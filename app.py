@@ -14,7 +14,7 @@ import socket
 import zipfile
 import tempfile
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio   import SocketIO, emit as ws_emit
 
@@ -748,34 +748,6 @@ def api_salir():
 
 
 # ── API Administración de usuarios (solo admin) ───────────────────────────────
-
-@app.route('/api/admin/usuarios/online')
-@_requiere_admin
-def api_usuarios_online():
-    """Devuelve todos los usuarios con estado online/offline.
-    Se considera online quien tuvo actividad en los ultimos 5 minutos."""
-    if not _mongo_ok():
-        return jsonify({'error': 'BD no disponible'}), 503
-    ahora  = datetime.utcnow()
-    umbral = ahora - timedelta(minutes=5)
-    docs   = list(_col_usuarios.find({}, {'password_hash': 0}))
-    usuarios = []
-    for doc in docs:
-        ua = doc.get('ultimo_acceso')
-        if isinstance(ua, str):
-            try: ua = datetime.fromisoformat(ua)
-            except: ua = None
-        online = isinstance(ua, datetime) and ua >= umbral
-        usuarios.append({
-            'id':            str(doc['_id']),
-            'username':      doc.get('username', ''),
-            'rol':           doc.get('rol', 'registrado'),
-            'online':        online,
-            'ultimo_acceso': ua.isoformat() if isinstance(ua, datetime) else None,
-        })
-    usuarios.sort(key=lambda u: (not u['online'], u['ultimo_acceso'] or ''))
-    return jsonify({'usuarios': usuarios})
-
 
 @app.route('/api/admin/usuarios')
 @_requiere_admin

@@ -28,11 +28,86 @@
 
     <style>
         .leaflet-container { background: #e8e8e8 !important; }
+
+        /* ── Modal cuenta (copiado de index.html) ── */
+        .cuenta-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55); z-index: 9500;
+            align-items: center; justify-content: center;
+        }
+        .cuenta-overlay.open { display: flex; }
+        .cuenta-box {
+            background: #fff; border-radius: 14px;
+            box-shadow: 0 24px 70px rgba(0,0,0,0.35);
+            width: min(560px, 96vw); max-height: 90vh;
+            display: flex; flex-direction: column; overflow: hidden;
+            animation: cuentaIn 0.2s ease;
+        }
+        @keyframes cuentaIn {
+            from { opacity:0; transform: scale(0.94) translateY(8px); }
+            to   { opacity:1; transform: scale(1)    translateY(0); }
+        }
+        .cuenta-header {
+            background: linear-gradient(135deg, #1a3a5c, #2c3e50);
+            padding: 18px 20px; display: flex; align-items: center;
+            justify-content: space-between; flex-shrink: 0;
+        }
+        .cuenta-header-info { display:flex; align-items:center; gap:12px; font-size:28px; }
+        .cuenta-cerrar {
+            background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25);
+            color: #fff; border-radius: 6px; padding: 4px 10px;
+            cursor: pointer; font-size: 14px; transition: background 0.15s;
+        }
+        .cuenta-cerrar:hover { background: rgba(255,255,255,0.25); }
+        .cuenta-tabs {
+            display: flex; border-bottom: 2px solid #ecf0f1;
+            flex-shrink: 0; background: #f8f9fa;
+        }
+        .cuenta-tab {
+            padding: 12px 18px; font-size: 13px; font-weight: 600; color: #7f8c8d;
+            cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;
+            transition: color 0.15s, border-color 0.15s; white-space: nowrap;
+        }
+        .cuenta-tab:hover { color: #2c3e50; }
+        .cuenta-tab.activa { color: #2980b9; border-bottom-color: #2980b9; }
+        .cuenta-body { overflow-y: auto; flex: 1; padding: 24px; }
+        .cm-field { display:flex; flex-direction:column; gap:5px; margin-bottom:14px; }
+        .cm-label { font-size:11px; font-weight:700; color:#7f8c8d; text-transform:uppercase; letter-spacing:0.4px; }
+        .cm-input {
+            padding: 10px 13px; border: 1px solid #dfe6e9; border-radius: 8px;
+            font-size:14px; color:#2c3e50; outline:none; transition: border-color 0.2s;
+        }
+        .cm-input:focus { border-color:#3498db; }
+        .cm-input-wrap { position:relative; display:flex; align-items:center; }
+        .cm-input-wrap .cm-input { flex:1; padding-right:40px; }
+        .cm-pw-toggle { position:absolute; right:8px; background:none; border:none; cursor:pointer; font-size:16px; padding:4px; }
+        .cm-btn {
+            width:100%; padding:11px; border:none; border-radius:8px;
+            font-size:14px; font-weight:700; cursor:pointer;
+            transition: background 0.15s, transform 0.1s; margin-top:4px;
+        }
+        .cm-btn:active { transform: scale(0.98); }
+        .cm-btn-primary { background:#3498db; color:#fff; }
+        .cm-btn-primary:hover { background:#2980b9; }
+        .cm-btn-danger { background:#e74c3c; color:#fff; margin-top:8px; }
+        .cm-btn-danger:hover { background:#c0392b; }
+        .cm-btn-ghost { background:#ecf0f1; color:#2c3e50; }
+        .cm-btn-ghost:hover { background:#dfe6e9; }
+        .cm-sep { border:none; border-top:1px solid #ecf0f1; margin:18px 0; }
+        .cm-msg {
+            padding: 9px 13px; border-radius:7px; font-size:12px; margin-bottom:12px; display:none;
+        }
+        .cm-msg.error   { background:rgba(231,76,60,0.1); color:#e74c3c; border:1px solid rgba(231,76,60,0.25); display:block; }
+        .cm-msg.success { background:rgba(39,174,96,0.1); color:#27ae60; border:1px solid rgba(39,174,96,0.25); display:block; }
+        .cm-section-title {
+            font-size:13px; font-weight:700; color:#2c3e50;
+            margin-bottom:14px; padding-bottom:8px; border-bottom:1px solid #ecf0f1;
+        }
     </style>
 </head>
 <body>
 
-        <!-- TOPBAR Google Maps style -->
+    <!-- TOPBAR Google Maps style -->
     <div class="m-topbar">
         <button class="m-topbar-menu" onclick="toggleDrawer()" aria-label="Menu"><span></span><span></span><span></span></button>
         <input type="text" id="msw-input" class="m-topbar-input" placeholder="Buscar calle, numero..." autocomplete="off"
@@ -44,15 +119,12 @@
     <div id="network-dot" style="display:none;"></div>
     <span id="user-name" style="display:none;">Inv.</span>
     <span id="user-rol-badge" style="display:none;"></span>
+    <span id="serverStatus" style="display:none;"></span>
 
-    <!-- ═══════════════════════════════════════
-         OVERLAY (cierra el drawer al tocar fuera)
-    ═══════════════════════════════════════ -->
+    <!-- OVERLAY -->
     <div id="m-overlay" class="m-overlay" onclick="cerrarDrawer()"></div>
 
-    <!-- ═══════════════════════════════════════
-         DRAWER LATERAL (capas)
-    ═══════════════════════════════════════ -->
+    <!-- DRAWER LATERAL -->
     <aside id="m-drawer" class="m-drawer">
         <div class="m-drawer-header">
             <span>📚 Capas</span>
@@ -60,7 +132,6 @@
         </div>
         <div class="m-drawer-content">
 
-            <!-- Pestaña Capas / Momento -->
             <div class="m-tabs">
                 <button class="m-tab active" id="m-tab-capas"   onclick="selectMobileTab('capas')">🗂️ Capas</button>
                 <button class="m-tab"        id="m-tab-momento" onclick="selectMobileTab('momento')">⏱️ Momento</button>
@@ -80,7 +151,7 @@
                     </div>
                 </div>
                 <div id="admin-vias-controls" style="display:none;">
-                    <input type="file" id="file-vias" accept=".geojson,.json,.shp" onchange="cargarArchivo('vias', this)">
+                    <input type="file" id="file-vias" accept=".geojson,.json,.zip" onchange="cargarArchivo('vias', this)">
                     <div class="m-btn-row">
                         <button class="m-btn m-btn-blue" onclick="document.getElementById('file-vias').click()">📂 Cargar Vías</button>
                         <button class="m-btn m-btn-purple" id="btn-config-campos" style="display:none;" onclick="abrirConfigCamposRuta()">⚙️ Config.</button>
@@ -92,13 +163,23 @@
                     <input type="checkbox" id="check-puntos" onchange="toggleLayerVisibility('puntos', this.checked)">
                     <div class="m-layer-info">
                         <div class="m-layer-name">🪧 Puntos de Interés</div>
-                        <div class="m-layer-desc">Sin cargar</div>
+                        <div class="m-layer-desc" id="pois-manuales-desc">Sin añadir</div>
                     </div>
                 </div>
-                <div id="admin-puntos-controls" style="display:none;">
-                    <input type="file" id="file-puntos" accept=".zip" onchange="cargarArchivo('puntos', this)">
-                    <button class="m-btn m-btn-blue" style="width:100%;" onclick="document.getElementById('file-puntos').click()">📂 Cargar Puntos</button>
+                <!-- POIs: Añadir + import/export (registrado/admin) -->
+                <div id="pois-controles-registrado" style="display:none;">
+                    <button id="btn-colocar-poi" onclick="activarModoPoi(); cerrarDrawer();"
+                        class="m-btn m-btn-green" style="width:100%;margin-bottom:4px;">
+                        🪧 Añadir POI
+                    </button>
+                    <div id="pois-import-export-top" class="m-btn-row" style="margin-bottom:8px;">
+                        <button class="m-btn m-btn-dark" onclick="importarPoisConFormato()">⬇️ Importar</button>
+                        <button class="m-btn" style="background:#2c5f2d;" onclick="exportarPoisConFormato()">⬆️ Exportar</button>
+                        <input type="file" id="file-pois-import" accept=".gpkg,.geojson,.csv,.zip,.shp"
+                            style="display:none;" onchange="importarPoisDesdeArchivo(this)">
+                    </div>
                 </div>
+                <div id="admin-puntos-controls" style="display:none;"></div>
 
                 <!-- Obstáculos -->
                 <div class="m-layer-item" id="layer-obstaculos">
@@ -108,11 +189,16 @@
                         <div class="m-layer-desc" id="obstaculos-layer-desc">Sin cargar</div>
                     </div>
                 </div>
-                <div id="obstaculos-import-export-top" class="m-btn-row" style="display:none;">
+                <div id="obstaculos-registrado-controls" style="display:none;"></div>
+                <div id="obstaculos-import-export-top" class="m-btn-row" style="display:none;margin-bottom:8px;">
                     <button class="m-btn m-btn-dark" onclick="importarObstaculosConFormato()">⬇️ Importar</button>
                     <button class="m-btn m-btn-green" onclick="exportarObstaculosConFormato()">⬆️ Exportar</button>
-                    <input type="file" id="file-obstaculos-import" accept=".gpkg,.geojson,.csv,.zip,.shp" style="display:none;" onchange="importarObstaculosDesdeArchivo(this)">
+                    <input type="file" id="file-obstaculos-import" accept=".gpkg,.geojson,.csv,.zip,.shp"
+                        style="display:none;" onchange="importarObstaculosDesdeArchivo(this)">
                 </div>
+
+                <!-- Obstáculos admin -->
+                <div id="obstaculos-admin-controls" style="display:none;"></div>
 
                 <!-- Eventos -->
                 <div class="m-layer-item" id="layer-eventos" style="display:none;">
@@ -122,15 +208,13 @@
                         <div class="m-layer-desc" id="eventos-layer-desc">Sin cargar</div>
                     </div>
                 </div>
-                <div id="eventos-import-export-top" class="m-btn-row" style="display:none;">
+                <div id="eventos-import-export-top" class="m-btn-row" style="display:none;margin-bottom:8px;">
                     <label class="m-btn m-btn-dark" style="cursor:pointer;">
                         ⬇️ Importar
                         <input type="file" accept=".gpkg,.geojson,.zip,.shp" style="display:none;" onchange="importarEventos(this)">
                     </label>
                     <button class="m-btn m-btn-green" onclick="abrirModalExportacionEventos()">⬆️ Exportar</button>
                 </div>
-
-                <!-- Elementos ocultos requeridos por event-manager.js -->
                 <div id="admin-eventos-controls" style="display:none;">
                     <button id="btn-crear-evento" onclick="activarModoEvento()" style="display:none;">🎪 Crear evento</button>
                 </div>
@@ -198,51 +282,81 @@
         </div><!-- /m-drawer-content -->
     </aside>
 
-        <!-- MAPA -->
+    <!-- MAPA -->
     <div id="map">
-        <!-- Contenedor de controles del mapa -->
         <div id="map-controls"></div>
-        <!-- Botón home (abajo derecha) -->
         <button class="m-map-home-btn" id="m-btn-home" onclick="resetView()" title="Vista inicial">🏠</button>
     </div>
 
-    <!-- BOTTOM SHEET — BÚSQUEDA Y RUTA
-    ═══════════════════════════════════════ -->
+    <!-- BOTTOM SHEET -->
     <div id="m-bottom-sheet" class="m-bottom-sheet">
         <div class="m-bs-handle" ontouchstart="initDragBS(event)" onmousedown="initDragBS(event)"></div>
 
         <!-- Panel Cómo Llegar -->
         <div id="msw-panel" class="msw-panel" style="display:none;">
-            <div class="m-bs-section-title">Cómo llegar</div>
+            <div class="m-bs-section-title" style="display:flex;align-items:center;justify-content:space-between;">
+                <span>Cómo llegar</span>
+                <button id="msw-historial-btn" onclick="toggleHistorial()"
+                    style="background:none;border:1px solid #d1d5db;border-radius:6px;color:#374151;
+                           cursor:pointer;font-size:13px;padding:4px 8px;white-space:nowrap;">🕐</button>
+            </div>
 
-            <!-- Vehículo -->
-            <div class="msw-vehiculos">
-                <button id="msw-btn-coche"  class="msw-vehiculo active"
-                    onclick="document.getElementById('msw-btn-coche').classList.add('active');document.getElementById('msw-btn-camion').classList.remove('active');">🚗 Veh. Ligero</button>
-                <button id="msw-btn-camion" class="msw-vehiculo"
-                    onclick="document.getElementById('msw-btn-camion').classList.add('active');document.getElementById('msw-btn-coche').classList.remove('active');">🚛 Veh. Pesado</button>
+            <!-- Vehículo + Emergencia -->
+            <div class="msw-vehiculos" style="display:flex;align-items:center;gap:6px;">
+                <button id="msw-btn-coche"  class="msw-vehiculo active" onclick="seleccionarVehiculo('coche')">🚗 Veh. Ligero</button>
+                <button id="msw-btn-camion" class="msw-vehiculo"        onclick="seleccionarVehiculo('camion')">🚛 Veh. Pesado</button>
+                <button id="msw-btn-emergencia"
+                    onclick="toggleEmergencia()"
+                    title="Emergencia"
+                    style="border:1px solid #e74c3c;border-radius:6px;background:none;
+                           color:#e74c3c;cursor:pointer;font-size:16px;padding:3px 7px;
+                           line-height:1;flex-shrink:0;transition:background 0.15s,color 0.15s;">🚨</button>
+            </div>
+
+            <!-- Dropdown opciones emergencia -->
+            <div id="emergencia-opciones-dropdown" style="display:none;
+                background:#fff3f3;border:1px solid #e74c3c;border-radius:8px;
+                padding:8px 12px;margin:4px 0 2px;font-size:12px;">
+                <div style="font-size:11px;font-weight:700;color:#c0392b;margin-bottom:7px;">🚨 Privilegios de emergencia</div>
+                <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer;color:#2c3e50;">
+                    <input type="checkbox" id="emerg-chk-velocidad" checked onchange="toggleEmergenciaOpcion('velocidad')" style="accent-color:#e74c3c;width:14px;height:14px;">
+                    <span><strong>Velocidad máx.</strong> <span style="color:#7f8c8d;font-size:11px;">— si no: +20 km/h</span></span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer;color:#2c3e50;">
+                    <input type="checkbox" id="emerg-chk-giros" checked onchange="toggleEmergenciaOpcion('giros')" style="accent-color:#e74c3c;width:14px;height:14px;">
+                    <span><strong>Giros</strong> <span style="color:#7f8c8d;font-size:11px;">— si no: giros libres</span></span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#2c3e50;">
+                    <input type="checkbox" id="emerg-chk-sentido" checked onchange="toggleEmergenciaOpcion('sentido')" style="accent-color:#e74c3c;width:14px;height:14px;">
+                    <span><strong>Sentido</strong> <span style="color:#7f8c8d;font-size:11px;">— si no: contramano en urbano</span></span>
+                </label>
             </div>
 
             <!-- Puntos origen/destino -->
-            <div class="msw-puntos">
+            <div class="msw-puntos" style="position:relative;">
                 <div class="msw-punto-row">
                     <span class="msw-punto-dot origen">●</span>
                     <div id="msw-origen-label" class="msw-punto-label placeholder"
-                        onclick="modoActual='ruta';window._esperandoOrigen=true;window._esperandoDestino=false;mostrarInstruccionOrigen();showNotification('Toca el mapa para colocar el ORIGEN','info');cerrarBottomSheet();">
+                        onclick="iniciarSeleccionOrigen(); cerrarBottomSheet();">
                         Elige un punto de origen…
                     </div>
                 </div>
+                <button onclick="invertirPuntos()" title="Invertir origen y destino"
+                    style="position:absolute;right:4px;top:50%;transform:translateY(-50%);
+                           background:none;border:1px solid #bdc3c7;border-radius:50%;
+                           width:28px;height:28px;cursor:pointer;font-size:15px;
+                           display:flex;align-items:center;justify-content:center;color:#555;">⇅</button>
                 <div class="msw-divider"></div>
                 <div class="msw-punto-row">
                     <span class="msw-punto-dot destino">📍</span>
                     <div id="msw-destino-label" class="msw-punto-label placeholder"
-                        onclick="modoActual='ruta';window._esperandoDestino=true;window._esperandoOrigen=false;mostrarInstruccionDestino();showNotification('Toca el mapa para colocar el DESTINO','info');cerrarBottomSheet();">
+                        onclick="iniciarSeleccionDestino(); cerrarBottomSheet();">
                         Elige un destino…
                     </div>
                 </div>
             </div>
 
-            <!-- Botón calcular -->
+            <!-- Botón calcular / progreso -->
             <div id="msw-calcular-wrap" style="padding:8px 0 0;">
                 <button id="msw-btn-calcular" onclick="msw_lanzarCalculo()" class="m-btn-calcular">
                     🗺️ Calcular ruta
@@ -252,6 +366,30 @@
                         <div id="msw-progreso-fill" style="height:100%;width:0%;border-radius:6px;background:linear-gradient(90deg,#3498db,#2ecc71);transition:width 0.3s ease;"></div>
                     </div>
                     <span id="msw-progreso-text" style="font-size:11px;color:#7f8c8d;display:block;text-align:center;">Calculando ruta…</span>
+                </div>
+                <!-- Resultados inline -->
+                <div id="msw-resultados-ruta" style="display:none;margin-top:10px;padding:10px 12px;background:#fff;border-radius:8px;border:1px solid #e8ecf0;">
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                        <span id="msw-icono-vehiculo" style="font-size:15px;">🚗</span>
+                        <span style="font-size:12px;color:#6b7280;">por</span>
+                        <span id="msw-nombre-via" style="font-size:12px;font-weight:600;color:#374151;">—</span>
+                    </div>
+                    <div style="display:flex;align-items:baseline;gap:4px;">
+                        <span id="msw-tiempo-minutos" style="font-size:22px;font-weight:700;color:#1a1a1a;">—</span>
+                    </div>
+                    <div style="margin-top:1px;">
+                        <span id="msw-distancia-km" style="font-size:13px;color:#6b7280;">—</span>
+                        <span style="font-size:13px;color:#6b7280;"> km</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:4px;margin-top:6px;padding-top:6px;border-top:1px solid #f3f4f6;">
+                        <span style="font-size:11px;color:#9ca3af;">Vel. media</span>
+                        <span id="msw-velocidad" style="font-size:11px;color:#9ca3af;">—</span>
+                        <span style="font-size:11px;color:#9ca3af;">km/h</span>
+                        <span style="font-size:11px;color:#d1d5db;">·</span>
+                        <span style="font-size:11px;color:#9ca3af;">Vía</span>
+                        <span id="msw-tipo-via" style="font-size:11px;color:#9ca3af;">—</span>
+                    </div>
+                    <div id="msw-info-temporal" style="margin-top:8px;padding-top:8px;border-top:1px solid #f3f4f6;font-size:11px;color:#9ca3af;"></div>
                 </div>
             </div>
 
@@ -276,56 +414,45 @@
                     </div>
                     <div id="salir-coef-info" style="margin-top:6px;font-size:11px;color:#7f8c8d;display:flex;align-items:center;gap:4px;"></div>
                 </div>
-                <!-- Botones msw-btn-obstaculo y msw-btn-evento ocultos: gestionados desde la nav de Obstáculos -->
+                <!-- Botones modo obstáculo/evento (ocultos — gestionados desde bottom nav) -->
                 <button id="msw-btn-obstaculo" style="display:none;"></button>
                 <button id="msw-btn-evento"    style="display:none;"></button>
             </div>
         </div>
 
-        <!-- Panel de Obstáculos/Eventos (visible en modo 'obstaculos' de la bottom nav) -->
+        <!-- Panel de Obstáculos/Eventos -->
         <div id="m-obs-panel" style="display:none;">
-
-            <!-- Sub-tabs: Obstáculos / Eventos -->
             <div class="m-obs-tabs" id="m-obs-tabs">
                 <button class="m-obs-tab active" id="m-obstab-obs" onclick="selectObsTab('obs')">🚧 Obstáculos</button>
                 <button class="m-obs-tab"        id="m-obstab-ev"  onclick="selectObsTab('ev')" style="display:none;">🎪 Eventos</button>
             </div>
-
-            <!-- Sección Obstáculos -->
+            <!-- Obstáculos -->
             <div id="m-obssec-obs" style="flex:1;overflow-y:auto;padding:0 2px;">
                 <div class="m-obs-action-row">
-                    <button class="m-obs-create-btn m-obs-create-obs" onclick="if (typeof modoObstaculo === 'undefined' || !modoObstaculo) { activarModoObstaculo(); _setBSHeight(0); document.getElementById('map').style.bottom = '0px'; }">
+                    <button class="m-obs-create-btn m-obs-create-obs" onclick="if(typeof modoObstaculo==='undefined'||!modoObstaculo){activarModoObstaculo();_setBSHeight(0);}">
                         ➕ Añadir obstáculo
                     </button>
-                    <button class="m-obs-create-btn m-obs-clear" onclick="limpiarObstaculos()">
-                        🗑️ Limpiar
-                    </button>
+                    <button class="m-obs-create-btn m-obs-clear" onclick="limpiarObstaculos()">🗑️ Limpiar</button>
                 </div>
-                <!-- Lista de obstáculos (mismos ids que el panel flotante de escritorio) -->
                 <div id="obs-flotante-lista" class="m-obs-list"></div>
                 <div class="m-obs-empty" id="m-obs-empty-obs">No hay obstáculos activos</div>
             </div>
-
-            <!-- Sección Eventos (solo admin) -->
+            <!-- Eventos (solo admin) -->
             <div id="m-obssec-ev" style="display:none;flex:1;overflow-y:auto;padding:0 2px;">
                 <div class="m-obs-action-row">
-                    <button class="m-obs-create-btn m-obs-create-ev" onclick="activarModoEvento(); _setBSHeight(0); document.getElementById('map').style.bottom = '0px';">
+                    <button class="m-obs-create-btn m-obs-create-ev" onclick="activarModoEvento();_setBSHeight(0);">
                         ➕ Añadir evento
                     </button>
-                    <button class="m-obs-create-btn m-obs-clear" onclick="limpiarEventos()">
-                        🗑️ Limpiar
-                    </button>
+                    <button class="m-obs-create-btn m-obs-clear" onclick="limpiarEventos()">🗑️ Limpiar</button>
                 </div>
-                <!-- Lista de eventos -->
                 <div id="ev-flotante-lista" class="m-obs-list"></div>
                 <div class="m-obs-empty" id="m-obs-empty-ev">No hay eventos activos</div>
             </div>
-
-        </div><!-- /m-obs-panel -->
+        </div>
 
     </div><!-- /m-bottom-sheet -->
 
-    <!-- Paneles flotantes ocultos: en móvil la lista está en el bottom sheet -->
+    <!-- Paneles flotantes (ocultos en móvil — listas embebidas en bottom sheet) -->
     <div id="obstaculos-panel-flotante" style="display:none!important;">
         <div class="obs-flotante-header">
             <span class="obs-flotante-title">🚧 Obstáculos <span id="obs-flotante-contador" class="obs-flotante-badge">0</span></span>
@@ -336,14 +463,18 @@
             <span class="ev-flotante-title">🎪 Eventos <span id="ev-flotante-contador" class="ev-flotante-badge">0</span></span>
         </div>
     </div>
+    <!-- Panel flotante POIs (oculto en móvil) -->
+    <div id="pois-panel-flotante" style="display:none!important;">
+        <div class="obs-flotante-header" style="background:linear-gradient(135deg,#1a6b3c,#27ae60);">
+            <span class="obs-flotante-title">🪧 POIs <span id="pois-flotante-contador" class="obs-flotante-badge">0</span></span>
+        </div>
+        <div id="pois-flotante-lista"></div>
+    </div>
 
-    <!-- ═══════════════════════════════════════
-         WIDGET INFO CLIC EN MAPA
-    ═══════════════════════════════════════ -->
+    <!-- WIDGET INFO CLIC EN MAPA -->
     <div id="click-info-widget" style="display:none;
-        position:fixed;bottom:var(--bs-height, 80px);left:50%;transform:translateX(-50%);
-        background:#fff;border-radius:14px;
-        box-shadow:0 8px 32px rgba(0,0,0,0.18);
+        position:fixed;bottom:calc(var(--bs-height, 80px) + 8px);left:50%;transform:translateX(-50%);
+        background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.18);
         z-index:2000;width:90%;max-width:400px;
         font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden;">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px;border-bottom:1px solid #f0f0f0;">
@@ -366,22 +497,33 @@
         </div>
     </div>
 
-    <!-- ═══════════════════════════════════════
-         INSTRUCCIÓN EN EL MAPA
-    ═══════════════════════════════════════ -->
     <div id="notification" class="notification" style="display:none;"></div>
 
-    <!-- ═══════════════════════════════════════
-         BARRA DE PROGRESO OCULTA (para map-widgets.js)
-    ═══════════════════════════════════════ -->
+    <!-- Barra de progreso oculta (para map-widgets.js) -->
     <div id="progress-container" style="display:none;">
         <div id="progress-fill" style="width:0%;"></div>
         <span id="progress-text"></span>
     </div>
 
-    <!-- ═══════════════════════════════════════
-         MODAL % OBSTÁCULO
-    ═══════════════════════════════════════ -->
+    <!-- ═══ MODAL CUENTA DE USUARIO (igual que index.html) ═══ -->
+    <div id="cuenta-modal" class="cuenta-overlay" onclick="if(event.target===this)cerrarModalCuenta()">
+        <div class="cuenta-box">
+            <div class="cuenta-header">
+                <div class="cuenta-header-info">
+                    <span id="cuenta-header-icon">👤</span>
+                    <div>
+                        <div id="cuenta-header-nombre" style="font-weight:700;font-size:15px;color:#fff;">Mi cuenta</div>
+                        <div id="cuenta-header-rol" style="font-size:11px;color:rgba(255,255,255,0.55);margin-top:1px;">invitado</div>
+                    </div>
+                </div>
+                <button class="cuenta-cerrar" onclick="cerrarModalCuenta()">✕</button>
+            </div>
+            <div class="cuenta-tabs" id="cuenta-tabs"></div>
+            <div class="cuenta-body" id="cuenta-body"></div>
+        </div>
+    </div>
+
+    <!-- ═══ MODAL % OBSTÁCULO ═══ -->
     <div id="obstaculo-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;">
         <div class="obstaculo-box">
             <div id="obstaculo-titulo" class="obstaculo-titulo"
@@ -407,14 +549,12 @@
         </div>
     </div>
 
-    <!-- ═══════════════════════════════════════
-         MODAL EVENTO ESPECIAL
-    ═══════════════════════════════════════ -->
+    <!-- ═══ MODAL EVENTO ESPECIAL ═══ -->
     <div id="evento-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:4000;align-items:center;justify-content:center;">
         <div class="ev-box">
             <div class="ev-header">
                 <span>🎪 Nuevo evento especial</span>
-                <button onclick="cerrarModalEvento()">✕</button>
+                <button onclick="cerrarModalEventoMobile()">✕</button>
             </div>
             <div class="ev-body">
                 <div class="ev-field">
@@ -446,34 +586,7 @@
         </div>
     </div>
 
-    <!-- ═══════════════════════════════════════
-         MODAL REGISTRO
-    ═══════════════════════════════════════ -->
-    <div id="registro-modal" class="registro-overlay">
-        <div class="registro-box">
-            <div class="registro-title">👤 Registrarse</div>
-            <div class="registro-hint">
-                Introduce un nombre para identificarte.<br>
-                Escribe <strong>admin</strong> para acceder con privilegios de administrador.
-            </div>
-            <div class="registro-field">
-                <label class="registro-label">Nombre</label>
-                <input id="registro-nombre" type="text" class="registro-input"
-                    placeholder="Ej: maria_lopez"
-                    onkeydown="if(event.key==='Enter')confirmarRegistro()">
-            </div>
-            <div id="registro-msg" class="registro-msg"></div>
-            <div class="registro-footer">
-                <button class="registro-btn-logout" onclick="cerrarSesion();cerrarModalRegistro();">⏻ Cerrar sesión</button>
-                <button class="registro-btn-cancel" onclick="cerrarModalRegistro()">Cancelar</button>
-                <button class="registro-btn-ok"     onclick="confirmarRegistro()">✅ Aceptar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- ═══════════════════════════════════════
-         MODAL CONFIG CAMPOS RUTA
-    ═══════════════════════════════════════ -->
+    <!-- ═══ MODAL CONFIG CAMPOS RUTA ═══ -->
     <div id="campos-ruta-modal" style="display:none;">
         <div class="crm-box">
             <div class="crm-header">
@@ -500,18 +613,7 @@
         </div>
     </div>
 
-    <!-- Elementos ocultos requeridos por route-manager.js -->
-    <div id="lista-obstaculos" style="display:none;"></div>
-    <div id="lista-obstaculos-vacia" style="display:none;"></div>
-    <span id="obstaculos-contador" style="display:none;">0</span>
-    <!-- Elementos de tabla omitidos en versión móvil — sin tabla de atributos -->
-    <div id="table-panel"         style="display:none;"></div>
-    <div id="table-panel-header"  style="display:none;"></div>
-    <div id="table-panel-toolbar" style="display:none;"></div>
-    <div id="table-panel-body"    style="display:none;"></div>
-    <table style="display:none;"><thead id="table-header"></thead><tbody id="table-body"></tbody></table>
-    <div id="edit-menu"           style="display:none;"></div>
-    <div id="table-edit-modal"    style="display:none;"><div class="mbox"><div class="mbox-header"><span id="modal-title"></span><button onclick="cerrarModal()">✕</button></div><div class="mbox-body" id="modal-body"></div><div class="mbox-footer"><button class="mbox-btn-cancel" onclick="cerrarModal()">Cancelar</button><button class="mbox-btn-primary" id="modal-confirm" onclick="confirmarModal()">Aplicar</button></div></div></div>
+    <!-- ═══ MODAL EXPORTAR OBSTÁCULOS ═══ -->
     <div id="export-obstaculos-modal" class="export-modal-overlay" style="display:none;">
         <div class="export-modal-box">
             <div class="export-modal-header">
@@ -525,13 +627,10 @@
                     <option value="shp">Shapefile ZIP (.zip)</option>
                     <option value="csv">CSV (.csv)</option>
                 </select>
-                <label for="export-filepath-input">Ruta / nombre de archivo</label>
+                <label for="export-filepath-input">Nombre de archivo</label>
                 <div class="export-path-row">
-                    <input id="export-filepath-input" type="text" placeholder="Pulsa 📁 para seleccionar ubicación y nombre">
-                    <button type="button" class="export-path-browse-btn" onclick="explorarRutaExportacionObstaculos()" title="Examinar carpeta">📁</button>
-                </div>
-                <div class="export-path-note" id="export-filepath-note">
-                    Debes seleccionar una ubicación con 📁 antes de exportar.
+                    <input id="export-filepath-input" type="text" placeholder="Pulsa 📁 para seleccionar ubicación">
+                    <button type="button" class="export-path-browse-btn" onclick="explorarRutaExportacionObstaculos()">📁</button>
                 </div>
             </div>
             <div class="export-modal-footer">
@@ -541,6 +640,7 @@
         </div>
     </div>
 
+    <!-- ═══ MODAL EXPORTAR EVENTOS ═══ -->
     <div id="export-eventos-modal" class="export-modal-overlay" style="display:none;">
         <div class="export-modal-box">
             <div class="export-modal-header">
@@ -553,13 +653,10 @@
                     <option value="gpkg">GeoPackage (.gpkg)</option>
                     <option value="shp">Shapefile (.zip)</option>
                 </select>
-                <label for="export-eventos-filepath-input">Ruta / nombre de archivo</label>
+                <label for="export-eventos-filepath-input">Nombre de archivo</label>
                 <div class="export-path-row">
-                    <input id="export-eventos-filepath-input" type="text" placeholder="eventos_2026-04-29.gpkg">
-                    <button type="button" class="export-path-browse-btn" onclick="explorarRutaExportacionEventos()" title="Examinar carpeta">📁</button>
-                </div>
-                <div class="export-path-note" id="export-eventos-filepath-note">
-                    Si no eliges ruta, se descargará en la carpeta de descargas.
+                    <input id="export-eventos-filepath-input" type="text" placeholder="eventos.gpkg">
+                    <button type="button" class="export-path-browse-btn" onclick="explorarRutaExportacionEventos()">📁</button>
                 </div>
             </div>
             <div class="export-modal-footer">
@@ -568,9 +665,100 @@
             </div>
         </div>
     </div>
+
+    <!-- ═══ MODAL POI ═══ -->
+    <div id="poi-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;">
+        <div class="obstaculo-box">
+            <div class="obstaculo-titulo" style="cursor:default;">🪧 Nuevo punto de interés</div>
+            <div class="obstaculo-hint">Rellena los datos del POI. Solo el nombre es obligatorio.</div>
+            <div class="obstaculo-field" style="margin-bottom:12px;">
+                <label class="obstaculo-label">Nombre <span style="color:#e74c3c;">*</span></label>
+                <input id="poi-nombre-input" type="text" placeholder="Ej: Colegio San José"
+                    style="width:100%;padding:7px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;box-sizing:border-box;margin-top:4px;"
+                    onkeydown="if(event.key==='Enter')confirmarPoi();if(event.key==='Escape')cerrarPoiModal();">
+            </div>
+            <div class="obstaculo-field" style="margin-bottom:12px;">
+                <label class="obstaculo-label">Tipo</label>
+                <select id="poi-tipo-select" style="width:100%;padding:7px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;margin-top:4px;background:#fff;">
+                    <option value="colegio">🏫 Colegio</option>
+                    <option value="iglesia">⛪ Iglesia / templo</option>
+                    <option value="oficina">🏢 Oficina / servicio público</option>
+                    <option value="ocio">🎭 Ocio / restauración</option>
+                    <option value="otro" selected>📍 Otro</option>
+                </select>
+            </div>
+            <div class="obstaculo-field" style="margin-bottom:4px;">
+                <label class="obstaculo-label">ID (opcional)</label>
+                <input id="poi-id-input" type="text" placeholder="Ej: colegio-01"
+                    style="width:100%;padding:7px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;box-sizing:border-box;margin-top:4px;"
+                    onkeydown="if(event.key==='Enter')confirmarPoi();if(event.key==='Escape')cerrarPoiModal();">
+            </div>
+            <div id="poi-id-error" style="display:none;font-size:12px;color:#e74c3c;background:rgba(231,76,60,0.12);border-radius:4px;padding:5px 8px;margin-bottom:8px;"></div>
+            <div class="obstaculo-footer" style="margin-top:14px;">
+                <button class="obstaculo-btn-cancel" onclick="cerrarPoiModal()">Cancelar</button>
+                <button class="obstaculo-btn-ok"     onclick="confirmarPoi()">✅ Colocar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ MODAL EXPORTAR POIs ═══ -->
+    <div id="export-pois-modal" class="export-modal-overlay" style="display:none;">
+        <div class="export-modal-box">
+            <div class="export-modal-header">
+                <span>⬆️ Exportar POIs manuales</span>
+                <button onclick="cerrarModalExportPois()">✕</button>
+            </div>
+            <div class="export-modal-body">
+                <label>Formato</label>
+                <select id="export-pois-formato" onchange="cambiarFormatoExportPois()">
+                    <option value="gpkg">GeoPackage (.gpkg)</option>
+                    <option value="shp">Shapefile (.zip)</option>
+                    <option value="csv">CSV (.csv)</option>
+                </select>
+                <label>Archivo</label>
+                <div style="display:flex;gap:6px;">
+                    <input id="export-pois-filepath" type="text" placeholder="pois_YYYYMMDD.gpkg" style="flex:1;padding:10px;border:1px solid #dfe6e9;border-radius:8px;font-size:14px;">
+                    <button onclick="explorarRutaExportPois()" style="padding:10px;background:#2c3e50;color:#fff;border:none;border-radius:8px;cursor:pointer;">📁</button>
+                </div>
+            </div>
+            <div class="export-modal-footer">
+                <button class="mbox-btn-cancel" onclick="cerrarModalExportPois()">Cancelar</button>
+                <button class="mbox-btn-primary" onclick="confirmarExportacionPois()">⬆️ Exportar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ MODAL EDICIÓN GENÉRICA (table-manager stubs) ═══ -->
+    <div id="table-edit-modal" style="display:none;">
+        <div class="mbox">
+            <div class="mbox-header">
+                <span id="modal-title">Editar</span>
+                <button onclick="cerrarModal()">✕</button>
+            </div>
+            <div class="mbox-body" id="modal-body"></div>
+            <div class="mbox-footer">
+                <button class="mbox-btn-cancel"  onclick="cerrarModal()">Cancelar</button>
+                <button class="mbox-btn-primary" id="modal-confirm" onclick="confirmarModal()">Aplicar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Elementos ocultos requeridos por route-manager.js -->
+    <div id="lista-obstaculos" style="display:none;"></div>
+    <div id="lista-obstaculos-vacia" style="display:none;"></div>
+    <span id="obstaculos-contador" style="display:none;">0</span>
+
+    <!-- Elementos de tabla omitidos en móvil -->
+    <div id="table-panel"         style="display:none;"></div>
+    <div id="table-panel-header"  style="display:none;"></div>
+    <div id="table-panel-toolbar" style="display:none;"></div>
+    <div id="table-panel-body"    style="display:none;"></div>
+    <table style="display:none;"><thead id="table-header"></thead><tbody id="table-body"></tbody></table>
+    <span id="table-panel-info" style="display:none;"></span>
+    <input id="table-cmd" style="display:none;">
+    <div id="edit-menu"           style="display:none;"></div>
     <div id="left-legend-vias"    style="display:none;"></div>
     <div id="left-legend-puntos"  style="display:none;"></div>
-    <!-- Panel derecho omitido -->
     <div id="right-panel"         style="display:none;"></div>
     <div id="right-section-rutas" style="display:none;"></div>
     <div id="right-section-obstaculos" style="display:none;"></div>
@@ -578,10 +766,9 @@
     <div id="btn-tabla-puntos"    style="display:none;"></div>
     <div id="btn-tabla-obstaculos-layer" style="display:none;"></div>
     <div id="btn-tabla-eventos-layer"    style="display:none;"></div>
+    <div id="btn-tabla-obstaculos"       style="display:none;"></div>
 
-    <!-- ═══════════════════════════════════════
-         SCRIPTS (mismos que escritorio)
-    ═══════════════════════════════════════ -->
+    <!-- SCRIPTS -->
     <script src="{{ url_for('static', filename='js/vendor/leaflet.js') }}"></script>
     <script src="{{ url_for('static', filename='js/vendor/proj4.js') }}"></script>
     <script src="{{ url_for('static', filename='js/vendor/chart.umd.min.js') }}"></script>
@@ -605,36 +792,39 @@
     <script src="{{ url_for('static', filename='js/ui/search.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ui/map-widgets.js') }}"></script>
 
+    <!-- Socket.IO + módulos en tiempo real y persistencia (igual que index.html) -->
+    <script src="{{ url_for('static', filename='js/vendor/socket.io.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/temporal/realtime.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ui/session-persistence.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ui/history-manager.js') }}"></script>
+
     <!-- ── JS específico móvil ── -->
     <script>
-    // ── Wrappers para obstáculos y eventos (solo mobile) ──────────────────────
+    // ── Wrappers modal obstáculo / evento ────────────────────────────────────
     function confirmarObstaculoMobile() {
         confirmarObstaculo();
         _setBSHeight(BS_HALF);
         document.getElementById('map').style.bottom = '';
         if (typeof desactivarModoObstaculo === 'function') desactivarModoObstaculo();
     }
-
     function cerrarObstaculoModalMobile() {
         cerrarObstaculoModal();
         _setBSHeight(BS_HALF);
         document.getElementById('map').style.bottom = '';
     }
-
     function confirmarEventoMobile() {
         confirmarEvento();
         _setBSHeight(BS_HALF);
         document.getElementById('map').style.bottom = '';
         if (typeof desactivarModoEvento === 'function') desactivarModoEvento();
     }
-
     function cerrarModalEventoMobile() {
         cerrarModalEvento();
         _setBSHeight(BS_HALF);
         document.getElementById('map').style.bottom = '';
     }
 
-    // ── Drawer ──────────────────────────────────────────────────────────────
+    // ── Drawer ───────────────────────────────────────────────────────────────
     function toggleDrawer() {
         const d = document.getElementById('m-drawer');
         const o = document.getElementById('m-overlay');
@@ -646,7 +836,7 @@
         document.getElementById('m-overlay').classList.remove('visible');
     }
 
-    // ── Tabs del drawer ─────────────────────────────────────────────────────
+    // ── Tabs del drawer ──────────────────────────────────────────────────────
     function selectMobileTab(name) {
         document.querySelectorAll('.m-tab').forEach(b => b.classList.remove('active'));
         document.getElementById('m-tab-' + name)?.classList.add('active');
@@ -654,32 +844,21 @@
         document.getElementById('m-section-momento').style.display = name === 'momento' ? 'block' : 'none';
     }
 
-    // ── Bottom Sheet ────────────────────────────────────────────────────────
-    const BS_PEEK   = 0;   // altura mínima visible (px) — muestra barra búsqueda
-    const BS_HALF   = Math.round(window.innerHeight * 0.45);
-    const BS_FULL   = Math.round(window.innerHeight * 0.85);
-    let   bsHeight  = BS_PEEK;
+    // ── Bottom Sheet ─────────────────────────────────────────────────────────
+    const BS_PEEK = 0;
+    const BS_HALF = Math.round(window.innerHeight * 0.45);
+    const BS_FULL = Math.round(window.innerHeight * 0.85);
+    let   bsHeight = BS_PEEK;
 
     function _setBSHeight(h) {
         bsHeight = Math.max(BS_PEEK, Math.min(BS_FULL, h));
         document.getElementById('m-bottom-sheet').style.height = bsHeight + 'px';
         document.documentElement.style.setProperty('--bs-height', bsHeight + 'px');
     }
-
-    function abrirBottomSheet(mode) {
-        _setBSHeight(BS_HALF);
-        if (mode === 'ruta') {
-            const panel = document.getElementById('msw-panel');
-            const btnLL = document.querySelector('.msw-como-llegar-btn');
-            if (panel) panel.style.display = 'block';
-            if (btnLL) btnLL.style.display = 'none';
-        }
-    }
     function cerrarBottomSheet() { _setBSHeight(BS_PEEK); }
 
     // Drag del handle
-    let _dragStart = null;
-    let _dragH0    = null;
+    let _dragStart = null, _dragH0 = null;
     function initDragBS(e) {
         _dragStart = e.touches ? e.touches[0].clientY : e.clientY;
         _dragH0    = bsHeight;
@@ -688,7 +867,6 @@
             _setBSHeight(_dragH0 + (_dragStart - y));
         };
         const up = () => {
-            // Snap a los tres estados
             const snaps = [BS_PEEK, BS_HALF, BS_FULL];
             const closest = snaps.reduce((a, b) => Math.abs(b - bsHeight) < Math.abs(a - bsHeight) ? b : a);
             _setBSHeight(closest);
@@ -703,93 +881,47 @@
         document.addEventListener('touchend',  up);
     }
 
-    // Inicializar bottom sheet en peek
-    const BS_NAV = 56; // altura de la bottom nav
-    
+    // Init
     document.addEventListener('DOMContentLoaded', () => {
         _setBSHeight(BS_PEEK);
-        
-        // ── MÓVIL ONLY: Evitar chincheta al mover obstáculos ──────────────────
-        if (window.isMobile) {
-            window._mobileMovingObstacle = false;
-            
-            setTimeout(() => {
-                // Override de iniciarMoverObstaculo
-                const origIniciarMover = window.iniciarMoverObstaculo;
+
+        // Evitar chincheta al mover obstáculos en móvil
+        window._mobileMovingObstacle = false;
+        setTimeout(() => {
+            const origIniciarMover = window.iniciarMoverObstaculo;
+            if (origIniciarMover) {
                 window.iniciarMoverObstaculo = function(idx) {
                     window._mobileMovingObstacle = true;
                     origIniciarMover.call(this, idx);
                 };
-                
-                // Override de _moverObstaculoA para resetear el flag
-                const orig_moverObstaculoA = window._moverObstaculoA;
-                window._moverObstaculoA = function(idx, nuevaLatlng) {
-                    orig_moverObstaculoA.call(this, idx, nuevaLatlng);
-                    // Limpiar el flag después de un pequeño delay para asegurar que todos los eventos de clic se procesen
-                    setTimeout(() => {
-                        window._mobileMovingObstacle = false;
-                    }, 100);
+            }
+            const orig_moverA = window._moverObstaculoA;
+            if (orig_moverA) {
+                window._moverObstaculoA = function(idx, ll) {
+                    orig_moverA.call(this, idx, ll);
+                    setTimeout(() => { window._mobileMovingObstacle = false; }, 100);
                 };
-            }, 100);
-        }
-        
-        setTimeout(() => { 
+            }
+        }, 100);
+
+        setTimeout(() => {
             if (typeof map !== 'undefined') {
                 map.invalidateSize();
-                // Ocultar bottom sheet al mover el mapa
                 map.on('movestart', () => {
                     _setBSHeight(0);
                     document.getElementById('map').style.bottom = '0px';
                 });
             }
         }, 100);
-    });
 
-    // ── Bottom Nav — modos Explorar / Obstáculos ─────────────────────────────
-    function selectMobileMode(mode) {
-        document.querySelectorAll('.m-nav-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById('m-nav-' + mode)?.classList.add('active');
-        if (mode === 'explorar') {
-            // Desactivar modo obstáculo si estaba activo
-            if (typeof modoObstaculo !== 'undefined' && modoObstaculo) {
-                if (typeof desactivarModoObstaculo === 'function') desactivarModoObstaculo();
-            }
-            // Abrir bottom sheet con panel de ruta
-            _setBSHeight(BS_HALF);
-            document.getElementById('map').style.bottom = '';
-            const panel = document.getElementById('msw-panel');
-            const btnLL = document.querySelector('.msw-como-llegar-btn');
-            if (panel) panel.style.display = 'block';
-            if (btnLL) btnLL.style.display = 'none';
-        } else if (mode === 'obstaculos') {
-            cerrarBottomSheet();
-            document.getElementById('map').style.bottom = '';
-            if (typeof activarModoObstaculo === 'function') activarModoObstaculo();
-        }
-    }
-
-    // ── Stubs para funciones que usan el panel derecho/tabla (no disponibles en móvil) ──
-    function abrirTabla()           { showNotification('Tabla de atributos no disponible en móvil. Usa Exportar .gpkg para descargar los datos.', 'info'); }
-    function abrirTablaObstaculos() { showNotification('Tabla no disponible en móvil.', 'info'); }
-    function toggleLeftPanel()      {}
-    function selectLeftTab()        {}
-    function selectRightTab()       {}
-
-    // ── Evitar que botones sobre el mapa propaguen el clic a Leaflet ─────────
-    // (sin esto, al pulsar Home o Layers se genera un marcador en el mapa)
-    document.addEventListener('DOMContentLoaded', () => {
-        ['m-btn-home'].forEach(id => {
+        // Observar cambios en las listas de obstáculos/eventos para actualizar empty states
+        ['obs-flotante-lista','ev-flotante-lista'].forEach(id => {
             const el = document.getElementById(id);
-            if (el && typeof L !== 'undefined') L.DomEvent.disableClickPropagation(el);
-            else if (el) el.addEventListener('click', e => e.stopPropagation());
+            if (el) new MutationObserver(_actualizarObsPanel).observe(el, { childList: true });
         });
     });
 
-    // ── Modo Obstáculos: bottom sheet naranja con registro ───────────────────
-
-    // Activa el modo obstáculos en la bottom nav:
-    // - Cambia el bottom sheet a naranja y muestra el panel de registro
-    // - El modo explorar vuelve al panel de ruta normal
+    // ── Bottom Nav ───────────────────────────────────────────────────────────
     let _modoNavActual = 'explorar';
 
     function selectMobileMode(mode) {
@@ -797,52 +929,57 @@
         document.querySelectorAll('.m-nav-btn').forEach(b => b.classList.remove('active'));
         document.getElementById('m-nav-' + mode)?.classList.add('active');
 
-        const bs      = document.getElementById('m-bottom-sheet');
-        const bsHandle= bs?.querySelector('.m-bs-handle');
-        const panelObs= document.getElementById('m-obs-panel');
+        const bs       = document.getElementById('m-bottom-sheet');
+        const panelObs = document.getElementById('m-obs-panel');
         const panelRuta= document.getElementById('msw-panel');
-        const btnLL   = document.querySelector('.msw-como-llegar-btn');
+        const btnLL    = document.querySelector('.msw-como-llegar-btn');
 
         if (mode === 'explorar') {
-            // Desactivar cualquier modo activo
             if (typeof modoObstaculo !== 'undefined' && modoObstaculo &&
                 typeof desactivarModoObstaculo === 'function') desactivarModoObstaculo();
             if (window._modoEvento && typeof desactivarModoEvento === 'function') desactivarModoEvento();
 
-            // Restaurar estilo neutro
             if (bs) { bs.style.borderTop = ''; bs.style.boxShadow = '0 -4px 24px rgba(0,0,0,0.15)'; }
             document.getElementById('m-nav-obstaculos')?.classList.remove('obs-mode');
 
-            // Mostrar panel de ruta
             if (panelObs) panelObs.style.display = 'none';
             if (panelRuta) panelRuta.style.display = 'block';
             if (btnLL) btnLL.style.display = 'none';
             _setBSHeight(BS_HALF);
 
         } else if (mode === 'obstaculos') {
-            // Estilo obras: borde naranja en el bottom sheet
             if (bs) { bs.style.borderTop = '3px solid #e67e22'; bs.style.boxShadow = '0 -4px 24px rgba(230,126,34,0.3)'; }
-
-            // Nav btn naranja
             document.getElementById('m-nav-obstaculos')?.classList.add('obs-mode');
 
-            // Ocultar panel ruta, mostrar panel de registro
             if (panelRuta) panelRuta.style.display = 'none';
             if (btnLL) btnLL.style.display = 'none';
             if (panelObs) { panelObs.style.display = 'flex'; panelObs.style.flexDirection = 'column'; }
             _setBSHeight(BS_HALF);
 
-            // Mostrar tab Eventos solo si es admin
             const evTab = document.getElementById('m-obstab-ev');
             if (evTab) evTab.style.display = window._userRol === 'admin' ? '' : 'none';
-
-            // Empezar en la pestaña de obstáculos
             selectObsTab('obs');
         }
     }
 
-    // ── Actualizar empty states del panel obs ───────────────────────────────
-    // Se llama cuando cambia la lista de obstáculos o eventos
+    // Sub-tabs obstáculos/eventos
+    function selectObsTab(tab) {
+        ['obs','ev'].forEach(t => {
+            document.getElementById('m-obstab-' + t)?.classList.toggle('active', t === tab);
+            document.getElementById('m-obssec-' + t)?.style.setProperty('display', t === tab ? 'block' : 'none');
+        });
+        const bs = document.getElementById('m-bottom-sheet');
+        if (tab === 'obs') {
+            if (bs) { bs.style.borderTop = '3px solid #e67e22'; bs.style.boxShadow = '0 -4px 24px rgba(230,126,34,0.3)'; }
+            if (window._modoEvento && typeof desactivarModoEvento === 'function') desactivarModoEvento();
+        } else {
+            if (bs) { bs.style.borderTop = '3px solid #8e44ad'; bs.style.boxShadow = '0 -4px 24px rgba(142,68,173,0.3)'; }
+            if (typeof modoObstaculo !== 'undefined' && modoObstaculo &&
+                typeof desactivarModoObstaculo === 'function') desactivarModoObstaculo();
+        }
+    }
+
+    // Empty states
     function _actualizarObsPanel() {
         const obsLista = document.getElementById('obs-flotante-lista');
         const evLista  = document.getElementById('ev-flotante-lista');
@@ -851,115 +988,101 @@
         if (obsEmpty) obsEmpty.style.display = (obsLista?.children.length > 0) ? 'none' : 'block';
         if (evEmpty)  evEmpty.style.display  = (evLista?.children.length  > 0) ? 'none' : 'block';
     }
-    // Observar cambios en las listas
+
+    // ── Stubs para funciones de tabla/panel (no disponibles en móvil) ────────
+    function abrirTabla()           { showNotification('Tabla no disponible en móvil. Usa Exportar .gpkg.', 'info'); }
+    function abrirTablaObstaculos() { showNotification('Tabla no disponible en móvil.', 'info'); }
+    function toggleLeftPanel()      {}
+    function selectLeftTab()        {}
+    function selectRightTab()       {}
+
+    // ── Prevenir propagación de clics en botones sobre el mapa ──────────────
     document.addEventListener('DOMContentLoaded', () => {
-        ['obs-flotante-lista','ev-flotante-lista'].forEach(id => {
+        ['m-btn-home'].forEach(id => {
             const el = document.getElementById(id);
-            if (el) new MutationObserver(_actualizarObsPanel).observe(el, { childList: true });
+            if (el && typeof L !== 'undefined') L.DomEvent.disableClickPropagation(el);
+            else if (el) el.addEventListener('click', e => e.stopPropagation());
         });
     });
-
-    // ── Panel Obstáculos/Eventos: sub-tabs ───────────────────────────────────
-    function selectObsTab(tab) {
-        ['obs','ev'].forEach(t => {
-            document.getElementById('m-obstab-' + t)?.classList.toggle('active', t === tab);
-            document.getElementById('m-obssec-' + t)?.style.setProperty('display', t === tab ? 'block' : 'none');
-        });
-
-        const bs = document.getElementById('m-bottom-sheet');
-        if (tab === 'obs') {
-            if (bs) { bs.style.borderTop = '3px solid #e67e22'; bs.style.boxShadow = '0 -4px 24px rgba(230,126,34,0.3)'; }
-            // Desactivar evento si está activo
-            if (window._modoEvento && typeof desactivarModoEvento === 'function') desactivarModoEvento();
-        } else {
-            if (bs) { bs.style.borderTop = '3px solid #8e44ad'; bs.style.boxShadow = '0 -4px 24px rgba(142,68,173,0.3)'; }
-            // Desactivar obstáculo si está activo
-            if (typeof modoObstaculo !== 'undefined' && modoObstaculo &&
-                typeof desactivarModoObstaculo === 'function') desactivarModoObstaculo();
-        }
-    }
     </script>
 
+    <!-- Control de capas base para móvil -->
     <script>
-    // ── Control de capas base para móvil ─────────────────────────────────────
-    // Se ejecuta después de que todos los scripts se hayan cargado
     setTimeout(function() {
         const ctrl = document.querySelector('.leaflet-top.leaflet-left .leaflet-control-layers');
         const controls = document.getElementById('map-controls');
-        if (!ctrl || !controls) {
-            console.log('Control de capas base no encontrado o contenedor no disponible');
-            return;
-        }
+        if (!ctrl || !controls) return;
 
-        // Sacar el ctrl del DOM de Leaflet y esconderlo fuera de la pantalla
         ctrl.parentNode.removeChild(ctrl);
         ctrl.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
         document.body.appendChild(ctrl);
 
-        // Crear botón 🗺️ independiente en .map-controls
         const btn = document.createElement('button');
         btn.title = 'Capas base';
-        btn.style.cssText = 'position:fixed;top:74px;left:12px;width:44px;height:44px;background:#fff;border:none;border-radius:12px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,0.18);transition:background 0.15s;z-index:1000;pointer-events:all;';
+        btn.style.cssText = 'position:fixed;top:74px;left:12px;width:44px;height:44px;background:#fff;border:none;border-radius:12px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,0.18);z-index:1000;pointer-events:all;';
         btn.textContent = '🗺️';
-        btn.onmouseover = function() { this.style.background = '#f8f9fa'; };
-        btn.onmouseout = function() { this.style.background = '#fff'; };
-        btn.onmousedown = function() { this.style.background = '#f0f0f0'; };
-        btn.onmouseup = function() { this.style.background = '#f8f9fa'; };
         controls.appendChild(btn);
 
         let panelAbierto = false;
-
-        // Función para abrir el panel
-        function abrirPanel() {
-            const r = btn.getBoundingClientRect();
-            ctrl.classList.add('leaflet-control-layers-expanded');
-            ctrl.style.cssText = [
-                'position:fixed',
-                'top:' + Math.round(r.top) + 'px',
-                'left:' + (Math.round(r.right) + 8) + 'px',
-                'z-index:2000',
-                'background:white',
-                'border-radius:8px',
-                'border:1px solid #dde3ea',
-                'box-shadow:0 6px 20px rgba(0,0,0,0.15)',
-                'padding:6px 4px',
-                'min-width:190px'
-            ].join(';');
-            panelAbierto = true;
-        }
-
-        // Función para cerrar el panel
-        function cerrarPanel() {
-            ctrl.classList.remove('leaflet-control-layers-expanded');
-            ctrl.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
-            panelAbierto = false;
-        }
-
-        // Evento click del botón
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
             if (panelAbierto) {
-                cerrarPanel();
+                ctrl.classList.remove('leaflet-control-layers-expanded');
+                ctrl.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
+                panelAbierto = false;
             } else {
-                abrirPanel();
+                const r = btn.getBoundingClientRect();
+                ctrl.classList.add('leaflet-control-layers-expanded');
+                ctrl.style.cssText = [
+                    'position:fixed',
+                    'top:' + Math.round(r.top) + 'px',
+                    'left:' + (Math.round(r.right) + 8) + 'px',
+                    'z-index:2000','background:white','border-radius:8px',
+                    'border:1px solid #dde3ea','box-shadow:0 6px 20px rgba(0,0,0,0.15)',
+                    'padding:6px 4px','min-width:190px'
+                ].join(';');
+                panelAbierto = true;
             }
         });
-
-        // Cerrar panel al hacer clic fuera
         document.addEventListener('click', function(e) {
             if (panelAbierto && !btn.contains(e.target) && !ctrl.contains(e.target)) {
-                cerrarPanel();
+                ctrl.classList.remove('leaflet-control-layers-expanded');
+                ctrl.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
+                panelAbierto = false;
             }
         });
-
-        console.log('Botón de capas base creado exitosamente');
-    }, 500); // Mayor delay para asegurar que todo esté cargado
+    }, 500);
     </script>
 
+    <!-- Sincronizar controles POI según rol -->
+    <script>
+    (function() {
+        function _sincronizarControlesPoi(rol) {
+            const el = document.getElementById('pois-controles-registrado');
+            if (!el) return;
+            el.style.display = (rol === 'registrado' || rol === 'admin') ? '' : 'none';
+        }
+        fetch('/api/auth/me')
+            .then(r => r.json())
+            .then(data => _sincronizarControlesPoi(data.rol || 'invitado'))
+            .catch(() => {});
+        const _waitAuth = setInterval(function() {
+            if (typeof window.cerrarSesion === 'function') {
+                clearInterval(_waitAuth);
+                if (typeof window.abrirModalRegistro === 'function') {
+                    const _orig = window.abrirModalRegistro;
+                    window.abrirModalRegistro = function() {
+                        const ret = _orig.apply(this, arguments);
+                        fetch('/api/auth/me').then(r=>r.json()).then(d=>_sincronizarControlesPoi(d.rol||'invitado')).catch(()=>{});
+                        return ret;
+                    };
+                }
+            }
+        }, 150);
+    })();
+    </script>
 
-    <!-- ═══════════════════════════════════════
-         BOTTOM NAV
-    ═══════════════════════════════════════ -->
+    <!-- BOTTOM NAV -->
     <nav class="m-bottom-nav">
         <button class="m-nav-btn active" id="m-nav-explorar" onclick="selectMobileMode('explorar')">
             <span class="m-nav-icon">🧭</span>
