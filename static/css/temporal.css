@@ -1,0 +1,86 @@
+/* ============================================
+   SIMULACIÓN TEMPORAL y ESTADO
+   ============================================ */
+#stats-tiempo {
+    animation: slideDown 0.3s ease-out;
+}
+
+#select-dia {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#select-dia:hover {
+    border-color: #3498db;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+}
+
+#select-dia:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.legend.active {
+    animation: gentle-glow 2s ease-in-out infinite;
+}
+
+@keyframes gentle-glow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(52, 152, 219, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 15px rgba(52, 152, 219, 0.4);
+    }
+}
+
+.via-congestionada {
+    animation: dash-animation 1s linear infinite;
+}
+
+@keyframes dash-animation {
+    0% {
+        stroke-dashoffset: 0;
+    }
+    100% {
+        stroke-dashoffset: 30;
+    }
+}
+
+#contexto-momento.madrugada {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    border-left-color: #34495e;
+}
+
+#contexto-momento.manana {
+    background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+    border-left-color: #f39c12;
+}
+
+#contexto-momento.tarde {
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    border-left-color: #3498db;
+}
+
+#contexto-momento.noche {
+    background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%);
+    border-left-color: #8e44ad;
+}
+
+.leaflet-marker-icon.pulsing-marker,
+.leaflet-interactive.via-congestionada {
+    transition: all 0.3s ease;
+}
+
+.leaflet-tooltip.temporal-tooltip {
+    background-color: rgba(44, 62, 80, 0.95);
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.leaflet-tooltip.temporal-tooltip::before {
+    border-top-color: rgba(44, 62, 80, 0.95);
+}

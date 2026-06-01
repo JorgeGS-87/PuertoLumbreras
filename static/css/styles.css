@@ -1,0 +1,2099 @@
+/* ============================================
+   ESTILOS GLOBALES
+   ============================================ */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+}
+
+/* ============================================
+   CURSORES PERSONALIZADOS
+   ============================================ */
+.cursor-origen {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40"><circle cx="16" cy="16" r="14" fill="%2327ae60" stroke="white" stroke-width="2"/><circle cx="16" cy="16" r="6" fill="white"/><path d="M 16 16 L 16 38" stroke="%2327ae60" stroke-width="3"/></svg>') 16 38, crosshair !important;
+}
+
+.cursor-destino {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40"><circle cx="16" cy="16" r="14" fill="%23e74c3c" stroke="white" stroke-width="2"/><circle cx="16" cy="16" r="6" fill="white"/><path d="M 16 16 L 16 38" stroke="%23e74c3c" stroke-width="3"/></svg>') 16 38, crosshair !important;
+}
+
+#map.modo-obstaculo,
+#map.modo-evento {
+    cursor: crosshair;
+}
+
+#btn-obstaculo.obstaculo-activo,
+#btn-obstaculo-panel.obstaculo-activo {
+    background: #e67e22;
+    color: #fff;
+    font-weight: 700;
+}
+
+#btn-crear-evento.evento-activo {
+    background: #8e44ad;
+    color: #fff;
+    font-weight: 700;
+}
+
+/* ============================================
+   NOTIFICACIÓN DE INSTRUCCIONES
+   ============================================ */
+.map-instruction {
+    position: absolute;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 900;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    display: none;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.map-instruction.show {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: slideDown 0.3s ease-out;
+}
+
+.map-instruction.origen {
+    border-left: 4px solid #27ae60;
+}
+
+.map-instruction.destino {
+    border-left: 4px solid #e74c3c;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -10px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+.instruction-icon {
+    font-size: 20px;
+}
+
+.instruction-text {
+    font-size: 14px;
+}
+
+/* ============================================
+   HEADER
+   ============================================ */
+.header {
+    background: #2c3e50;
+    color: white;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 1800;
+    position: relative;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.header-title {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.status-badge {
+    background: #27ae60;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: white;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ============================================
+   CONTENEDOR PRINCIPAL
+   ============================================ */
+.main-container {
+    display: flex;
+    height: calc(100vh - 50px);
+    position: relative;
+    margin-left: 56px;
+    transition: height 0.3s cubic-bezier(.4,0,.2,1);
+}
+
+/* El mapa ocupa todo el espacio del main-container.
+   Cuando el panel izquierdo está abierto (fixed), le damos margen. */
+#map {
+    flex: 1;
+    transition: margin-left 0.3s ease;
+}
+
+body.left-panel-open #map {
+    margin-left: 320px;
+}
+
+/* Cuando la tabla está abierta, el mapa encoge para no quedar bajo la barra azul */
+body.tabla-abierta .main-container {
+    height: calc(100vh - 50px - 36vh);
+    min-height: 200px;
+}
+
+@media (max-width: 900px) {
+    .main-container {
+        margin-left: 0;
+    }
+}
+
+/* ============================================
+   PANEL IZQUIERDO
+   ============================================ */
+.left-panel {
+    width: 320px;
+    background: white;
+    border-right: 1px solid #ddd;
+    display: flex;
+    flex-direction: column;
+    z-index: 9000;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    transition: width 0.3s ease, transform 0.3s ease;
+    position: fixed;
+    top: 48px;
+    left: 56px;
+    bottom: 0;
+    overflow: hidden;
+}
+
+.left-panel.collapsed {
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    box-shadow: none;
+    border: none;
+}
+
+/* Cuando la tabla está abierta, el panel izquierdo se acorta por abajo */
+
+.panel-header {
+    background: #34495e;
+    color: white;
+    padding: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.panel-header-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.collapse-btn {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 5px;
+    transition: transform 0.3s;
+}
+
+.collapse-btn:hover {
+    transform: scale(1.2);
+}
+
+.panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+}
+
+/* ============================================
+   SECCIÓN TABLAS
+   ============================================ */
+.tables-section {
+    display: none;
+}
+
+.tables-section.active {
+    display: block;
+}
+
+.simple-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.simple-table th,
+.simple-table td {
+    border: 1px solid #e6eef6;
+    padding: 6px 8px;
+    text-align: left;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #2c3e50;
+}
+
+.simple-table th {
+    background: #f5f8fb;
+    font-weight: 700;
+}
+
+.simple-table td {
+    background: #ffffff;
+}
+
+/* ============================================
+   PANEL DERECHO
+   ============================================ */
+.right-panel {
+    width: 320px;
+    background: white;
+    border-left: 1px solid #ddd;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    z-index: 500;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.right-panel.collapsed {
+    width: 0;
+    min-width: 0;
+    border: none;
+    box-shadow: none;
+    overflow: hidden;
+}
+
+.property-group {
+    padding: 15px;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.property-group h4 {
+    font-size: 13px;
+    color: #2c3e50;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.property-item {
+    margin-bottom: 15px;
+}
+
+.property-item label {
+    display: block;
+    font-size: 12px;
+    color: #7f8c8d;
+    margin-bottom: 5px;
+}
+
+.mode-selector {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 15px;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 8px;
+    background: #ecf0f1;
+    border: 2px solid transparent;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    text-align: center;
+    transition: all 0.3s;
+}
+
+.mode-btn:hover {
+    background: #d5dbdb;
+}
+
+.mode-btn.active {
+    background: #3498db;
+    color: white;
+    border-color: #2980b9;
+}
+
+/* ============================================
+   CONTROLES DEL MAPA — misma altura que el zoom,
+   a su derecha, en fila horizontal.
+   Zoom Leaflet: 26px ancho. Separación: 6px → left base = 66+26+6 = 98px.
+   JS sobreescribe el left cuando el panel izquierdo se abre.
+   ============================================ */
+.map-controls {
+    position: fixed;
+    bottom: 18px;        /* centrado con zoom: 10px + (52-36)/2 */
+    left: 98px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    transition: bottom 0.3s cubic-bezier(.4,0,.2,1), left 0.3s ease;
+}
+
+.control-btnHome,
+.control-btnRuta {
+    position: static;
+    background: #fff;
+    border: none;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s;
+    padding: 0;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+}
+
+/* Si solo hay un botón */
+.map-controls > button:only-child {
+    border-radius: 4px;
+}
+
+/* ── Botones Home y Capas Base como control nativo Leaflet ── */
+.map-btns-control {
+    margin-bottom: 0 !important;
+}
+
+.map-btn-ctrl {
+    width: 36px;
+    height: 36px;
+    background: #fff;
+    border: 2px solid rgba(0,0,0,0.2);
+    border-radius: 4px;
+    box-shadow: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s;
+}
+
+.map-btn-ctrl:hover {
+    background: #f4f4f4;
+}
+
+/* ── Override zoom de Leaflet: contenedor bottomleft en fila horizontal ── */
+.leaflet-bottom.leaflet-left {
+    position: fixed !important;
+    bottom: 10px !important;
+    left: 66px;   /* JS sobreescribe este valor en tiempo real */
+    transition: bottom 0.3s cubic-bezier(.4,0,.2,1), left 0.3s ease !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-end !important;
+    gap: 6px !important;
+}
+
+/* Zoom primero (izquierda), botones después (derecha) */
+.leaflet-bottom.leaflet-left .leaflet-control-zoom {
+    order: 1;
+}
+.leaflet-bottom.leaflet-left .map-btns-control {
+    order: 2;
+    margin-bottom: 10px !important;
+}
+
+/* Cuando la tabla está abierta, subir el bloque entero */
+body.tabla-abierta .leaflet-bottom.leaflet-left {
+    bottom: calc(36vh + 10px) !important;
+}
+
+/* Hover uniforme para todos los botones del bloque */
+.control-btnHome:hover,
+.control-btnRuta:hover {
+    background: #f4f4f4;
+}
+
+.control-btnHome.active,
+.control-btnRuta.active {
+    background: #e74c3c;
+    color: white;
+}
+
+/* ============================================
+   BARRA LATERAL DE PESTAÑAS
+   ============================================ */
+.column {
+    position: fixed;
+    left: 0;
+    top: 48px;
+    bottom: 0;
+    width: 56px;
+    background: #111;
+    color: #fff;
+    z-index: 1700;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 12px;
+    gap: 12px;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.35);
+}
+
+.column.right {
+    right: 0;
+    left: auto;
+    box-shadow: -2px 0 8px rgba(0,0,0,0.35);
+}
+
+.side-bar-item {
+    width: 42px;
+    height: 42px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    color: #cfd8dc;
+    border: none;
+    background: transparent;
+}
+
+.side-bar-item:hover {
+    background: rgba(255,255,255,0.05);
+    color: #fff;
+    transform: translateX(2px);
+}
+
+.side-bar-item.active {
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,0.03);
+}
+
+.side-bar-item::after {
+    content: attr(data-title);
+    position: absolute;
+    top: 50%;
+    left: 100%;
+    transform: translateY(-50%) translateX(4px);
+    background: #fff;
+    color: #222;
+    padding: 6px 10px;
+    border-radius: 6px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.28);
+    white-space: nowrap;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+    pointer-events: none;
+    z-index: 3001;
+}
+
+.side-bar-item:hover::after {
+    opacity: 1;
+    transform: translateY(-50%) translateX(8px);
+}
+
+/* Ajuste especial para tooltips de la barra derecha */
+.column.right .side-bar-item::after {
+    left: auto;
+    right: 100%;
+    transform: translateY(-50%) translateX(-4px);
+}
+
+.column.right .side-bar-item:hover::after {
+    transform: translateY(-50%) translateX(0);
+}
+
+
+
+@media (max-width: 900px) {
+    .column {
+        display: none;
+    }
+}
+
+/* ============================================
+   Advertencia de la ruta
+   ============================================ */
+
+.modal-body canvas {
+    max-width: 100%;
+    height: auto !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .modal-content-boxplot {
+        width: 95%;
+        max-height: 95vh;
+    }
+    
+    .modal-header {
+        padding: 15px 20px;
+    }
+    
+    .modal-header h3 {
+        font-size: 16px;
+    }
+    
+    .modal-body {
+        padding: 20px;
+    }
+    
+    .modal-body canvas {
+        height: 400px !important;
+    }
+}
+
+/* ============================================
+   BOX PLOT PANEL DERECHO - TAMAÑO AUMENTADO
+   ============================================ */
+/* ============================================
+   MENÚ DESPLEGABLE DE EXPORTACIÓN
+   ============================================ */
+.export-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #dfe6e9;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    margin-top: 5px;
+    overflow: hidden;
+    animation: slideDownMenu 0.2s ease-out;
+}
+
+@keyframes slideDownMenu {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.export-option {
+    width: 100%;
+    padding: 12px 15px;
+    background: white;
+    border: none;
+    border-bottom: 1px solid #ecf0f1;
+    text-align: left;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: #2c3e50;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.export-option:last-child {
+    border-bottom: none;
+}
+
+.export-option:hover {
+    background: #f8f9fa;
+    color: #3498db;
+    padding-left: 20px;
+}
+
+.export-option:active {
+    background: #e8f4f8;
+}
+
+/* ==========================================
+   ESTILOS PARA PANEL MOMENTO
+   ========================================== */
+
+/* Contenedor principal */
+.momento-section {
+    padding: 20px;
+}
+
+/* Slider de hora personalizado */
+#slider-hora::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    cursor: pointer;
+    border: 3px solid #3498db;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+}
+
+#slider-hora::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+}
+
+#slider-hora::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    cursor: pointer;
+    border: 3px solid #3498db;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+}
+
+#slider-hora::-moz-range-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+}
+
+/* Display de hora */
+#display-hora {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.15s ease-in-out, color 0.3s ease;
+}
+
+/* Animación de pulsación para marcadores temporales */
+@keyframes pulse-marker {
+    0% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+    50% {
+        transform: scale(1.15);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+}
+
+.pulsing-marker {
+    animation: pulse-marker 2s ease-in-out infinite;
+}
+
+/* Animación de congestión para vías */
+@keyframes dash-animation {
+    0% {
+        stroke-dashoffset: 0;
+    }
+    100% {
+        stroke-dashoffset: 30;
+    }
+}
+
+.via-congestionada {
+    animation: dash-animation 1s linear infinite;
+}
+
+/* Contexto momento - gradiente según hora */
+#contexto-momento.madrugada {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    border-left-color: #34495e;
+}
+
+#contexto-momento.manana {
+    background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+    border-left-color: #f39c12;
+}
+
+#contexto-momento.tarde {
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    border-left-color: #3498db;
+}
+
+#contexto-momento.noche {
+    background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%);
+    border-left-color: #8e44ad;
+}
+
+/* Transiciones suaves para elementos temporales */
+.leaflet-marker-icon.pulsing-marker,
+.leaflet-interactive.via-congestionada {
+    transition: all 0.3s ease;
+}
+
+/* Tooltips mejorados para elementos temporales */
+.leaflet-tooltip.temporal-tooltip {
+    background-color: rgba(44, 62, 80, 0.95);
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.leaflet-tooltip.temporal-tooltip::before {
+    border-top-color: rgba(44, 62, 80, 0.95);
+}
+
+/* Estadísticas temporales con efecto de entrada */
+#stats-tiempo {
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Botonera con hover mejorado */
+/* Selector de día con estilo mejorado */
+#select-dia {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#select-dia:hover {
+    border-color: #3498db;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+}
+
+#select-dia:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+/* Efecto de brillo en leyenda cuando está activa */
+.legend.active {
+    animation: gentle-glow 2s ease-in-out infinite;
+}
+
+@keyframes gentle-glow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(52, 152, 219, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 15px rgba(52, 152, 219, 0.4);
+    }
+}
+
+/* ============================================
+   PANEL INFERIOR DE TABLA (estilo ArcGIS Pro)
+   ============================================ */
+#table-panel {
+    position: fixed;
+    bottom: 0;
+    /* left/right se calculan dinámicamente desde JS leyendo getBoundingClientRect de #map */
+    height: 0;
+    background: #fff;
+    border-top: 0px solid #3498db;
+    box-shadow: none;
+    z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    transition: height 0.3s cubic-bezier(.4,0,.2,1), left 0.3s ease, right 0.3s ease;
+    overflow: hidden;
+}
+
+#table-panel.open {
+    height: 36vh;
+    min-height: 200px;
+    border-top: 3px solid #3498db;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.18);
+}
+
+/* Cabecera del panel */
+#table-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #2c3e50;
+    color: #fff;
+    padding: 0 14px;
+    height: 38px;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+#table-panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    flex: 1;
+    letter-spacing: 0.3px;
+}
+
+/* Barra de comandos */
+#table-panel-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: #f5f8fb;
+    border-bottom: 1px solid #dfe6e9;
+    flex-shrink: 0;
+}
+
+#table-panel-toolbar input {
+    flex: 1;
+    padding: 5px 10px;
+    border: 1px solid #dfe6e9;
+    border-radius: 5px;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+#table-panel-toolbar input:focus {
+    border-color: #3498db;
+}
+
+#table-panel-toolbar button {
+    padding: 5px 12px;
+    border: none;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.tp-btn-apply  { background: #3498db; color: #fff; }
+.tp-btn-apply:hover  { background: #2980b9; }
+.tp-btn-reset  { background: #95a5a6; color: #fff; }
+.tp-btn-reset:hover  { background: #7f8c8d; }
+
+#table-panel-info {
+    font-size: 11px;
+    color: #7f8c8d;
+    white-space: nowrap;
+}
+
+/* Área de scroll de la tabla */
+#table-panel-body {
+    flex: 1;
+    overflow: auto;
+}
+
+#table-panel-body table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+#table-panel-body thead th {
+    position: sticky;
+    top: 0;
+    background: #ecf0f1;
+    border: 1px solid #dfe6e9;
+    padding: 5px 8px;
+    font-weight: 700;
+    color: #2c3e50;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+#table-panel-body tbody td {
+    border: 1px solid #ecf0f1;
+    padding: 4px 8px;
+    white-space: nowrap;
+    color: #34495e;
+}
+
+#table-panel-body tbody tr:hover {
+    background: #eaf4fb;
+}
+
+/* Botón modo eliminar columnas */
+.btn-modo-eliminar {
+    padding: 4px 10px;
+    font-size: 12px;
+    border: 1px solid #bdc3c7;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+    background: #ecf0f1;
+    color: #2c3e50;
+}
+.btn-modo-eliminar.active {
+    background: #e74c3c;
+    color: #fff;
+    border-color: #c0392b;
+}
+.btn-modo-eliminar:hover:not(.active) {
+    background: #d5dbdb;
+}
+
+/* Botón ver tabla en layer-item */
+.btn-ver-tabla {
+    padding: 3px 8px;
+    font-size: 11px;
+    background: #ecf0f1;
+    border: 1px solid #bdc3c7;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #2c3e50;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.btn-ver-tabla:hover {
+    background: #3498db;
+    color: #fff;
+    border-color: #2980b9;
+}
+
+.btn-ver-tabla.active {
+    background: #3498db;
+    color: #fff;
+    border-color: #2980b9;
+}
+/* ============================================
+   MENÚ FLOTANTE EDITAR TABLA
+   ============================================ */
+#edit-menu {
+    position: fixed;
+    background: #fff;
+    border: 1px solid #dfe6e9;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    z-index: 9000;
+    overflow: hidden;
+    min-width: 185px;
+    animation: fadeInScale 0.15s ease-out;
+}
+@keyframes fadeInScale {
+    from { opacity:0; transform:scale(0.93); }
+    to   { opacity:1; transform:scale(1); }
+}
+.edit-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #2c3e50;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f0f3f4;
+}
+.edit-menu-item:last-child   { border-bottom: none; }
+.edit-menu-item:hover        { background: #f5f8fb; }
+.edit-menu-item.danger:hover { background: #fdecea; color: #e74c3c; }
+
+/* ============================================
+   MODAL GENÉRICO DE EDICIÓN
+   ============================================ */
+#table-edit-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 9500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#table-edit-modal .mbox {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+    width: 420px;
+    max-width: 95vw;
+    overflow: hidden;
+}
+#table-edit-modal .mbox-header {
+    background: #2c3e50;
+    color: #fff;
+    padding: 13px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+#table-edit-modal .mbox-header button {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+}
+#table-edit-modal .mbox-body {
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+#table-edit-modal .mbox-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+#table-edit-modal .mbox-row label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+#table-edit-modal .mbox-row input,
+#table-edit-modal .mbox-row select {
+    padding: 8px 10px;
+    border: 1px solid #dfe6e9;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+#table-edit-modal .mbox-row input:focus,
+#table-edit-modal .mbox-row select:focus {
+    border-color: #3498db;
+}
+#table-edit-modal .mbox-hint {
+    font-size: 11px;
+    color: #95a5a6;
+    margin-top: 2px;
+}
+#table-edit-modal .mbox-footer {
+    padding: 12px 18px;
+    background: #f8f9fa;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid #ecf0f1;
+}
+#table-edit-modal .mbox-footer button {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.mbox-btn-primary  { background: #3498db; color: #fff; }
+.mbox-btn-primary:hover  { background: #2980b9; }
+.mbox-btn-cancel   { background: #ecf0f1; color: #2c3e50; }
+.mbox-btn-cancel:hover   { background: #dfe6e9; }
+
+/* ============================================
+   MODAL CONFIGURACIÓN CAMPOS DE RUTA
+   ============================================ */
+#campos-ruta-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 9600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#campos-ruta-modal .crm-box {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    width: 480px;
+    max-width: 96vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#campos-ruta-modal .crm-header {
+    background: #2c3e50;
+    color: #fff;
+    padding: 14px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+#campos-ruta-modal .crm-header button {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+}
+#campos-ruta-modal .crm-body {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    flex: 1;
+}
+#campos-ruta-modal .crm-field {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 6px 10px;
+}
+#campos-ruta-modal .crm-preview {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    color: #7f8c8d;
+    min-height: 0;
+}
+#campos-ruta-modal .crm-field label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+#campos-ruta-modal .crm-field select,
+#campos-ruta-modal .crm-field input {
+    padding: 7px 10px;
+    border: 1px solid #dfe6e9;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+#campos-ruta-modal .crm-field select:focus,
+#campos-ruta-modal .crm-field input:focus {
+    border-color: #3498db;
+}
+#campos-ruta-modal .crm-hint {
+    font-size: 11px;
+    color: #95a5a6;
+    padding: 0 18px 4px;
+}
+#campos-ruta-modal .crm-footer {
+    padding: 12px 18px;
+    background: #f8f9fa;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid #ecf0f1;
+}
+#campos-ruta-modal .crm-footer button {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.crm-btn-primary { background: #9b59b6; color: #fff; }
+.crm-btn-primary:hover { background: #8e44ad; }
+.crm-btn-secondary { background: #ecf0f1; color: #2c3e50; }
+.crm-btn-secondary:hover { background: #dfe6e9; }
+
+/* Extras modal campos de ruta */
+.crm-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #2c3e50;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 10px 0 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #ecf0f1;
+}
+.crm-default {
+    font-weight: 400;
+    font-size: 10px;
+    color: #95a5a6;
+    text-transform: none;
+}
+
+/* ── Previsualización de campos en modal de ruta ── */
+.crm-preview {
+    margin-top: 5px;
+    min-height: 0;
+    font-size: 11px;
+    line-height: 1.4;
+}
+.crm-preview-warn {
+    display: block;
+    background: #fef5e7;
+    border: 1px solid #f39c12;
+    border-radius: 5px;
+    padding: 6px 10px;
+    color: #7d5a00;
+}
+.crm-preview-ok {
+    display: block;
+    background: #eafaf1;
+    border: 1px solid #2ecc71;
+    border-radius: 5px;
+    padding: 6px 10px;
+    color: #1a7a40;
+}
+
+/* ══════════════════════════════════════════════
+   Header — zona de usuario
+══════════════════════════════════════════════ */
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-right: 16px;
+}
+
+.user-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.75);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.user-badge:hover { background: rgba(255,255,255,0.14); }
+
+.user-rol-badge {
+    font-size: 10px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 2px 7px;
+    color: rgba(255,255,255,0.45);
+}
+
+.btn-logout {
+    background: rgba(231,76,60,0.15);
+    border: 1px solid rgba(231,76,60,0.3);
+    border-radius: 20px;
+    padding: 5px 13px;
+    font-size: 13px;
+    color: rgba(231,76,60,0.8);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-logout:hover {
+    background: rgba(231,76,60,0.28);
+    color: #e74c3c;
+}
+
+/* ══════════════════════════════════════════════
+   Modal de Registro
+══════════════════════════════════════════════ */
+.registro-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0,0,0,0.55);
+    align-items: center;
+    justify-content: center;
+}
+.registro-overlay.open { display: flex; }
+
+.registro-box {
+    background: #1a2a3a;
+    border: 1px solid rgba(0,180,216,0.25);
+    border-radius: 14px;
+    padding: 32px 36px;
+    width: 340px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.registro-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+}
+
+.registro-hint {
+    font-size: 12px;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 24px;
+    line-height: 1.6;
+}
+.registro-hint strong { color: rgba(255,255,255,0.6); }
+
+.registro-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 20px;
+}
+
+.registro-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.registro-input {
+    padding: 11px 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.registro-input:focus  { border-color: #00b4d8; }
+.registro-input::placeholder { color: rgba(255,255,255,0.18); }
+
+.registro-msg {
+    display: none;
+    font-size: 12px;
+    color: #e74c3c;
+    margin-bottom: 14px;
+    padding: 8px 12px;
+    background: rgba(231,76,60,0.1);
+    border-radius: 6px;
+    border: 1px solid rgba(231,76,60,0.25);
+}
+.registro-msg.visible { display: block; }
+
+.registro-footer {
+    display: flex;
+    gap: 10px;
+}
+
+.registro-btn-cancel {
+    flex: 1;
+    padding: 11px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    color: rgba(255,255,255,0.5);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.registro-btn-cancel:hover {
+    background: rgba(255,255,255,0.05);
+    color: rgba(255,255,255,0.75);
+}
+
+.registro-btn-ok {
+    flex: 1;
+    padding: 11px;
+    background: #00b4d8;
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.registro-btn-ok:hover { background: #0096b5; }
+
+/* ══════════════════════════════════════════════
+   Widget flotante búsqueda + Cómo llegar
+══════════════════════════════════════════════ */
+.map-search-widget {
+    position: fixed;
+    top: 62px;
+    left: calc(56px + 10px);
+    transform: none;
+    z-index: 1600;
+    width: 320px;
+    /* filter eliminado: no usar en ancestro de position:fixed */
+    font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.msw-bar {
+    display: flex;
+    align-items: center;
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid #dfe6e9;
+    overflow: hidden;
+    height: 42px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.20);
+}
+.msw-input {
+    flex: 1;
+    padding: 0 12px;
+    border: none;
+    font-size: 13px;
+    outline: none;
+    background: transparent;
+    color: #7f8c8d;
+    cursor: not-allowed;
+    min-width: 0;
+}
+.msw-search-btn {
+    padding: 0 10px;
+    height: 100%;
+    background: transparent;
+    border: none;
+    border-left: 1px solid #dfe6e9;
+    cursor: not-allowed;
+    color: #bdc3c7;
+    font-size: 14px;
+}
+.msw-como-llegar-btn {
+    padding: 0 14px;
+    height: 100%;
+    background: #9b59b6;
+    border: none;
+    border-left: 1px solid #8e44ad;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.msw-como-llegar-btn:hover { background: #8e44ad; }
+
+/* Panel desplegable */
+.msw-panel {
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid #dfe6e9;
+    margin-top: 6px;
+    overflow: hidden;
+}
+.msw-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px 8px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.msw-panel-titulo {
+    font-size: 14px;
+    font-weight: 700;
+    color: #2c3e50;
+}
+.msw-cerrar-btn {
+    background: transparent;
+    border: none;
+    font-size: 16px;
+    color: #7f8c8d;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 50%;
+    transition: background 0.2s;
+    line-height: 1;
+}
+.msw-cerrar-btn:hover { background: #ecf0f1; color: #e74c3c; }
+
+/* Selector vehículo */
+.msw-vehiculos {
+    display: flex;
+    gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.msw-vehiculo {
+    flex: 1;
+    padding: 7px 6px;
+    background: #ecf0f1;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #7f8c8d;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+.msw-vehiculo:hover  { background: #dfe6e9; }
+.msw-vehiculo.active { background: #eaf4fb; border-color: #3498db; color: #2980b9; }
+
+/* Puntos origen/destino */
+.msw-puntos {
+    padding: 6px 14px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.msw-punto-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+}
+.msw-punto-dot { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
+.msw-punto-dot.origen  { color: #3498db; }
+.msw-punto-dot.destino { color: #e74c3c; }
+.msw-punto-label {
+    flex: 1;
+    font-size: 12px;
+    color: #2c3e50;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 5px;
+    transition: background 0.15s;
+}
+.msw-punto-label:hover { background: #f8f9fa; }
+.msw-punto-label.placeholder { color: #aab0b7; font-style: italic; }
+.msw-divider { height: 1px; background: #f0f0f0; margin-left: 28px; }
+
+/* Botones opciones */
+.msw-opciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 14px;
+    overflow: visible;
+}
+.msw-opcion-btn {
+    flex: 1;
+    padding: 8px 6px;
+    background: #f8f9fa;
+    border: 1px solid #dfe6e9;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #2c3e50;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+.msw-opcion-btn:hover { background: #ecf0f1; border-color: #bdc3c7; }
+.msw-opcion-btn.obs-activo  { background: #e67e22 !important; color: #fff !important; border-color: #e67e22 !important; font-weight: 700 !important; }
+.msw-opcion-btn.ev-activo   { background: #8e44ad !important; color: #fff !important; border-color: #8e44ad !important; font-weight: 700 !important; }
+
+/* ══════════════════════════════════════════════
+   Widget flotante búsqueda + Cómo llegar
+   Posición: izquierda, bajo el header, desplazado
+   dinámicamente con el panel izquierdo via JS
+══════════════════════════════════════════════ */
+.map-search-widget {
+    position: fixed;
+    top: 62px;
+    /* left se gestiona dinámicamente en JS (msw_actualizarPosicion).
+       Valor inicial: panel colapsado → 56px (ancho de la barra lateral de tabs) + 10px margen */
+    left: calc(56px + 10px);
+    transform: none;
+    z-index: 1600;
+    width: 320px;
+    /* filter eliminado: no usar en ancestro de position:fixed */
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    transition: left 0.3s ease;
+}
+.msw-bar {
+    display: flex;
+    align-items: center;
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid #dfe6e9;
+    overflow: hidden;
+    height: 42px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.20);
+}
+.msw-input {
+    flex: 1;
+    padding: 0 12px;
+    border: none;
+    font-size: 13px;
+    outline: none;
+    background: transparent;
+    color: #2c3e50;
+    min-width: 0;
+}
+.msw-input::placeholder { color: #aab0b7; }
+.msw-search-btn {
+    padding: 0 10px;
+    height: 100%;
+    background: transparent;
+    border: none;
+    border-left: 1px solid #dfe6e9;
+    cursor: pointer;
+    color: #7f8c8d;
+    font-size: 14px;
+    transition: background 0.15s;
+}
+.msw-search-btn:hover { background: #f8f9fa; }
+.msw-como-llegar-btn {
+    padding: 0 14px;
+    height: 100%;
+    background: #9b59b6;
+    border: none;
+    border-left: 1px solid #8e44ad;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.msw-como-llegar-btn:hover { background: #8e44ad; }
+
+/* Resultados */
+.msw-resultados {
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid #dfe6e9;
+    margin-top: 6px;
+    overflow: hidden;
+}
+.msw-resultado-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f8f9fa;
+    font-size: 13px;
+    color: #2c3e50;
+}
+.msw-resultado-item:last-child { border-bottom: none; }
+.msw-resultado-item:hover { background: #f8f9fa; }
+.msw-resultado-icono { font-size: 15px; flex-shrink: 0; }
+.msw-resultado-nombre { flex: 1; }
+.msw-resultado-count {
+    font-size: 11px;
+    color: #9b59b6;
+    background: #f5eef8;
+    padding: 2px 7px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+.msw-resultado-vacio {
+    padding: 12px 14px;
+    font-size: 13px;
+    color: #aab0b7;
+    text-align: center;
+}
+
+/* Panel Cómo llegar */
+.msw-panel {
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid #dfe6e9;
+    margin-top: 6px;
+    overflow: visible;  /* necesario para que el dropdown no se corte */
+}
+.msw-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px 8px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.msw-panel-titulo { font-size: 14px; font-weight: 700; color: #2c3e50; }
+.msw-cerrar-btn {
+    background: transparent;
+    border: none;
+    font-size: 16px;
+    color: #7f8c8d;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 50%;
+    transition: background 0.2s;
+    line-height: 1;
+}
+.msw-cerrar-btn:hover { background: #ecf0f1; color: #e74c3c; }
+.msw-vehiculos {
+    display: flex;
+    gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.msw-vehiculo {
+    flex: 1;
+    padding: 7px 6px;
+    background: #ecf0f1;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #7f8c8d;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+.msw-vehiculo:hover { background: #dfe6e9; }
+.msw-vehiculo.active { background: #eaf4fb; border-color: #3498db; color: #2980b9; }
+.msw-puntos { padding: 6px 14px; border-bottom: 1px solid #f0f0f0; }
+.msw-punto-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+.msw-punto-dot { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
+.msw-punto-dot.origen { color: #3498db; }
+.msw-punto-dot.destino { color: #e74c3c; }
+.msw-punto-label {
+    flex: 1; font-size: 12px; color: #2c3e50;
+    cursor: pointer; padding: 3px 6px; border-radius: 5px;
+    transition: background 0.15s;
+}
+.msw-punto-label:hover { background: #f8f9fa; }
+.msw-punto-label.placeholder { color: #aab0b7; font-style: italic; }
+.msw-divider { height: 1px; background: #f0f0f0; margin-left: 28px; }
+.msw-opciones { display: flex; gap: 6px; padding: 10px 14px; }
+.msw-opcion-btn {
+    flex: 1; padding: 8px 6px;
+    background: #f8f9fa; border: 1px solid #dfe6e9;
+    border-radius: 8px; font-size: 12px; font-weight: 600;
+    color: #2c3e50; cursor: pointer; transition: all 0.2s; text-align: center;
+}
+.msw-opcion-btn:hover { background: #ecf0f1; border-color: #bdc3c7; }
+
+/* ══════════════════════════════════════════════
+   Registro de obstáculos (panel izquierdo)
+══════════════════════════════════════════════ */
+.obs-item {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-left: 3px solid #e67e22;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 7px;
+    font-size: 12px;
+}
+.obs-item-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
+}
+.obs-item-titulo { flex: 1; color: #2c3e50; line-height: 1.5; }
+.obs-cruce { color: #e67e22; font-style: italic; font-size: 11px; }
+.obs-item-sub { margin-top: 3px; display: flex; flex-direction: column; gap: 1px; }
+.obs-via { font-size: 11px; color: #7f8c8d; padding-left: 4px; }
+.obs-item-del {
+    background: transparent;
+    border: none;
+    color: #bdc3c7;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    flex-shrink: 0;
+    line-height: 1;
+    transition: color 0.15s;
+}
+.obs-item-del:hover { color: #e74c3c; }
+
+/* ══ Panel flotante de obstáculos (derecha del mapa) ══ */
+#obstaculos-panel-flotante {
+    position: fixed;
+    top: 122px;
+    right: 10px;
+    z-index: 1900;
+    width: 240px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 6px 28px rgba(0,0,0,0.18), 0 1px 6px rgba(0,0,0,0.10);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: obsFadeIn 0.22s ease;
+}
+@keyframes obsFadeIn {
+    from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+.obs-flotante-header {
+    background: #e67e22;
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+.obs-flotante-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+.obs-flotante-badge {
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 700;
+}
+#obs-flotante-lista {
+    overflow-y: auto;
+    padding: 8px 10px;
+    /* Máximo 4 ítems visibles (~48px cada uno) antes de hacer scroll */
+    max-height: calc(7 * 48px);
+}
+
+/* ══════════════════════════════════════════════
+   Modal porcentaje de obstáculo (al crear)
+══════════════════════════════════════════════ */
+.obstaculo-box {
+    background: #1a2a3a;
+    border: 1px solid rgba(0,180,216,0.25);
+    border-radius: 14px;
+    padding: 28px 32px;
+    width: 320px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.obstaculo-titulo { font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+.obstaculo-hint   { font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 20px; line-height: 1.6; }
+.obstaculo-field  { margin-bottom: 20px; }
+.obstaculo-label  { display: block; font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.6); margin-bottom: 10px; }
+.obstaculo-slider { width: 100%; height: 6px; border-radius: 5px; outline: none; cursor: pointer; accent-color: #f39c12; }
+.obstaculo-slider-marks {
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: rgba(255,255,255,0.3); margin-top: 6px;
+}
+.obstaculo-footer { display: flex; gap: 10px; }
+.obstaculo-btn-cancel {
+    flex: 1; padding: 10px; background: transparent;
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+    color: rgba(255,255,255,0.5); font-size: 13px; cursor: pointer;
+}
+.obstaculo-btn-cancel:hover { background: rgba(255,255,255,0.05); }
+.obstaculo-btn-ok {
+    flex: 1; padding: 10px; background: #e67e22; border: none;
+    border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.obstaculo-btn-ok:hover { background: #d35400; }
+
+/* ============================================
+   WIDGET SALIR AHORA — DROPDOWN TEMPORAL
+   ============================================ */
+
+.salir-dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 10px 16px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid #f0f0f0;
+    text-align: left;
+    cursor: pointer;
+    font-size: 13px;
+    color: #2c3e50;
+    transition: background 0.15s;
+}
+
+.salir-dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.salir-dropdown-item:hover {
+    background: #f0f7ff;
+    color: #2980b9;
+}
+
+/* ============================================
+   SIMULACIÓN TEMPORAL — CAPAS DE TRÁFICO
+   ============================================ */
+
+/* Vías con tráfico activo: animación de pulso sutil */
+.via-trafico-activa {
+    animation: trafico-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes trafico-pulse {
+    0%, 100% { opacity: 0.85; }
+    50%       { opacity: 1;    }
+}
+
+/* Vías base (sin POIs activos): apagadas para destacar las congestionadas */
+.via-trafico-base {
+    opacity: 0.35;
+}
+/* ============================================
+   CONTROL DE CAPAS BASE (siempre expandido 🗺️)
+   ============================================ */
+
+/* Forzar estado expandido siempre — Leaflet añade/quita
+   .leaflet-control-layers-expanded con hover/touch;
+   lo aplicamos también al contenedor base para que nunca
+   colapse cuando el ratón sale. */
+.leaflet-control-layers,
+.leaflet-control-layers-expanded {
+    background: #ffffff !important;
+    border-radius: 8px !important;
+    border: 1px solid #dde3ea !important;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15) !important;
+    padding: 6px 4px !important;
+    min-width: 190px !important;
+    color: #2c3e50 !important;
+    font-family: 'Segoe UI', system-ui, sans-serif !important;
+    font-size: 13px !important;
+}
+
+/* Ocultar siempre el botón toggle — el panel ya es visible */
+.leaflet-control-layers-toggle {
+    display: none !important;
+}
+
+/* Ocultar el toggle también dentro del panel expandido */
+.leaflet-control-layers-expanded .leaflet-control-layers-toggle {
+    display: none !important;
+}
+
+.leaflet-control-layers-base label,
+.leaflet-control-layers-overlays label {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 7px 12px !important;
+    margin: 0 !important;
+    cursor: pointer !important;
+    border-radius: 6px !important;
+    transition: background 0.15s !important;
+    color: #2c3e50 !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+}
+
+.leaflet-control-layers-base label:hover,
+.leaflet-control-layers-overlays label:hover {
+    background: #f0f4f8 !important;
+}
+
+.leaflet-control-layers-base input[type="radio"],
+.leaflet-control-layers-overlays input[type="checkbox"] {
+    accent-color: #3498db !important;
+    width: 14px !important;
+    height: 14px !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+}
+
+.leaflet-control-layers-separator {
+    border-top: 1px solid #e8ecf0 !important;
+    margin: 4px 0 !important;
+}
+
+/* ══════════════════════════════════════════════
+   Panel flotante de eventos especiales
+   Se posiciona debajo de #obstaculos-panel-flotante via JS
+══════════════════════════════════════════════ */
+#eventos-panel-flotante {
+    position: fixed;
+    top: 122px;
+    right: 10px;
+    z-index: 1900;
+    width: 240px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 6px 28px rgba(0,0,0,0.18), 0 1px 6px rgba(0,0,0,0.10);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: obsFadeIn 0.22s ease;
+}
+.ev-flotante-header {
+    background: linear-gradient(135deg, #8e44ad, #9b59b6);
+    color: #fff;
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+.ev-flotante-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+.ev-flotante-badge {
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 700;
+}
+#ev-flotante-lista {
+    overflow-y: auto;
+    padding: 8px 10px;
+    /* Máximo 4 ítems visibles antes de hacer scroll */
+    max-height: calc(5 * 55px);
+}
+.ev-flotante-item {
+    padding: 6px 4px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background 0.12s;
+    border-radius: 4px;
+}
+.ev-flotante-item:last-child { border-bottom: none; }
+.ev-flotante-item:hover { background: #faf5ff; }
+/* ── Import/Export button rows: siempre flex independientemente de cómo JS los muestre ── */
+#obstaculos-import-export-top,
+#eventos-import-export-top {
+    display: none;  /* oculto por defecto */
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+#obstaculos-import-export-top.visible,
+#eventos-import-export-top.visible,
+#obstaculos-import-export-top[style*="flex"],
+#eventos-import-export-top[style*="flex"],
+#obstaculos-import-export-top[style*="grid"],
+#obstaculos-import-export-top[style*="block"] {
+    display: flex !important;
+}

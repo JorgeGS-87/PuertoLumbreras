@@ -1,0 +1,171 @@
+/* ============================================
+   MAPA / RUTAS
+   ============================================ */
+#map {
+    flex: 1;
+    position: relative;
+}
+
+#map .leaflet-control-zoom {
+    margin-left: 10px;
+    margin-top: 10px;
+}
+
+/* El control de capas (OSM/PNOA) siempre visible en la esquina superior derecha
+   del área del mapa: fixed, desplazado 56px por la barra lateral de iconos */
+.leaflet-top.leaflet-right {
+    position: fixed !important;
+    top: 58px !important;
+    right: 10px !important;
+    margin: 0 !important;
+    transition: right 0.3s ease !important;
+    z-index: 1600 !important;
+}
+
+.leaflet-popup-content {
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.leaflet-popup-content a {
+    display: inline-block;
+    max-width: 240px;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+    color: #1a73e8;
+    text-decoration: underline;
+}
+
+.leaflet-control-zoom,
+.map-controls {
+    z-index: 1400;
+}
+
+.control-btnHome,
+.control-btnRuta {
+    position: absolute;
+    left: -5px;
+    background: white;
+    border: 2px solid #ddd;
+    padding: 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 16px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.control-btnHome {
+    top: 65px;
+}
+
+.control-btnRuta {
+    top: 115px;
+}
+
+.control-btnHome:hover,
+.control-btnRuta:hover {
+    background: #3498db;
+    color: white;
+    border-color: #3498db;
+}
+
+.control-btnHome.active,
+.control-btnRuta.active {
+    background: #e74c3c;
+    color: white;
+    border-color: #c0392b;
+}
+
+/* ============================================
+   BARRA LATERAL DE PESTAÑAS
+   ============================================ */
+.column {
+    position: fixed;
+    left: 0;
+    top: 48px;
+    bottom: 0;
+    width: 56px;
+    background: #111;
+    color: #fff;
+    z-index: 2500;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 12px;
+    gap: 12px;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.35);
+}
+
+.column.right {
+    right: 0;
+    left: auto;
+    box-shadow: -2px 0 8px rgba(0,0,0,0.35);
+}
+
+.side-bar-item {
+    width: 42px;
+    height: 42px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    color: #cfd8dc;
+    border: none;
+    background: transparent;
+}
+
+.side-bar-item:hover {
+    background: rgba(255,255,255,0.05);
+    color: #fff;
+    transform: translateX(2px);
+}
+
+.side-bar-item.active {
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,0.03);
+}
+
+.side-bar-item::after {
+    content: attr(data-title);
+    position: absolute;
+    top: 50%;
+    left: 100%;
+    transform: translateY(-50%) translateX(4px);
+    background: #fff;
+    color: #222;
+    padding: 6px 10px;
+    border-radius: 6px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.28);
+    white-space: nowrap;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+    pointer-events: none;
+    z-index: 3001;
+}
+
+.side-bar-item:hover::after {
+    opacity: 1;
+    transform: translateY(-50%) translateX(8px);
+}
+
+.column.right .side-bar-item::after {
+    left: auto;
+    right: 100%;
+    transform: translateY(-50%) translateX(-4px);
+}
+
+.column.right .side-bar-item:hover::after {
+    transform: translateY(-50%) translateX(0);
+}
+
+@media (max-width: 900px) {
+    .column {
+        display: none;
+    }
+}

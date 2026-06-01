@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administración de Usuarios — GeoRuta</title>
+    <style>
+        /* ── Reset y base ── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #f0f2f5;
+            color: #2c3e50;
+            min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        .header {
+            background: #2c3e50;
+            color: #fff;
+            padding: 14px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .header-title { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .header-actions { display: flex; gap: 10px; }
+        .btn-volver {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.25);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s;
+        }
+        .btn-volver:hover { background: rgba(255,255,255,0.2); }
+
+        /* ── Layout principal ── */
+        .main { max-width: 1100px; margin: 32px auto; padding: 0 20px; }
+
+        /* ── Tarjetas de stats ── */
+        .stats-row { display: flex; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
+        .stat-card {
+            flex: 1; min-width: 150px;
+            background: #fff;
+            border-radius: 10px;
+            padding: 18px 22px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border-left: 4px solid #3498db;
+        }
+        .stat-card.green  { border-left-color: #27ae60; }
+        .stat-card.orange { border-left-color: #e67e22; }
+        .stat-card.red    { border-left-color: #e74c3c; }
+        .stat-num  { font-size: 32px; font-weight: 800; color: #2c3e50; }
+        .stat-label { font-size: 13px; color: #7f8c8d; margin-top: 4px; }
+
+        /* ── Panel principal ── */
+        .panel {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+            overflow: hidden;
+        }
+        .panel-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid #ecf0f1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .panel-header h2 { font-size: 16px; font-weight: 700; }
+
+        /* ── Controles barra superior ── */
+        .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .search-input {
+            padding: 8px 14px;
+            border: 1px solid #dfe6e9;
+            border-radius: 8px;
+            font-size: 13px;
+            width: 220px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-input:focus { border-color: #3498db; }
+        .filter-select {
+            padding: 8px 12px;
+            border: 1px solid #dfe6e9;
+            border-radius: 8px;
+            font-size: 13px;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        /* ── Botones ── */
+        .btn {
+            padding: 9px 18px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: opacity 0.15s, transform 0.1s;
+        }
+        .btn:active { transform: scale(0.97); }
+        .btn-primary  { background: #3498db; color: #fff; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-success  { background: #27ae60; color: #fff; }
+        .btn-success:hover { background: #219a52; }
+        .btn-danger   { background: #e74c3c; color: #fff; }
+        .btn-danger:hover { background: #c0392b; }
+        .btn-warning  { background: #f39c12; color: #fff; }
+        .btn-warning:hover { background: #d68910; }
+        .btn-ghost    { background: #ecf0f1; color: #2c3e50; }
+        .btn-ghost:hover { background: #dfe6e9; }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+        /* ── Tabla ── */
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        thead th {
+            background: #f8f9fa;
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 700;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #ecf0f1;
+            white-space: nowrap;
+        }
+        tbody tr {
+            border-bottom: 1px solid #f0f3f4;
+            transition: background 0.12s;
+        }
+        tbody tr:hover { background: #f8fbff; }
+        tbody td { padding: 13px 16px; vertical-align: middle; }
+
+        /* ── Badges ── */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .badge-admin      { background: #fdeaea; color: #c0392b; }
+        .badge-registrado { background: #eaf4fb; color: #2980b9; }
+        .badge-activo     { background: #eafaf1; color: #1e8449; }
+        .badge-inactivo   { background: #fdfefe; color: #95a5a6; border: 1px solid #ecf0f1; }
+
+        /* ── Acciones por fila ── */
+        .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+        /* ── Estado vacío ── */
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: #aab0b7;
+        }
+        .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; }
+        .empty-state p { font-size: 14px; }
+
+        /* ── Modal overlay ── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-box {
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            width: min(480px, 95vw);
+            overflow: hidden;
+            animation: modalIn 0.2s ease;
+        }
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.94); }
+            to   { opacity: 1; transform: scale(1); }
+        }
+        .modal-header {
+            background: #2c3e50;
+            color: #fff;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 15px;
+            font-weight: 700;
+        }
+        .modal-header button {
+            background: none; border: none; color: #fff;
+            font-size: 20px; cursor: pointer; line-height: 1;
+        }
+        .modal-body { padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; }
+        .modal-footer {
+            padding: 14px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #ecf0f1;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* ── Campos del formulario ── */
+        .field { display: flex; flex-direction: column; gap: 6px; }
+        .field label { font-size: 12px; font-weight: 700; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.4px; }
+        .field input, .field select {
+            padding: 10px 12px;
+            border: 1px solid #dfe6e9;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #2c3e50;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .field input:focus, .field select:focus { border-color: #3498db; box-shadow: 0 0 0 3px rgba(52,152,219,0.12); }
+        .field-hint { font-size: 11px; color: #95a5a6; margin-top: 2px; }
+        .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+        /* ── Notificación toast ── */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 13px 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            z-index: 99999;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.25s, transform 0.25s;
+            max-width: 360px;
+            pointer-events: none;
+        }
+        #toast.show { opacity: 1; transform: translateY(0); }
+        #toast.success { background: #27ae60; }
+        #toast.error   { background: #e74c3c; }
+        #toast.info    { background: #3498db; }
+
+        /* ── Password toggle ── */
+        .pw-wrap { position: relative; }
+        .pw-wrap input { width: 100%; padding-right: 42px; }
+        .pw-toggle {
+            position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; cursor: pointer; font-size: 16px; color: #7f8c8d;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            .stats-row { flex-direction: column; }
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .search-input { width: 100%; }
+            .field-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="header">
+    <div class="header-title">
+        🔑 Panel de Administración — Usuarios
+    </div>
+    <div class="header-actions">
+        <a href="/" class="btn-volver">🗺️ Volver al mapa</a>
+    </div>
+</div>
+
+<!-- ── Contenido principal ── -->
+<div class="main">
+
+    <!-- Stats -->
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-num" id="stat-total">—</div>
+            <div class="stat-label">Usuarios totales</div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-num" id="stat-activos">—</div>
+            <div class="stat-label">Activos</div>
+        </div>
+        <div class="stat-card orange">
+            <div class="stat-num" id="stat-admin">—</div>
+            <div class="stat-label">Administradores</div>
+        </div>
+        <div class="stat-card red">
+            <div class="stat-num" id="stat-inactivos">—</div>
+            <div class="stat-label">Desactivados</div>
+        </div>
+    </div>
+
+    <!-- Panel tabla -->
+    <div class="panel">
+        <div class="panel-header">
+            <h2>👥 Gestión de usuarios</h2>
+            <div class="toolbar">
+                <input type="text" class="search-input" id="buscar-input"
+                    placeholder="🔍 Buscar por nombre o email…"
+                    oninput="filtrarTabla()">
+                <select class="filter-select" id="filtro-rol" onchange="filtrarTabla()">
+                    <option value="">Todos los roles</option>
+                    <option value="admin">Admin</option>
+                    <option value="registrado">Registrado</option>
+                </select>
+                <select class="filter-select" id="filtro-estado" onchange="filtrarTabla()">
+                    <option value="">Todos los estados</option>
+                    <option value="activo">Activos</option>
+                    <option value="inactivo">Inactivos</option>
+                </select>
+                <button class="btn btn-success" onclick="abrirModalNuevo()">
+                    ➕ Nuevo usuario
+                </button>
+            </div>
+        </div>
+
+        <div class="table-wrap">
+            <table id="tabla-usuarios">
+                <thead>
+                    <tr>
+                        <th>Usuario</th>
+                        <th>Email</th>
+                        <th>Rol</th>
+                        <th>Estado</th>
+                        <th>Registro</th>
+                        <th>Último acceso</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tabla-body">
+                    <tr>
+                        <td colspan="7">
+                            <div class="empty-state">
+                                <div class="empty-icon">⏳</div>
+                                <p>Cargando usuarios…</p>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal Nuevo / Editar usuario ── -->
+<div class="modal-overlay" id="modal-usuario">
+    <div class="modal-box">
+        <div class="modal-header">
+            <span id="modal-titulo">➕ Nuevo usuario</span>
+            <button onclick="cerrarModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="edit-id">
+
+            <div class="field-row">
+                <div class="field">
+                    <label>Nombre de usuario</label>
+                    <input type="text" id="edit-username" placeholder="ej: maria_lopez" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label>Rol</label>
+                    <select id="edit-rol">
+                        <option value="registrado">Registrado</option>
+                        <option value="admin">Administrador</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="field">
+                <label>Email</label>
+                <input type="email" id="edit-email" placeholder="usuario@ejemplo.com" autocomplete="off">
+            </div>
+
+            <div class="field" id="campo-password">
+                <label>Contraseña <span id="pw-hint-label" style="font-weight:400;text-transform:none;font-size:11px;color:#95a5a6;">(mínimo 6 caracteres)</span></label>
+                <div class="pw-wrap">
+                    <input type="password" id="edit-password" placeholder="Contraseña…" autocomplete="new-password">
+                    <button type="button" class="pw-toggle" onclick="togglePw('edit-password', this)">👁️</button>
+                </div>
+                <span class="field-hint" id="pw-editar-hint" style="display:none;">
+                    Déjalo vacío para no cambiar la contraseña actual.
+                </span>
+            </div>
+
+            <div class="field">
+                <label>Estado de la cuenta</label>
+                <select id="edit-activo">
+                    <option value="true">✅ Activa</option>
+                    <option value="false">🚫 Desactivada</option>
+                </select>
+            </div>
+
+            <div id="modal-error" style="display:none;background:#fdeaea;border:1px solid #e74c3c;border-radius:8px;padding:10px 14px;font-size:13px;color:#c0392b;"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+            <button class="btn btn-primary" id="modal-btn-guardar" onclick="guardarUsuario()">💾 Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal confirmar eliminación ── -->
+<div class="modal-overlay" id="modal-confirmar">
+    <div class="modal-box">
+        <div class="modal-header" style="background:#e74c3c;">
+            <span>🗑️ Confirmar eliminación</span>
+            <button onclick="cerrarModalConfirmar()">✕</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:14px;line-height:1.6;">
+                ¿Estás seguro de que quieres <strong>eliminar permanentemente</strong> al usuario
+                <strong id="confirmar-nombre"></strong>?<br><br>
+                Esta acción no se puede deshacer.
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="cerrarModalConfirmar()">Cancelar</button>
+            <button class="btn btn-danger" id="btn-confirmar-eliminar" onclick="confirmarEliminar()">🗑️ Eliminar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Toast ── -->
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+//  Estado
+// ════════════════════════════════════════════════════════════════
+let _usuarios      = [];   // lista completa de usuarios de la BD
+let _editandoId    = null; // id del usuario que se está editando (null = nuevo)
+let _eliminandoId  = null; // id del usuario a eliminar
+
+// ════════════════════════════════════════════════════════════════
+//  Toast
+// ════════════════════════════════════════════════════════════════
+function toast(msg, tipo = 'info') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className   = 'show ' + tipo;
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.className = ''; }, 3200);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Cargar usuarios desde la API
+// ════════════════════════════════════════════════════════════════
+async function cargarUsuarios() {
+    try {
+        const r    = await fetch('/api/admin/usuarios');
+        const data = await r.json();
+        if (!r.ok) { toast(data.error || 'Error al cargar usuarios', 'error'); return; }
+        _usuarios = data.usuarios || [];
+        actualizarStats();
+        renderTabla(_usuarios);
+    } catch (e) {
+        toast('Error de conexión', 'error');
+    }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Stats
+// ════════════════════════════════════════════════════════════════
+function actualizarStats() {
+    document.getElementById('stat-total').textContent    = _usuarios.length;
+    document.getElementById('stat-activos').textContent  = _usuarios.filter(u => u.activo).length;
+    document.getElementById('stat-admin').textContent    = _usuarios.filter(u => u.rol === 'admin').length;
+    document.getElementById('stat-inactivos').textContent = _usuarios.filter(u => !u.activo).length;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Renderizar tabla
+// ════════════════════════════════════════════════════════════════
+function renderTabla(lista) {
+    const tbody = document.getElementById('tabla-body');
+    if (!lista.length) {
+        tbody.innerHTML = `<tr><td colspan="7">
+            <div class="empty-state">
+                <div class="empty-icon">🔍</div>
+                <p>No se encontraron usuarios con ese filtro.</p>
+            </div></td></tr>`;
+        return;
+    }
+
+    const _fmt = iso => {
+        if (!iso || iso === 'None' || iso === '') return '—';
+        try {
+            const d = new Date(iso);
+            return d.toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric' });
+        } catch { return '—'; }
+    };
+
+    tbody.innerHTML = lista.map(u => `
+        <tr data-id="${u.id}">
+            <td>
+                <div style="font-weight:600;">${_esc(u.username)}</div>
+            </td>
+            <td style="color:#7f8c8d;">${_esc(u.email)}</td>
+            <td>
+                <span class="badge ${u.rol === 'admin' ? 'badge-admin' : 'badge-registrado'}">
+                    ${u.rol === 'admin' ? '🔑 Admin' : '👤 Registrado'}
+                </span>
+            </td>
+            <td>
+                <span class="badge ${u.activo ? 'badge-activo' : 'badge-inactivo'}">
+                    ${u.activo ? '✅ Activo' : '🚫 Inactivo'}
+                </span>
+            </td>
+            <td style="color:#7f8c8d;font-size:12px;">${_fmt(u.fecha_registro)}</td>
+            <td style="color:#7f8c8d;font-size:12px;">${_fmt(u.ultimo_acceso)}</td>
+            <td>
+                <div class="actions">
+                    <button class="btn btn-ghost btn-sm" onclick="abrirModalEditar('${u.id}')">✏️ Editar</button>
+                    <button class="btn btn-danger btn-sm" onclick="pedirConfirmarEliminar('${u.id}', '${_esc(u.username)}')">🗑️</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function _esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Filtros
+// ════════════════════════════════════════════════════════════════
+function filtrarTabla() {
+    const q       = document.getElementById('buscar-input').value.toLowerCase();
+    const rol     = document.getElementById('filtro-rol').value;
+    const estado  = document.getElementById('filtro-estado').value;
+
+    const filtrados = _usuarios.filter(u => {
+        const coincideQ      = !q || u.username.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+        const coincideRol    = !rol || u.rol === rol;
+        const coincideEstado = !estado || (estado === 'activo' ? u.activo : !u.activo);
+        return coincideQ && coincideRol && coincideEstado;
+    });
+    renderTabla(filtrados);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Modal — Nuevo usuario
+// ════════════════════════════════════════════════════════════════
+function abrirModalNuevo() {
+    _editandoId = null;
+    document.getElementById('modal-titulo').textContent   = '➕ Nuevo usuario';
+    document.getElementById('modal-btn-guardar').textContent = '💾 Crear usuario';
+    document.getElementById('edit-id').value       = '';
+    document.getElementById('edit-username').value = '';
+    document.getElementById('edit-email').value    = '';
+    document.getElementById('edit-password').value = '';
+    document.getElementById('edit-rol').value      = 'registrado';
+    document.getElementById('edit-activo').value   = 'true';
+    document.getElementById('pw-editar-hint').style.display = 'none';
+    document.getElementById('pw-hint-label').style.display = '';
+    document.getElementById('modal-error').style.display   = 'none';
+    document.getElementById('modal-usuario').classList.add('open');
+    setTimeout(() => document.getElementById('edit-username').focus(), 80);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Modal — Editar usuario
+// ════════════════════════════════════════════════════════════════
+function abrirModalEditar(id) {
+    const u = _usuarios.find(x => x.id === id);
+    if (!u) return;
+    _editandoId = id;
+    document.getElementById('modal-titulo').textContent      = '✏️ Editar usuario';
+    document.getElementById('modal-btn-guardar').textContent = '💾 Guardar cambios';
+    document.getElementById('edit-id').value       = u.id;
+    document.getElementById('edit-username').value = u.username;
+    document.getElementById('edit-email').value    = u.email;
+    document.getElementById('edit-password').value = '';
+    document.getElementById('edit-rol').value      = u.rol;
+    document.getElementById('edit-activo').value   = u.activo ? 'true' : 'false';
+    document.getElementById('pw-editar-hint').style.display = '';
+    document.getElementById('pw-hint-label').style.display  = 'none';
+    document.getElementById('modal-error').style.display    = 'none';
+    document.getElementById('modal-usuario').classList.add('open');
+    setTimeout(() => document.getElementById('edit-username').focus(), 80);
+}
+
+function cerrarModal() {
+    document.getElementById('modal-usuario').classList.remove('open');
+    _editandoId = null;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Guardar usuario (crear o editar)
+// ════════════════════════════════════════════════════════════════
+async function guardarUsuario() {
+    const username = document.getElementById('edit-username').value.trim();
+    const email    = document.getElementById('edit-email').value.trim();
+    const password = document.getElementById('edit-password').value;
+    const rol      = document.getElementById('edit-rol').value;
+    const activo   = document.getElementById('edit-activo').value === 'true';
+    const errEl    = document.getElementById('modal-error');
+    errEl.style.display = 'none';
+
+    const btn = document.getElementById('modal-btn-guardar');
+    btn.disabled = true;
+    btn.textContent = '⏳ Guardando…';
+
+    try {
+        let r, data;
+
+        if (!_editandoId) {
+            // ── Crear nuevo ──
+            if (!username || !email || !password) {
+                mostrarErrorModal('Todos los campos son obligatorios para crear un usuario.');
+                return;
+            }
+            r    = await fetch('/api/admin/usuarios', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ username, email, password, rol }),
+            });
+            data = await r.json();
+        } else {
+            // ── Editar existente ──
+            const payload = { username, email, rol, activo };
+            if (password) payload.password_nueva = password;
+            r    = await fetch(`/api/admin/usuarios/${_editandoId}`, {
+                method:  'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify(payload),
+            });
+            data = await r.json();
+        }
+
+        if (!r.ok || !data.ok) {
+            mostrarErrorModal(data.error || 'Error desconocido');
+            return;
+        }
+
+        cerrarModal();
+        toast(data.mensaje || 'Usuario guardado correctamente', 'success');
+        await cargarUsuarios();
+
+    } catch (e) {
+        mostrarErrorModal('Error de conexión con el servidor.');
+    } finally {
+        btn.disabled    = false;
+        btn.textContent = _editandoId ? '💾 Guardar cambios' : '💾 Crear usuario';
+    }
+}
+
+function mostrarErrorModal(msg) {
+    const el = document.getElementById('modal-error');
+    el.textContent    = '⚠️ ' + msg;
+    el.style.display  = 'block';
+    const btn = document.getElementById('modal-btn-guardar');
+    btn.disabled    = false;
+    btn.textContent = _editandoId ? '💾 Guardar cambios' : '💾 Crear usuario';
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Eliminar usuario
+// ════════════════════════════════════════════════════════════════
+function pedirConfirmarEliminar(id, nombre) {
+    _eliminandoId = id;
+    document.getElementById('confirmar-nombre').textContent = nombre;
+    document.getElementById('modal-confirmar').classList.add('open');
+}
+
+function cerrarModalConfirmar() {
+    document.getElementById('modal-confirmar').classList.remove('open');
+    _eliminandoId = null;
+}
+
+async function confirmarEliminar() {
+    if (!_eliminandoId) return;
+    const btn = document.getElementById('btn-confirmar-eliminar');
+    btn.disabled = true; btn.textContent = '⏳ Eliminando…';
+
+    try {
+        const r    = await fetch(`/api/admin/usuarios/${_eliminandoId}`, { method: 'DELETE' });
+        const data = await r.json();
+        if (!r.ok || !data.ok) {
+            toast(data.error || 'No se pudo eliminar', 'error');
+            return;
+        }
+        cerrarModalConfirmar();
+        toast(data.mensaje || 'Usuario eliminado', 'success');
+        await cargarUsuarios();
+    } catch (e) {
+        toast('Error de conexión', 'error');
+    } finally {
+        btn.disabled    = false;
+        btn.textContent = '🗑️ Eliminar';
+    }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Helpers UI
+// ════════════════════════════════════════════════════════════════
+function togglePw(inputId, btn) {
+    const input = document.getElementById(inputId);
+    const mostrar = input.type === 'password';
+    input.type = mostrar ? 'text' : 'password';
+    btn.textContent = mostrar ? '🙈' : '👁️';
+}
+
+// Cerrar modales al hacer clic en el fondo oscuro
+document.getElementById('modal-usuario').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModal();
+});
+document.getElementById('modal-confirmar').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModalConfirmar();
+});
+
+// ════════════════════════════════════════════════════════════════
+//  Init
+// ════════════════════════════════════════════════════════════════
+cargarUsuarios();
+</script>
+</body>
+</html>

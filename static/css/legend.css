@@ -1,0 +1,43 @@
+/* ============================================
+   LEYENDA
+   ============================================ */
+.legend {
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+.legend h4 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: #2c3e50;
+}
+
+.legend-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 6px;
+    max-height: 220px;
+    overflow: auto;
+    order: initial;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #34495e;
+}
+
+.legend-swatch {
+    width: 28px;
+    height: 8px;
+    border-radius: 3px;
+    border: 1px solid rgba(0,0,0,0.06);
+    box-shadow: inset 0 -1px 0 rgba(0,0,0,0.06);
+}

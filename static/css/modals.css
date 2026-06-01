@@ -1,0 +1,529 @@
+/* ============================================
+   MODALES
+   ============================================ */
+#table-edit-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 9500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#table-edit-modal .mbox {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+    width: 420px;
+    max-width: 95vw;
+    overflow: hidden;
+}
+
+#table-edit-modal .mbox-header {
+    background: #2c3e50;
+    color: #fff;
+    padding: 13px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+#table-edit-modal .mbox-header button {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+#table-edit-modal .mbox-body {
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+#table-edit-modal .mbox-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+#table-edit-modal .mbox-row label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+#table-edit-modal .mbox-row input,
+#table-edit-modal .mbox-row select {
+    padding: 8px 10px;
+    border: 1px solid #dfe6e9;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+#table-edit-modal .mbox-row input:focus,
+#table-edit-modal .mbox-row select:focus {
+    border-color: #3498db;
+}
+
+#table-edit-modal .mbox-hint {
+    font-size: 11px;
+    color: #95a5a6;
+    margin-top: 2px;
+}
+
+#table-edit-modal .mbox-footer {
+    padding: 12px 18px;
+    background: #f8f9fa;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid #ecf0f1;
+}
+
+#table-edit-modal .mbox-footer button {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.mbox-btn-primary {
+    background: #3498db;
+    color: #fff;
+}
+
+.mbox-btn-primary:hover {
+    background: #2980b9;
+}
+
+.mbox-btn-cancel {
+    background: #ecf0f1;
+    color: #2c3e50;
+}
+
+.mbox-btn-cancel:hover {
+    background: #dfe6e9;
+}
+
+#campos-ruta-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 9600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#campos-ruta-modal .crm-box {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    width: 480px;
+    max-width: 96vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#campos-ruta-modal .crm-header {
+    background: #2c3e50;
+    color: #fff;
+    padding: 14px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+#campos-ruta-modal .crm-header button {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+#campos-ruta-modal .crm-body {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+#campos-ruta-modal .crm-field {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 6px 10px;
+}
+
+#campos-ruta-modal .crm-preview {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    color: #7f8c8d;
+    min-height: 0;
+}
+
+#campos-ruta-modal .crm-field label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+#campos-ruta-modal .crm-field select,
+#campos-ruta-modal .crm-field input {
+    padding: 7px 10px;
+    border: 1px solid #dfe6e9;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+#campos-ruta-modal .crm-field select:focus,
+#campos-ruta-modal .crm-field input:focus {
+    border-color: #3498db;
+}
+
+#campos-ruta-modal .crm-hint {
+    font-size: 11px;
+    color: #95a5a6;
+    padding: 0 18px 4px;
+}
+
+#campos-ruta-modal .crm-footer {
+    padding: 12px 18px;
+    background: #f8f9fa;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid #ecf0f1;
+}
+
+#campos-ruta-modal .crm-footer button {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.crm-btn-primary {
+    background: #9b59b6;
+    color: #fff;
+}
+
+.crm-btn-primary:hover {
+    background: #8e44ad;
+}
+
+.crm-btn-secondary {
+    background: #ecf0f1;
+    color: #2c3e50;
+}
+
+.crm-btn-secondary:hover {
+    background: #dfe6e9;
+}
+
+/* Modal de eventos */
+#evento-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ev-box {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+    padding: 0;
+    width: 360px;
+    max-width: 95vw;
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.ev-header {
+    background: linear-gradient(135deg, #8e44ad, #9b59b6);
+    color: #fff;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.ev-header span { font-size: 15px; font-weight: 700; }
+
+.ev-header button {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 2px;
+}
+
+.ev-body {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.ev-field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+
+.ev-field input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid #dfe6e9;
+    border-radius: 7px;
+    font-size: 13px;
+    color: #2c3e50;
+}
+
+.ev-field input:focus {
+    outline: none;
+    border-color: #9b59b6;
+    box-shadow: 0 0 0 2px rgba(155,89,182,.2);
+}
+
+.ev-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.ev-slider-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ev-slider-wrap input[type=range] {
+    flex: 1;
+    accent-color: #8e44ad;
+}
+
+.ev-slider-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #8e44ad;
+    min-width: 36px;
+    text-align: right;
+}
+
+.ev-footer {
+    padding: 12px 18px 16px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    border-top: 1px solid #f0f0f0;
+}
+
+.ev-btn-cancel {
+    padding: 9px 18px;
+    border: 1px solid #dfe6e9;
+    border-radius: 8px;
+    background: #fff;
+    color: #7f8c8d;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.ev-btn-ok {
+    padding: 9px 18px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg,#8e44ad,#9b59b6);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(142,68,173,.35);
+}
+
+.ev-btn-ok:hover { opacity: .88; }
+.ev-btn-cancel:hover { background: #f5f6fa; }
+
+#btn-crear-evento {
+    width: 100%;
+    padding: 9px 14px;
+    background: linear-gradient(135deg,#8e44ad,#9b59b6);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(142,68,173,.30);
+    transition: opacity .15s;
+}
+
+#btn-crear-evento:hover { opacity: .88; }
+
+.crm-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #2c3e50;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 10px 0 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.crm-default {
+    font-weight: 400;
+    font-size: 10px;
+    color: #95a5a6;
+    text-transform: none;
+}
+
+.crm-preview {
+    margin-top: 5px;
+    min-height: 0;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.crm-preview-warn {
+    display: block;
+    background: #fef5e7;
+    border: 1px solid #f39c12;
+    border-radius: 5px;
+    padding: 6px 10px;
+    color: #7d5a00;
+}
+
+.crm-preview-ok {
+    display: block;
+    background: #eafaf1;
+    border: 1px solid #2ecc71;
+    border-radius: 5px;
+    padding: 6px 10px;
+    color: #1a7a40;
+}
+
+.obstaculo-box {
+    background: #1a2a3a;
+    border: 1px solid rgba(0,180,216,0.25);
+    border-radius: 14px;
+    padding: 28px 32px;
+    width: 320px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.obstaculo-titulo {
+    font-size: 17px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+}
+
+.obstaculo-hint {
+    font-size: 12px;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+
+.obstaculo-field {
+    margin-bottom: 20px;
+}
+
+.obstaculo-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 10px;
+}
+
+.obstaculo-slider {
+    width: 100%;
+    height: 6px;
+    border-radius: 5px;
+    outline: none;
+    cursor: pointer;
+    accent-color: #f39c12;
+}
+
+.obstaculo-slider-marks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+    margin-top: 6px;
+}
+
+.obstaculo-footer {
+    display: flex;
+    gap: 10px;
+}
+
+.obstaculo-btn-cancel {
+    flex: 1;
+    padding: 10px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    color: rgba(255,255,255,0.5);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.obstaculo-btn-cancel:hover {
+    background: rgba(255,255,255,0.05);
+}
+
+.obstaculo-btn-ok {
+    flex: 1;
+    padding: 10px;
+    background: #e67e22;
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.obstaculo-btn-ok:hover {
+    background: #d35400;
+}

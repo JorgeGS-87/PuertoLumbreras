@@ -1,0 +1,21 @@
+# Framework web
+Flask==3.0.0
+Flask-CORS==4.0.0
+
+# Librerías básicas
+numpy
+pandas
+
+# GIS - Datos espaciales
+geopandas
+shapely
+
+# Cálculo de rutas
+networkx
+
+# Base de datos — SQLite
+Flask-SQLAlchemy==3.1.1
+
+# Tiempo real — WebSockets
+Flask-SocketIO==5.3.6
+eventlet==0.35.2
