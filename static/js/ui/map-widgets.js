@@ -137,6 +137,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 btnCapas.title    = 'Capas base';
                 btnCapas.type     = 'button';
                 // El click lo conecta _initLayerControl en el bloque siguiente
+
+                // Botón Capa Compartida
+                const btnComp = L.DomUtil.create('button', 'map-btn-ctrl', container);
+                btnComp.id        = 'btn-capa-compartida';
+                btnComp.innerHTML = '🚧';
+                btnComp.title     = 'Capa de obstáculos compartida';
+                btnComp.type      = 'button';
+                L.DomEvent.on(btnComp, 'click', function (e) {
+                    L.DomEvent.stopPropagation(e);
+                    if (typeof window.toggleCapaCompartida === 'function') window.toggleCapaCompartida();
+                });
+
                 L.DomEvent.disableClickPropagation(container);
 
                 return container;

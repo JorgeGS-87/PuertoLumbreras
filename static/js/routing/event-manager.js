@@ -202,16 +202,38 @@ function _ocultarBotonCrearEventoMovil() {
     }
 }
 
-// ── Colores por nivel de afluencia ────────────────────────────────────────────
+// ── Niveles de afluencia ──────────────────────────────────────────────────────
 
 /**
- * Devuelve color según afluencia (0-1).
- * Verde bajo → naranja medio → rojo alto.
+ * Tabla de 4 niveles de afluencia/impacto.
+ * afluencia (0-1) se mapea a nivel 1-4 con _nivelAfluencia().
+ * Los valores de porcentaje coinciden exactamente con los de los obstáculos:
+ *   Nivel 1 → 25% → ×1.75   (impacto leve)
+ *   Nivel 2 → 50% → ×2.5    (impacto moderado)
+ *   Nivel 3 → 75% → ×3.25   (impacto alto)
+ *   Nivel 4 → 100% → ×4.0   (impacto máximo)
+ */
+const NIVELES_EVENTO = {
+    1: { pct: 25,  color: '#2980b9', label: 'Nivel 1',  desc: 'Leve' },
+    2: { pct: 50,  color: '#f39c12', label: 'Nivel 2',  desc: 'Moderado' },
+    3: { pct: 75,  color: '#e67e22', label: 'Nivel 3',  desc: 'Alto' },
+    4: { pct: 100, color: '#e74c3c', label: 'Nivel 4',  desc: 'Máximo' },
+};
+
+/**
+ * Devuelve el nivel (1-4) dado un valor de afluencia (0-1).
+ * Redondea al nivel más cercano por cuartos.
+ */
+function _nivelAfluencia(afluencia) {
+    const nivel = Math.round(afluencia * 4);
+    return Math.max(1, Math.min(4, nivel || 1));
+}
+
+/**
+ * Devuelve el color del nivel correspondiente a la afluencia dada.
  */
 function _colorEvento(afluencia) {
-    if (afluencia < 0.33) return '#2980b9';   // azul: baja afluencia
-    if (afluencia < 0.66) return '#f39c12';   // naranja: media
-    return '#e74c3c';                          // rojo: alta
+    return NIVELES_EVENTO[_nivelAfluencia(afluencia)].color;
 }
 
 // ── Activar / desactivar modo dibujo ─────────────────────────────────────────
@@ -434,6 +456,39 @@ map.on('contextmenu', function (e) {
 let _verticesPendientes = null;
 
 /**
+ * Marca visualmente el nivel seleccionado en el modal y guarda el valor
+ * en el input oculto #ev-nivel-value.
+ * @param {number} nivel  1-4
+ */
+function _seleccionarNivelEvento(nivel) {
+    const info = NIVELES_EVENTO[nivel];
+    if (!info) return;
+
+    // Actualizar input oculto
+    const hidden = document.getElementById('ev-nivel-value');
+    if (hidden) hidden.value = nivel;
+
+    // Actualizar botones
+    for (let n = 1; n <= 4; n++) {
+        const btn = document.getElementById(`ev-nivel-btn-${n}`);
+        if (!btn) continue;
+        const activo = (n === nivel);
+        btn.style.background   = activo ? NIVELES_EVENTO[n].color : '#f1f5f9';
+        btn.style.color        = activo ? '#fff' : '#374151';
+        btn.style.borderColor  = activo ? NIVELES_EVENTO[n].color : '#e2e8f0';
+        btn.style.fontWeight   = activo ? '700' : '500';
+        btn.style.transform    = activo ? 'scale(1.05)' : 'scale(1)';
+    }
+
+    // Actualizar descripción
+    const desc = document.getElementById('ev-nivel-desc');
+    if (desc) {
+        desc.textContent  = `${info.label} — ${info.desc} (equiv. ${info.pct}% obstáculo · factor ×${(1 / (1 - info.pct/100 * 0.99)).toFixed(2)})`;
+        desc.style.color  = info.color;
+    }
+}
+
+/**
  * Abre el modal para introducir los atributos del evento.
  * @param {L.LatLng[]} vertices
  */
@@ -463,13 +518,12 @@ function _abrirModalEvento(vertices) {
 
     // Limpiar campos
     const elNombre    = document.getElementById('ev-nombre');
-    const elAfluencia = document.getElementById('ev-afluencia');
     const elDuracion  = document.getElementById('ev-duracion');
-    const elPctLabel  = document.getElementById('ev-afluencia-label');
-    if (elNombre)    elNombre.value    = '';
-    if (elAfluencia) { elAfluencia.value = 50; }
-    if (elPctLabel)  elPctLabel.textContent = '50%';
-    if (elDuracion)  elDuracion.value  = 2;
+    if (elNombre)   elNombre.value   = '';
+    if (elDuracion) elDuracion.value = 2;
+
+    // Seleccionar nivel 2 por defecto
+    _seleccionarNivelEvento(2);
 
     document.getElementById('evento-modal').style.display = 'flex';
 }
@@ -488,7 +542,8 @@ function confirmarEvento() {
     const nombre    = document.getElementById('ev-nombre')?.value.trim();
     const fechaStr  = document.getElementById('ev-fecha')?.value;
     const horaStr   = document.getElementById('ev-hora')?.value   || '00:00';
-    const afluencia = parseInt(document.getElementById('ev-afluencia')?.value ?? 50, 10) / 100;
+    const nivel     = parseInt(document.getElementById('ev-nivel-value')?.value ?? 2, 10);
+    const afluencia = (NIVELES_EVENTO[nivel]?.pct ?? 50) / 100;
     const duracion  = parseFloat(document.getElementById('ev-duracion')?.value ?? 2);
 
     // Helper: marca un campo en rojo, muestra notificación y hace foco
@@ -563,7 +618,7 @@ function _crearEvento(vertices, nombre, fechaInicio, afluencia, duracion) {
 
     // Etiqueta centrada
     const centro  = poligono.getBounds().getCenter();
-    const pctText = Math.round(afluencia * 100);
+
     const label   = L.marker(centro, {
         icon: L.divIcon({
             className: '',
@@ -599,7 +654,8 @@ function _crearEvento(vertices, nombre, fechaInicio, afluencia, duracion) {
     });
 
     _actualizarListaEventos();
-    showNotification(`✅ Evento "${nombre}" creado (${pctText}% afluencia, ${duracion}h)`, 'success');
+    const nivel = _nivelAfluencia(afluencia);
+    showNotification(`✅ Evento "${nombre}" creado (Nivel ${nivel} — ${NIVELES_EVENTO[nivel].desc}, ${duracion}h)`, 'success');
 }
 
 // ── HTML del popup ────────────────────────────────────────────────────────────
@@ -607,8 +663,9 @@ function _crearEvento(vertices, nombre, fechaInicio, afluencia, duracion) {
 function _popupEventoHTML(idx) {
     const ev   = eventos[idx];
     if (!ev) return '';
-    const pct  = Math.round(ev.afluencia * 100);
-    const color = _colorEvento(ev.afluencia);
+    const nivel = _nivelAfluencia(ev.afluencia);
+    const info  = NIVELES_EVENTO[nivel];
+    const color = info.color;
     const _fmt  = d => d.toLocaleString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
 
     return `
@@ -619,8 +676,8 @@ function _popupEventoHTML(idx) {
                 <span>📅 Inicio</span>  <span>${_fmt(ev.fechaInicio)}</span>
                 <span>🏁 Fin</span>     <span>${_fmt(ev.fechaFin)}</span>
                 <span>⏱️ Duración</span><span>${ev.duracion}h</span>
-                <span>👥 Afluencia</span>
-                <span style="color:${color};font-weight:700;">${pct}%</span>
+                <span>👥 Impacto</span>
+                <span style="color:${color};font-weight:700;">${info.label} — ${info.desc}</span>
             </div>
             <button onclick="eliminarEvento(${idx})"
                 style="margin-top:10px;width:100%;padding:6px;background:#e74c3c;
@@ -726,8 +783,9 @@ function _actualizarListaEventos() {
     });
 
     activos.forEach(ev => {
-        const color = _colorEvento(ev.afluencia);
-        const pct   = Math.round(ev.afluencia * 100);
+        const nivel = _nivelAfluencia(ev.afluencia);
+        const info  = NIVELES_EVENTO[nivel];
+        const color = info.color;
 
         // ── Item panel lateral ──
         if (lista) {
@@ -737,7 +795,7 @@ function _actualizarListaEventos() {
                 <div class="obs-item-header">
                     <div class="obs-item-titulo">
                         <strong>🎪 ${ev.nombre}</strong>
-                        <span style="color:${color};margin-left:6px;font-weight:700;">${pct}%</span>
+                        <span style="color:${color};margin-left:6px;font-weight:700;">${info.label}</span>
                     </div>
                     <button class="obs-item-del" onclick="eliminarEvento(${ev.idx})" title="Eliminar">✕</button>
                 </div>
@@ -762,7 +820,7 @@ function _actualizarListaEventos() {
                                  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                         🎪 ${ev.nombre}
                     </span>
-                    <span style="color:${color};font-weight:700;font-size:12px;white-space:nowrap;">${pct}%</span>
+                    <span style="color:${color};font-weight:700;font-size:12px;white-space:nowrap;">${info.label}</span>
                     <button onclick="eliminarEvento(${ev.idx})"
                         style="background:none;border:none;color:#aab0b7;font-size:14px;
                                cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;"
@@ -802,7 +860,7 @@ async function exportarEventos(options = {}) {
         nombre:       ev.nombre,
         fecha_inicio: ev.fechaInicio.toISOString(),
         fecha_fin:    ev.fechaFin.toISOString(),
-        afluencia:    Math.round(ev.afluencia * 100),
+        afluencia:    _nivelAfluencia(ev.afluencia) * 25,  // nivel→pct: 1→25, 2→50, 3→75, 4→100
         duracion:     ev.duracion,
     }));
 
@@ -948,7 +1006,7 @@ function importarEventos(input) {
                     const fechaInicio = new Date(ev.fecha_inicio);
                     const fechaFin    = new Date(ev.fecha_fin);
                     const duracion    = (fechaFin - fechaInicio) / 3600000;
-                    const afluencia   = (ev.afluencia ?? 50) / 100;
+                    const afluencia   = (ev.afluencia ?? 50) / 100;  // pct→0-1, _nivelAfluencia() lo discretiza al crear
                     _crearEvento(vertices, ev.nombre, fechaInicio, afluencia, duracion);
                 } catch (e) {
                     console.warn('[event-manager] Error al importar evento:', e);
@@ -967,10 +1025,11 @@ function importarEventos(input) {
  * penalización resultante (≥ 1.0).
  *
  * Factor de penalización:
- *   factor = 1 + afluencia * 3
- *   → 0% afluencia → ×1.0  (sin penalización)
- *   → 50% afluencia → ×2.5
- *   → 100% afluencia → ×4.0
+ *   factor = 1 / (1 - afluencia * 0.99)   — idéntica a la fórmula de obstáculos en app.py
+ *   → Nivel 1 (25%) → ×1.49
+ *   → Nivel 2 (50%) → ×2.02
+ *   → Nivel 3 (75%) → ×4.03
+ *   → Nivel 4 (100%) → ×100  (prácticamente bloqueado, igual que un obstáculo al 100%)
  *
  * Se expone como window.obtenerPenalizacionEventos para ser llamada desde
  * _calcularPesosAristas() en route-manager.js.
@@ -998,7 +1057,9 @@ window.obtenerPenalizacionEventos = function (s, e, fechaEfectiva) {
         // Comprobar si el punto medio está dentro del polígono
         if (!_puntoDentroDePoligono(midPt, ev.vertices)) continue;
 
-        const factor = 1 + ev.afluencia * 3;
+        // Misma fórmula que el backend usa para obstáculos:
+        // factor = 1 / (1 - afluencia * 0.99)
+        const factor = 1.0 / (1.0 - Math.min(ev.afluencia, 0.99) * 0.99);
         if (factor > factorMax) factorMax = factor;
         console.log(`[event-manager] Evento "${ev.nombre}" activo, factor ${factor} para segmento ${s}→${e}`);
     }

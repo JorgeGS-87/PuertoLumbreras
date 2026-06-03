@@ -1006,52 +1006,140 @@
     });
     </script>
 
-    <!-- Control de capas base para móvil -->
+    <!-- Control de capas base para móvil — con reintentos robustos -->
     <script>
-    setTimeout(function() {
-        const ctrl = document.querySelector('.leaflet-top.leaflet-left .leaflet-control-layers');
-        const controls = document.getElementById('map-controls');
-        if (!ctrl || !controls) return;
+    (function _initCapasBase() {
+        let _intentos = 0;
+        const MAX_INTENTOS = 30;
 
-        ctrl.parentNode.removeChild(ctrl);
-        ctrl.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
-        document.body.appendChild(ctrl);
-
-        const btn = document.createElement('button');
-        btn.title = 'Capas base';
-        btn.style.cssText = 'position:fixed;top:74px;left:12px;width:44px;height:44px;background:#fff;border:none;border-radius:12px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,0.18);z-index:1000;pointer-events:all;';
-        btn.textContent = '🗺️';
-        controls.appendChild(btn);
-
-        let panelAbierto = false;
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (panelAbierto) {
-                ctrl.classList.remove('leaflet-control-layers-expanded');
-                ctrl.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
-                panelAbierto = false;
-            } else {
-                const r = btn.getBoundingClientRect();
-                ctrl.classList.add('leaflet-control-layers-expanded');
-                ctrl.style.cssText = [
-                    'position:fixed',
-                    'top:' + Math.round(r.top) + 'px',
-                    'left:' + (Math.round(r.right) + 8) + 'px',
-                    'z-index:2000','background:white','border-radius:8px',
-                    'border:1px solid #dde3ea','box-shadow:0 6px 20px rgba(0,0,0,0.15)',
-                    'padding:6px 4px','min-width:190px'
-                ].join(';');
-                panelAbierto = true;
+        function _tryInit() {
+            _intentos++;
+            // Buscar el control en cualquier posición del DOM de Leaflet
+            const ctrl = document.querySelector('.leaflet-control-layers');
+            if (!ctrl) {
+                if (_intentos < MAX_INTENTOS) setTimeout(_tryInit, 200);
+                return;
             }
-        });
-        document.addEventListener('click', function(e) {
-            if (panelAbierto && !btn.contains(e.target) && !ctrl.contains(e.target)) {
+
+            // Sacar del DOM de Leaflet y esconder fuera de pantalla
+            if (ctrl.parentNode) ctrl.parentNode.removeChild(ctrl);
+            ctrl.style.cssText = 'position:fixed;top:-9999px;left:-9999px;pointer-events:auto;';
+            document.body.appendChild(ctrl);
+
+            // Crear botón fijo visible sobre el mapa
+            const btn = document.createElement('button');
+            btn.id        = 'btn-capas-base-movil';
+            btn.title     = 'Capas base';
+            btn.innerHTML = '🗺️';
+            btn.style.cssText = [
+                'position:fixed',
+                'top:74px',
+                'left:12px',
+                'width:44px',
+                'height:44px',
+                'background:#fff',
+                'border:none',
+                'border-radius:12px',
+                'font-size:20px',
+                'cursor:pointer',
+                'display:flex',
+                'align-items:center',
+                'justify-content:center',
+                'box-shadow:0 2px 10px rgba(0,0,0,0.18)',
+                'z-index:1600',
+                'pointer-events:all',
+                'transition:background 0.15s',
+            ].join(';');
+            document.body.appendChild(btn);
+
+            if (typeof L !== 'undefined') L.DomEvent.disableClickPropagation(btn);
+
+            let panelAbierto = false;
+
+            function cerrarPanel() {
                 ctrl.classList.remove('leaflet-control-layers-expanded');
-                ctrl.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
+                ctrl.style.cssText = 'position:fixed;top:-9999px;left:-9999px;pointer-events:auto;';
                 panelAbierto = false;
             }
-        });
-    }, 500);
+
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (panelAbierto) {
+                    cerrarPanel();
+                } else {
+                    const r = btn.getBoundingClientRect();
+                    ctrl.classList.add('leaflet-control-layers-expanded');
+                    ctrl.style.cssText = [
+                        'position:fixed',
+                        'top:' + Math.round(r.top) + 'px',
+                        'left:' + (Math.round(r.right) + 8) + 'px',
+                        'z-index:3000',
+                        'background:white',
+                        'border-radius:8px',
+                        'border:1px solid #dde3ea',
+                        'box-shadow:0 6px 20px rgba(0,0,0,0.15)',
+                        'padding:6px 4px',
+                        'min-width:190px',
+                        'pointer-events:auto',
+                    ].join(';');
+                    panelAbierto = true;
+                }
+            });
+
+            document.addEventListener('click', function(e) {
+                if (panelAbierto && !btn.contains(e.target) && !ctrl.contains(e.target)) {
+                    cerrarPanel();
+                }
+            });
+
+            console.log('[mobile] ✅ Botón capas base creado (intento ' + _intentos + ')');
+        }
+
+        // Primer intento tras DOMContentLoaded, luego con retardo
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() { setTimeout(_tryInit, 400); });
+        } else {
+            setTimeout(_tryInit, 400);
+        }
+    })();
+    </script>
+
+    <!-- Override historial para móvil: panel centrado en pantalla en vez de junto al widget MSW -->
+    <script>
+    (function _historialMobileOverride() {
+        function _patchHistorial() {
+            if (typeof toggleHistorial !== 'function') {
+                setTimeout(_patchHistorial, 200);
+                return;
+            }
+
+            // Sobreescribir posicionamiento: en móvil el panel se centra en pantalla
+            window._reposicionarPanelHistorial = function() {
+                const panel = document.getElementById('historial-panel');
+                if (!panel) return;
+                // Centrado horizontal, encima del bottom sheet
+                const bsH = parseInt(getComputedStyle(document.documentElement)
+                    .getPropertyValue('--bs-height') || '80', 10);
+                panel.style.left      = '50%';
+                panel.style.transform = 'translateX(-50%)';
+                panel.style.top       = 'auto';
+                panel.style.bottom    = (bsH + 8) + 'px';
+                panel.style.width     = 'min(340px, 92vw)';
+                panel.style.maxHeight = '60vh';
+            };
+
+            // Re-observar --bs-height para reposicionar cuando el bottom sheet cambia
+            const bsEl = document.getElementById('m-bottom-sheet');
+            if (bsEl) {
+                new MutationObserver(function() {
+                    if (typeof window._reposicionarPanelHistorial === 'function') {
+                        window._reposicionarPanelHistorial();
+                    }
+                }).observe(bsEl, { attributes: true, attributeFilter: ['style'] });
+            }
+        }
+        setTimeout(_patchHistorial, 600);
+    })();
     </script>
 
     <!-- Sincronizar controles POI según rol -->

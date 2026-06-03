@@ -161,6 +161,21 @@ class SesionObstaculos(db.Model):
     confirmado   = db.Column(db.Boolean,    default=False)
 
 
+class ObstaculoCompartido(db.Model):
+    """Obstáculo de la capa compartida, visible y editable por todos los usuarios registrados."""
+    __tablename__ = 'obstaculos_compartidos'
+
+    id           = db.Column(db.Integer,    primary_key=True)
+    obs_id       = db.Column(db.String(64), nullable=True)   # ID/etiqueta opcional
+    lat          = db.Column(db.Float,      nullable=False)
+    lng          = db.Column(db.Float,      nullable=False)
+    porcentaje   = db.Column(db.Integer,    nullable=False, default=50)  # 0-100
+    portal       = db.Column(db.String(256), nullable=True, default='')
+    autor        = db.Column(db.String(64), nullable=False)  # usuario que lo creó/modificó
+    creado_en    = db.Column(db.DateTime,   default=datetime.utcnow)
+    modificado_en= db.Column(db.DateTime,   default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 # Crear tablas si no existen (idempotente, no destruye datos)
 with app.app_context():
     db.create_all()
@@ -2768,6 +2783,28 @@ def api_sesion_confirmar():
     return jsonify({'ok': True})
 
 
+# ==================== OBSTÁCULOS COMPARTIDOS ====================
+
+def _obs_a_dict(obs):
+    return {
+        'id':         obs.id,
+        'obs_id':     obs.obs_id,
+        'lat':        obs.lat,
+        'lng':        obs.lng,
+        'porcentaje': obs.porcentaje,
+        'portal':     obs.portal or '',
+        'autor':      obs.autor,
+    }
+
+
+@app.route('/api/obstaculos-compartidos')
+def api_obs_compartidos_get():
+    if not session.get('autenticado') or session.get('rol') == 'invitado':
+        return jsonify({'error': 'No autorizado'}), 401
+    todos = ObstaculoCompartido.query.order_by(ObstaculoCompartido.creado_en).all()
+    return jsonify({'obstaculos': [_obs_a_dict(o) for o in todos]})
+
+
 # ==================== SOCKETIO ====================
 
 @socketio.on('connect')
@@ -2778,6 +2815,57 @@ def ws_on_connect():
 @socketio.on('disconnect')
 def ws_on_disconnect():
     print(f'[WS] Cliente desconectado: {session.get("usuario", "anon")}')
+
+
+@socketio.on('obs_compartido_crear')
+def ws_obs_crear(data):
+    usuario = session.get('usuario')
+    if not session.get('autenticado') or session.get('rol') == 'invitado':
+        return
+    obs = ObstaculoCompartido(
+        obs_id     = data.get('obs_id') or None,
+        lat        = float(data['lat']),
+        lng        = float(data['lng']),
+        porcentaje = int(data.get('porcentaje', 50)),
+        portal     = data.get('portal', ''),
+        autor      = usuario,
+    )
+    db.session.add(obs)
+    db.session.commit()
+    socketio.emit('obs_compartido_nuevo', _obs_a_dict(obs))
+    print(f'[WS] obs_compartido_crear: #{obs.id} por {usuario}')
+
+
+@socketio.on('obs_compartido_eliminar')
+def ws_obs_eliminar(data):
+    if not session.get('autenticado') or session.get('rol') == 'invitado':
+        return
+    obs = ObstaculoCompartido.query.get(int(data.get('id', 0)))
+    if not obs:
+        return
+    obs_id = obs.id
+    db.session.delete(obs)
+    db.session.commit()
+    socketio.emit('obs_compartido_eliminado', {'id': obs_id})
+    print(f'[WS] obs_compartido_eliminar: #{obs_id} por {session.get("usuario")}')
+
+
+@socketio.on('obs_compartido_mover')
+def ws_obs_mover(data):
+    if not session.get('autenticado') or session.get('rol') == 'invitado':
+        return
+    obs = ObstaculoCompartido.query.get(int(data.get('id', 0)))
+    if not obs:
+        return
+    if 'lat'        in data: obs.lat        = float(data['lat'])
+    if 'lng'        in data: obs.lng        = float(data['lng'])
+    if 'porcentaje' in data: obs.porcentaje = int(data['porcentaje'])
+    if 'portal'     in data: obs.portal     = data['portal']
+    obs.autor         = session.get('usuario')
+    obs.modificado_en = datetime.utcnow()
+    db.session.commit()
+    socketio.emit('obs_compartido_actualizado', _obs_a_dict(obs))
+    print(f'[WS] obs_compartido_mover: #{obs.id} por {session.get("usuario")}')
 
 
 # ==================== ERRORES ====================

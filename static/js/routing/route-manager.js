@@ -415,11 +415,35 @@ function _actualizarLabelsMsw() {
     }
 }
 
-// ==================== LISTA DE OBSTÁCULOS ====================
+// ==================== NIVELES DE OBSTÁCULO ====================
 
-function _colorObs(v) {
-    return v < 0.33 ? '#27ae60' : v < 0.66 ? '#f39c12' : '#e74c3c';
+/**
+ * Tabla de 4 niveles de impacto para obstáculos.
+ * Idéntica en escala a NIVELES_EVENTO (event-manager.js):
+ *   Nivel 1 → 25%  → ×1.75  (impacto leve)
+ *   Nivel 2 → 50%  → ×2.5   (impacto moderado)
+ *   Nivel 3 → 75%  → ×3.25  (impacto alto)
+ *   Nivel 4 → 100% → ×4.0   (impacto máximo)
+ */
+const NIVELES_OBS = {
+    1: { pct: 25,  color: '#27ae60', label: 'Nivel 1', desc: 'Leve'     },
+    2: { pct: 50,  color: '#f39c12', label: 'Nivel 2', desc: 'Moderado' },
+    3: { pct: 75,  color: '#e67e22', label: 'Nivel 3', desc: 'Alto'     },
+    4: { pct: 100, color: '#e74c3c', label: 'Nivel 4', desc: 'Máximo'   },
+};
+
+/** Convierte obstruccion (0-1) al nivel 1-4 más cercano. */
+function _nivelObs(obstruccion) {
+    const nivel = Math.round((obstruccion ?? 0.5) * 4);
+    return Math.max(1, Math.min(4, nivel || 1));
 }
+
+/** Devuelve el color del nivel correspondiente a la obstruccion dada. */
+function _colorObs(v) {
+    return NIVELES_OBS[_nivelObs(v)].color;
+}
+
+// ==================== LISTA DE OBSTÁCULOS ====================
 
 function _nombresViasAfectadas(obs) {
     if (!window.currentViasGeoJSON?.features) return [];
@@ -493,12 +517,13 @@ function _actualizarListaObstaculos() {
 
     activos.forEach(obs => {
         const idx   = obstaculos.indexOf(obs);
-        const pct   = Math.round((obs.obstruccion ?? 0.5) * 100);
-        const color = _colorObs(obs.obstruccion ?? 0.5);
+        const nivel = _nivelObs(obs.obstruccion ?? 0.5);
+        const info  = NIVELES_OBS[nivel];
+        const color = info.color;
         const nombres = _nombresViasAfectadas(obs);
 
-        const activos = obstaculos.filter(Boolean);
-        const numFila = activos.indexOf(obs) + 1;
+        const activosFiltrado = obstaculos.filter(Boolean);
+        const numFila = activosFiltrado.indexOf(obs) + 1;
         const obsLabel = obs.obsId !== null ? `#${obs.obsId}` : `#${numFila}`;
 
         let tituloExtra = '';
@@ -513,7 +538,7 @@ function _actualizarListaObstaculos() {
         const itemHTML = `
             <div class="obs-item-header">
                 <div class="obs-item-titulo">
-                    <strong>${obsLabel} — <span style="color:${color}">${pct}%</span></strong>${tituloExtra}
+                    <strong>${obsLabel} — <span style="color:${color}">${info.label} (${info.desc})</span></strong>${tituloExtra}
                 </div>
                 <button class="obs-item-del" onclick="eliminarObstaculo(${idx})" title="Eliminar">✕</button>
             </div>
@@ -542,27 +567,32 @@ function _actualizarListaObstaculos() {
 function _popupHTML(idx) {
     const obs   = obstaculos[idx];
     if (!obs) return '';
-    const pct   = Math.round((obs.obstruccion ?? 0.5) * 100);
-    const color = _colorObs(obs.obstruccion ?? 0.5);
-    // Num de fila = posición entre los obstáculos activos (1-based)
+    const nivel = _nivelObs(obs.obstruccion ?? 0.5);
+    const info  = NIVELES_OBS[nivel];
     const activos = obstaculos.filter(Boolean);
     const numFila = activos.indexOf(obs) + 1;
     const label   = obs.obsId !== null ? `#${obs.obsId}` : `#${numFila}`;
+
+    const botonesNivel = [1,2,3,4].map(n => {
+        const ni = NIVELES_OBS[n];
+        const sel = n === nivel;
+        return `<button onclick="cambiarNivelObstaculo(${idx},${n})"
+            style="flex:1;padding:4px 2px;font-size:11px;font-weight:${sel?'700':'400'};
+                   border:2px solid ${sel ? ni.color : '#ddd'};border-radius:4px;
+                   background:${sel ? ni.color : '#f8f8f8'};
+                   color:${sel ? '#fff' : '#555'};cursor:pointer;">
+            ${ni.label}<br><span style="font-size:10px;opacity:.85;">${ni.desc}</span>
+        </button>`;
+    }).join('');
+
     return `
-        <div style="font-family:sans-serif;min-width:200px;text-align:center;">
+        <div style="font-family:sans-serif;min-width:220px;text-align:center;">
             <strong>🚧 Obstáculo ${label}</strong><br>
-            <label style="font-size:12px;color:#555;display:block;margin:8px 0 3px;">
-                Afectación: <strong id="obs-pct-lbl-${idx}" style="color:${color}">${pct}%</strong>
-            </label>
-            <input type="range" id="obs-pct-slider-${idx}" min="0" max="100" value="${pct}"
-                style="width:100%;accent-color:${color};"
-                oninput="
-                    const v=this.value,c=v<33?'#27ae60':v<66?'#f39c12':'#e74c3c';
-                    document.getElementById('obs-pct-lbl-${idx}').textContent=v+'%';
-                    document.getElementById('obs-pct-lbl-${idx}').style.color=c;
-                    this.style.accentColor=c;
-                ">
-            <div style="display:flex;gap:6px;margin-top:10px;">
+            <div style="margin:8px 0 4px;font-size:12px;color:#555;">
+                Impacto actual: <strong style="color:${info.color};">${info.label} — ${info.desc}</strong>
+            </div>
+            <div style="display:flex;gap:4px;margin-bottom:10px;">${botonesNivel}</div>
+            <div style="display:flex;gap:6px;margin-top:4px;">
                 <button onclick="iniciarMoverObstaculo(${idx})"
                     style="flex:1;padding:5px 4px;background:#3498db;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
                     📍 Mover

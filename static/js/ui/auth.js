@@ -244,9 +244,29 @@ async function cmRegistrar() {
         return;
     }
 
-    _aplicarPermisos(data.rol, data.usuario);
-    cerrarModalCuenta();
-    showNotification(`✅ Cuenta creada. Bienvenido, ${data.usuario}`, 'success');
+    // Si el backend devuelve rol y usuario, aplicar permisos directamente.
+    // Si no (algunos backends devuelven solo {message}), hacer login automático.
+    if (data.rol && data.usuario) {
+        _aplicarPermisos(data.rol, data.usuario);
+        cerrarModalCuenta();
+        showNotification(`✅ Cuenta creada. Bienvenido, ${data.usuario}`, 'success');
+    } else {
+        // Auto-login con las credenciales recién introducidas
+        const loginRes  = await fetch('/api/auth/entrar', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password: pw })
+        });
+        const loginData = await loginRes.json();
+        if (loginRes.ok && !loginData.error) {
+            _aplicarPermisos(loginData.rol, loginData.usuario);
+            cerrarModalCuenta();
+            showNotification(`✅ Cuenta creada. Bienvenido, ${loginData.usuario}`, 'success');
+        } else {
+            // Registro OK pero login falló: mostrar mensaje y redirigir a login
+            _cmMsg(msg, '✅ Cuenta creada. Inicia sesión para continuar.', 'success');
+            setTimeout(() => _cambiarTabCuenta('login'), 1800);
+        }
+    }
 }
 
 
@@ -423,7 +443,9 @@ function confirmarRegistro() { cmLogin(); }
 
 async function cerrarSesion() {
     await fetch('/api/auth/salir', { method: 'POST' });
-    window.location.href = '/login';
+    cerrarModalCuenta();
+    _aplicarPermisos('invitado', 'Invitado');
+    showNotification('Sesión cerrada. Continuando como invitado.', 'info');
 }
 
 
