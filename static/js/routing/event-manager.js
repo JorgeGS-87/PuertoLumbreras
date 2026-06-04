@@ -4,11 +4,11 @@
  * polígonos en el mapa. Cada evento tiene fecha, afluencia y duración.
  *
  * Flujo de creación:
- *   1. Admin pulsa "Crear evento" -> modo dibujo activo
+ *   1. Admin pulsa "Crear evento" → modo dibujo activo
  *   2. Clicks en el mapa añaden vértices (preview en tiempo real)
  *   3. Click derecho cierra el polígono
  *   4. Modal pide: nombre, fecha/hora inicio, afluencia (0-100%), duración (h)
- *   5. El polígono queda guardado en `eventos[]` 
+ *   5. El polígono queda guardado en `eventos[]`
  *
  * Integración con calcularRuta (route-manager.js):
  *   · window.obtenerPenalizacionEventos(segmentoS, segmentoE, fechaEfectiva)
@@ -22,39 +22,39 @@
 
 /** Array de eventos creados. Cada entrada es un objeto evento o null (eliminado). */
 let eventos = [];
-let eventosExportHandle = null;
+let _eventosExportHandle = null;
 
 /** true mientras el admin está dibujando un polígono nuevo. */
-let modoEvento = false;
+let _modoEvento = false;
 // Alias global para que map-widgets.js pueda consultarlo
-Object.defineProperty(window, 'modoEvento', {
-    get: () => modoEvento,
-    set: v  => { modoEvento = v; }
+Object.defineProperty(window, '_modoEvento', {
+    get: () => _modoEvento,
+    set: v  => { _modoEvento = v; }
 });
 
-/** Vértices del polígono en construcción [ L.LatLon, … ] */
-let verticesActuales = [];
+/** Vértices del polígono en construcción [ L.LatLng, … ] */
+let _verticesActuales = [];
 
 /** Polyline/Polygon de preview mientras se dibuja. */
-let preCapa = null;
+let _previewLayer = null;
 
-/** Marcadores de los vértices mientras se dibuja. */
-let preVertices = [];
+/** Markers de vértice (puntos azules) mientras se dibuja. */
+let _previewMarkers = [];
 
-/** L.LatLon del último vértice (para la línea de seguimiento al mover el ratón). */
-let lineaSeguimiento = null;
+/** LatLng del último vértice (para la línea de seguimiento al mover el ratón). */
+let _lineaSeguimiento = null;
 
 /** Botón flotante para cerrar polígono en móvil */
-let botonCrearEventoMovil = null;
+let _botonCrearEventoMovil = null;
 
 /** Tooltip que sigue al cursor durante el modo dibujo */
-let cursorTooltip = null;
+let _cursorTooltip = null;
 
-function crearCursorTooltip() {
-    if (cursorTooltip) return;
-    cursorTooltip = document.createElement('div');
-    cursorTooltip.id = 'evento-cursor-tooltip';
-    cursorTooltip.style.cssText = [
+function _crearCursorTooltip() {
+    if (_cursorTooltip) return;
+    _cursorTooltip = document.createElement('div');
+    _cursorTooltip.id = 'evento-cursor-tooltip';
+    _cursorTooltip.style.cssText = [
         'position:fixed',
         'pointer-events:none',
         'z-index:9999',
@@ -71,40 +71,40 @@ function crearCursorTooltip() {
         'border-left:3px solid #8e44ad',
         'transform:translate(16px,12px)',
     ].join(';');
-    document.body.appendChild(cursorTooltip);
+    document.body.appendChild(_cursorTooltip);
 }
 
-function mostrarCursorTooltip() {
+function _mostrarCursorTooltip() {
     if (window.isMobile) return;
-    crearCursorTooltip();
-    actualizarTextoCursorTooltip();
-    cursorTooltip.style.display = 'block';
-    document.addEventListener('mousemove', moverCursorTooltip);
+    _crearCursorTooltip();
+    _actualizarTextoCursorTooltip();
+    _cursorTooltip.style.display = 'block';
+    document.addEventListener('mousemove', _moverCursorTooltip);
 }
 
-function ocultarCursorTooltip() {
-    if (!cursorTooltip) return;
-    cursorTooltip.style.display = 'none';
-    document.removeEventListener('mousemove', moverCursorTooltip);
+function _ocultarCursorTooltip() {
+    if (!_cursorTooltip) return;
+    _cursorTooltip.style.display = 'none';
+    document.removeEventListener('mousemove', _moverCursorTooltip);
 }
 
-function moverCursorTooltip(e) {
-    if (!cursorTooltip) return;
-    cursorTooltip.style.left = e.clientX + 'px';
-    cursorTooltip.style.top  = e.clientY + 'px';
+function _moverCursorTooltip(e) {
+    if (!_cursorTooltip) return;
+    _cursorTooltip.style.left = e.clientX + 'px';
+    _cursorTooltip.style.top  = e.clientY + 'px';
 }
 
-function actualizarTextoCursorTooltip() {
-    if (!cursorTooltip) return;
-    const n = verticesActuales.length;
+function _actualizarTextoCursorTooltip() {
+    if (!_cursorTooltip) return;
+    const n = _verticesActuales.length;
     if (n === 0) {
-        cursorTooltip.textContent = '\uD83C\uDFAA Clic para a\u00F1adir el 1\u00BA v\u00E9rtice';
+        _cursorTooltip.textContent = '\uD83C\uDFAA Clic para a\u00F1adir el 1\u00BA v\u00E9rtice';
     } else if (n === 1) {
-        cursorTooltip.textContent = '\uD83C\uDFAA 1 v\u00E9rtice \u2014 necesitas 2 m\u00E1s m\u00EDnimo';
+        _cursorTooltip.textContent = '\uD83C\uDFAA 1 v\u00E9rtice \u2014 necesitas 2 m\u00E1s m\u00EDnimo';
     } else if (n === 2) {
-        cursorTooltip.textContent = '\uD83C\uDFAA 2 v\u00E9rtices \u2014 necesitas 1 m\u00E1s para poder cerrar';
+        _cursorTooltip.textContent = '\uD83C\uDFAA 2 v\u00E9rtices \u2014 necesitas 1 m\u00E1s para poder cerrar';
     } else {
-        cursorTooltip.textContent = '\uD83C\uDFAA ' + n + ' v\u00E9rtices \u2014 clic derecho para cerrar';
+        _cursorTooltip.textContent = '\uD83C\uDFAA ' + n + ' v\u00E9rtices \u2014 clic derecho para cerrar';
     }
 }
 
@@ -113,12 +113,12 @@ function actualizarTextoCursorTooltip() {
 /**
  * Crea el botón flotante para móvil si no existe.
  */
-function crearBotonCrearEventoMovil() {
-    if (botonCrearEventoMovil) return;
+function _crearBotonCrearEventoMovil() {
+    if (_botonCrearEventoMovil) return;
 
-    botonCrearEventoMovil = document.createElement('button');
-    botonCrearEventoMovil.textContent = '+ Crear';
-    botonCrearEventoMovil.style.cssText = `
+    _botonCrearEventoMovil = document.createElement('button');
+    _botonCrearEventoMovil.textContent = '+ Crear';
+    _botonCrearEventoMovil.style.cssText = `
         position: fixed;
         background: #8e44ad;
         color: white;
@@ -134,22 +134,22 @@ function crearBotonCrearEventoMovil() {
         pointer-events: all;
         transition: all 0.2s ease;
     `;
-    botonCrearEventoMovil.onmouseover = () => botonCrearEventoMovil.style.transform = 'scale(1.05)';
-    botonCrearEventoMovil.onmouseout = () => botonCrearEventoMovil.style.transform = 'scale(1)';
-    botonCrearEventoMovil.onmousedown = () => botonCrearEventoMovil.style.transform = 'scale(0.95)';
-    botonCrearEventoMovil.onmouseup = () => botonCrearEventoMovil.style.transform = 'scale(1.05)';
+    _botonCrearEventoMovil.onmouseover = () => _botonCrearEventoMovil.style.transform = 'scale(1.05)';
+    _botonCrearEventoMovil.onmouseout = () => _botonCrearEventoMovil.style.transform = 'scale(1)';
+    _botonCrearEventoMovil.onmousedown = () => _botonCrearEventoMovil.style.transform = 'scale(0.95)';
+    _botonCrearEventoMovil.onmouseup = () => _botonCrearEventoMovil.style.transform = 'scale(1.05)';
 
-    botonCrearEventoMovil.onclick = function(e) {
+    _botonCrearEventoMovil.onclick = function(e) {
         e.stopPropagation();
-        if (verticesActuales.length < 3) {
+        if (_verticesActuales.length < 3) {
             showNotification('⚠️ Necesitas al menos 3 vértices para cerrar el polígono.', 'warning');
             return;
         }
 
         // Simular el comportamiento del contextmenu (click derecho)
-        modoEvento = false;
-        map.off('mousemove', sobreRaton);
-        if (lineaSeguimiento) { map.removeLayer(lineaSeguimiento); lineaSeguimiento = null; }
+        _modoEvento = false;
+        map.off('mousemove', _onMouseMoveEvento);
+        if (_lineaSeguimiento) { map.removeLayer(_lineaSeguimiento); _lineaSeguimiento = null; }
         document.getElementById('map').classList.remove('modo-evento');
 
         const btn = document.getElementById('btn-crear-evento');
@@ -159,46 +159,46 @@ function crearBotonCrearEventoMovil() {
         }
 
         // Guardar copia de los vértices y abrir modal
-        const verticesCopia = [...verticesActuales];
-        verticesActuales = [];
-        ocultarBotonCrearEventoMovil();
-        abrirModalEvento(verticesCopia);
+        const verticesCopia = [..._verticesActuales];
+        _verticesActuales = [];
+        _ocultarBotonCrearEventoMovil();
+        _abrirModalEvento(verticesCopia);
     };
 
-    document.body.appendChild(botonCrearEventoMovil);
+    document.body.appendChild(_botonCrearEventoMovil);
 }
 
 /**
  * Muestra el botón flotante centrado en el polígono actual.
  */
-function mostrarBotonCrearEventoMovil() {
-    if (!window.isMobile || !modoEvento || verticesActuales.length < 3) return;
+function _mostrarBotonCrearEventoMovil() {
+    if (!window.isMobile || !_modoEvento || _verticesActuales.length < 3) return;
 
-    crearBotonCrearEventoMovil();
+    _crearBotonCrearEventoMovil();
 
     // Calcular centro del polígono
-    let latSum = 0, lonSum = 0;
-    verticesActuales.forEach(v => {
+    let latSum = 0, lngSum = 0;
+    _verticesActuales.forEach(v => {
         latSum += v.lat;
-        lonSum += v.lon;
+        lngSum += v.lng;
     });
-    const centerLat = latSum / verticesActuales.length;
-    const centerLon = lonSum / verticesActuales.length;
+    const centerLat = latSum / _verticesActuales.length;
+    const centerLng = lngSum / _verticesActuales.length;
 
     // Convertir a coordenadas de pantalla
-    const point = map.latLonToContainerPoint([centerLat, centerLon]);
+    const point = map.latLngToContainerPoint([centerLat, centerLng]);
 
-    botonCrearEventoMovil.style.left = (point.x - 50) + 'px'; // Centrado horizontalmente
-    botonCrearEventoMovil.style.top = (point.y - 25) + 'px';  // Centrado verticalmente
-    botonCrearEventoMovil.style.display = 'block';
+    _botonCrearEventoMovil.style.left = (point.x - 50) + 'px'; // Centrado horizontalmente
+    _botonCrearEventoMovil.style.top = (point.y - 25) + 'px';  // Centrado verticalmente
+    _botonCrearEventoMovil.style.display = 'block';
 }
 
 /**
  * Oculta el botón flotante.
  */
-function ocultarBotonCrearEventoMovil() {
-    if (botonCrearEventoMovil) {
-        botonCrearEventoMovil.style.display = 'none';
+function _ocultarBotonCrearEventoMovil() {
+    if (_botonCrearEventoMovil) {
+        _botonCrearEventoMovil.style.display = 'none';
     }
 }
 
@@ -206,12 +206,12 @@ function ocultarBotonCrearEventoMovil() {
 
 /**
  * Tabla de 4 niveles de afluencia/impacto.
- * afluencia (0-1) se mapea a nivel 1-4 con nivelAfluencia().
+ * afluencia (0-1) se mapea a nivel 1-4 con _nivelAfluencia().
  * Los valores de porcentaje coinciden exactamente con los de los obstáculos:
- *   Nivel 1 -> 25% -> ×1.75   (impacto leve)
- *   Nivel 2 -> 50% -> ×2.5    (impacto moderado)
- *   Nivel 3 -> 75% -> ×3.25   (impacto alto)
- *   Nivel 4 -> 100% -> ×4.0   (impacto máximo)
+ *   Nivel 1 → 25% → ×1.75   (impacto leve)
+ *   Nivel 2 → 50% → ×2.5    (impacto moderado)
+ *   Nivel 3 → 75% → ×3.25   (impacto alto)
+ *   Nivel 4 → 100% → ×4.0   (impacto máximo)
  */
 const NIVELES_EVENTO = {
     1: { pct: 25,  color: '#2980b9', label: 'Nivel 1',  desc: 'Leve' },
@@ -224,7 +224,7 @@ const NIVELES_EVENTO = {
  * Devuelve el nivel (1-4) dado un valor de afluencia (0-1).
  * Redondea al nivel más cercano por cuartos.
  */
-function nivelAfluencia(afluencia) {
+function _nivelAfluencia(afluencia) {
     const nivel = Math.round(afluencia * 4);
     return Math.max(1, Math.min(4, nivel || 1));
 }
@@ -232,8 +232,8 @@ function nivelAfluencia(afluencia) {
 /**
  * Devuelve el color del nivel correspondiente a la afluencia dada.
  */
-function colorEvento(afluencia) {
-    return NIVELES_EVENTO[nivelAfluencia(afluencia)].color;
+function _colorEvento(afluencia) {
+    return NIVELES_EVENTO[_nivelAfluencia(afluencia)].color;
 }
 
 // ── Activar / desactivar modo dibujo ─────────────────────────────────────────
@@ -243,16 +243,16 @@ function colorEvento(afluencia) {
  * Solo disponible para admin; si no hay capa de vías cargada, avisa.
  */
 function activarModoEvento() {
-    if (window.userRol !== 'admin') {
+    if (window._userRol !== 'admin') {
         showNotification('Solo el administrador puede crear eventos', 'warning');
         return;
     }
 
     // Cancelar selección de origen/destino si estaba activa
-    const habiaCancelando = window.esperandoDestino || window.esperandoOrigen;
+    const habiaCancelando = window._esperandoDestino || window._esperandoOrigen;
     if (habiaCancelando) {
-        window.esperandoDestino = false;
-        window.esperandoOrigen  = false;
+        window._esperandoDestino = false;
+        window._esperandoOrigen  = false;
         if (typeof ocultarInstruccion === 'function') ocultarInstruccion();
     }
 
@@ -260,9 +260,9 @@ function activarModoEvento() {
     const habiaObstaculo = typeof modoObstaculo !== 'undefined' && modoObstaculo;
     if (habiaObstaculo && typeof desactivarModoObstaculo === 'function') desactivarModoObstaculo();
 
-    modoEvento = true;
-    verticesActuales = [];
-    limpiarPreview();
+    _modoEvento = true;
+    _verticesActuales = [];
+    _limpiarPreview();
 
     // Cursor crosshair en el mapa
     document.getElementById('map').classList.add('modo-evento');
@@ -285,27 +285,27 @@ function activarModoEvento() {
     showNotification(msg, 'info');
 
     // Listener de movimiento del ratón (línea de seguimiento)
-    map.on('mousemove', sobreRaton);
+    map.on('mousemove', _onMouseMoveEvento);
 
     // Tooltip que sigue al cursor
-    mostrarCursorTooltip();
+    _mostrarCursorTooltip();
 }
 
 /**
  * Cancela el modo dibujo sin crear nada.
  */
 function desactivarModoEvento() {
-    modoEvento = false;
-    verticesActuales = [];
-    limpiarPreview();
-    map.off('mousemove', sobreRaton);
+    _modoEvento = false;
+    _verticesActuales = [];
+    _limpiarPreview();
+    map.off('mousemove', _onMouseMoveEvento);
     document.getElementById('map').classList.remove('modo-evento');
 
     // Ocultar tooltip de cursor
-    ocultarCursorTooltip();
+    _ocultarCursorTooltip();
 
     // Ocultar botón flotante en móvil
-    if (window.isMobile) ocultarBotonCrearEventoMovil();
+    if (window.isMobile) _ocultarBotonCrearEventoMovil();
 
     const btn = document.getElementById('btn-crear-evento');
     if (btn) {
@@ -317,39 +317,39 @@ function desactivarModoEvento() {
 // ── Preview mientras se dibuja ────────────────────────────────────────────────
 
 /** Elimina todas las capas de preview del mapa. */
-function limpiarPreview() {
-    if (preCapa)   { map.removeLayer(preCapa);   preCapa   = null; }
-    if (lineaSeguimiento) { map.removeLayer(lineaSeguimiento); lineaSeguimiento = null; }
-    preVertices.forEach(m => map.removeLayer(m));
-    preVertices = [];
+function _limpiarPreview() {
+    if (_previewLayer)   { map.removeLayer(_previewLayer);   _previewLayer   = null; }
+    if (_lineaSeguimiento) { map.removeLayer(_lineaSeguimiento); _lineaSeguimiento = null; }
+    _previewMarkers.forEach(m => map.removeLayer(m));
+    _previewMarkers = [];
 }
 
 /** Actualiza el polígono/polyline de preview con los vértices actuales. */
-function actualizarPreview() {
-    if (preCapa) map.removeLayer(preCapa);
+function _actualizarPreview() {
+    if (_previewLayer) map.removeLayer(_previewLayer);
 
-    const latlons = verticesActuales;
-    if (latlons.length < 2) {
-        preCapa = null;
-        if (window.isMobile) ocultarBotonCrearEventoMovil();
+    const latlngs = _verticesActuales;
+    if (latlngs.length < 2) {
+        _previewLayer = null;
+        if (window.isMobile) _ocultarBotonCrearEventoMovil();
         return;
     }
 
     // Con 2+ vértices dibuja una polyline; con 3+ cierra visualmente
-    preCapa = latlons.length >= 3
-        ? L.polygon(latlons, {
+    _previewLayer = latlngs.length >= 3
+        ? L.polygon(latlngs, {
             color: '#8e44ad', weight: 2, opacity: 0.9,
             fillColor: '#8e44ad', fillOpacity: 0.15,
             dashArray: '8, 6', interactive: false
         }).addTo(map)
-        : L.polyline(latlons, {
+        : L.polyline(latlngs, {
             color: '#8e44ad', weight: 2, opacity: 0.9,
             dashArray: '8, 6', interactive: false
         }).addTo(map);
 
     // Actualizar posición del botón flotante en móvil
-    if (window.isMobile && latlons.length >= 3) {
-        mostrarBotonCrearEventoMovil();
+    if (window.isMobile && latlngs.length >= 3) {
+        _mostrarBotonCrearEventoMovil();
     }
 }
 
@@ -357,11 +357,11 @@ function actualizarPreview() {
  * Dibuja la línea de seguimiento desde el último vértice al cursor.
  * @param {L.MouseEvent} e
  */
-function sobreRaton(e) { 
-    if (!modoEvento || !verticesActuales.length) return;
-    if (lineaSeguimiento) map.removeLayer(lineaSeguimiento);
-    const ultimo = verticesActuales[verticesActuales.length - 1];
-    lineaSeguimiento = L.polyline([ultimo, e.latlon], {
+function _onMouseMoveEvento(e) {
+    if (!_modoEvento || !_verticesActuales.length) return;
+    if (_lineaSeguimiento) map.removeLayer(_lineaSeguimiento);
+    const ultimo = _verticesActuales[_verticesActuales.length - 1];
+    _lineaSeguimiento = L.polyline([ultimo, e.latlng], {
         color: '#8e44ad', weight: 1.5, opacity: 0.6, dashArray: '4, 4',
         interactive: false
     }).addTo(map);
@@ -372,25 +372,25 @@ function sobreRaton(e) {
 /**
  * Añade un vértice al polígono en construcción (clic izquierdo en modo evento).
  * Se inyecta en el listener principal de map.on('click') de route-manager.js
- * a través de la función window.clicVertice expuesta más abajo.
+ * a través de la función window._eventoClickHandler expuesta más abajo.
  */
-window.clicVertice = function (e) {
-    if (!modoEvento) return false; // no se usa
+window._eventoClickHandler = function (e) {
+    if (!_modoEvento) return false; // no consumido
 
-    verticesActuales.push(e.latlon);
+    _verticesActuales.push(e.latlng);
 
-    // Marcador de vértice (non-interactive para que contextmenu llegue al mapa)
-    const m = L.circleMarcador(e.latlon, {
+    // Marker de vértice (non-interactive para que contextmenu llegue al mapa)
+    const m = L.circleMarker(e.latlng, {
         radius: 5, color: '#8e44ad', fillColor: '#fff',
         fillOpacity: 1, weight: 2,
         interactive: false
     }).addTo(map);
-    preVertices.push(m);
+    _previewMarkers.push(m);
 
-    actualizarPreview();
-    actualizarTextoCursorTooltip();
+    _actualizarPreview();
+    _actualizarTextoCursorTooltip();
 
-    const n = verticesActuales.length;
+    const n = _verticesActuales.length;
     if (n === 1) {
         const msg = window.isMobile
             ? '📍 Primer vértice. Sigue tocando para añadir más.'
@@ -406,13 +406,13 @@ window.clicVertice = function (e) {
             ? '📍 Vértice 3 añadido. Ya puedes cerrar el polígono con el botón "+ Crear".'
             : '📍 Vértice 3 añadido. Ya puedes cerrar el polígono con clic derecho.';
         showNotification(msg, 'info');
-        if (window.isMobile) mostrarBotonCrearEventoMovil();
+        if (window.isMobile) _mostrarBotonCrearEventoMovil();
     } else {
         const msg = window.isMobile
             ? `📍 Vértice ${n} añadido.`
             : `📍 Vértice ${n} añadido.`;
         showNotification(msg, 'info');
-        if (window.isMobile) mostrarBotonCrearEventoMovil();
+        if (window.isMobile) _mostrarBotonCrearEventoMovil();
     }
 
     return true; // consumido: route-manager no procesará este clic
@@ -422,21 +422,21 @@ window.clicVertice = function (e) {
  * Cierra el polígono con clic derecho y abre el modal de atributos.
  */
 map.on('contextmenu', function (e) {
-    if (!modoEvento) return;
+    if (!_modoEvento) return;
 
-    if (verticesActuales.length < 3) {
+    if (_verticesActuales.length < 3) {
         showNotification('⚠️ Necesitas al menos 3 vértices para cerrar el polígono.', 'warning');
         return;
     }
 
     // Desactivar modo dibujo (limpia preview y listeners)
-    modoEvento = false;
-    map.off('mousemove', sobreRaton);
-    if (lineaSeguimiento) { map.removeLayer(lineaSeguimiento); lineaSeguimiento = null; }
+    _modoEvento = false;
+    map.off('mousemove', _onMouseMoveEvento);
+    if (_lineaSeguimiento) { map.removeLayer(_lineaSeguimiento); _lineaSeguimiento = null; }
     document.getElementById('map').classList.remove('modo-evento');
 
     // Ocultar botón flotante en móvil
-    if (window.isMobile) ocultarBotonCrearEventoMovil();
+    if (window.isMobile) _ocultarBotonCrearEventoMovil();
 
     const btn = document.getElementById('btn-crear-evento');
     if (btn) {
@@ -445,28 +445,28 @@ map.on('contextmenu', function (e) {
     }
 
     // Guardar copia de los vértices y abrir modal
-    const verticesCopia = [...verticesActuales];
-    verticesActuales = [];
-    abrirModalEvento(verticesCopia);
+    const verticesCopia = [..._verticesActuales];
+    _verticesActuales = [];
+    _abrirModalEvento(verticesCopia);
 });
 
 // ── Modal de atributos ────────────────────────────────────────────────────────
 
 /** Vértices temporales hasta que el usuario confirme el modal. */
-let verticesPendientes = null;
+let _verticesPendientes = null;
 
 /**
  * Marca visualmente el nivel seleccionado en el modal y guarda el valor
  * en el input oculto #ev-nivel-value.
  * @param {number} nivel  1-4
  */
-function seleccionarNivelEvento(nivel) {
+function _seleccionarNivelEvento(nivel) {
     const info = NIVELES_EVENTO[nivel];
     if (!info) return;
 
     // Actualizar input oculto
-    const oculto = document.getElementById('ev-nivel-value');
-    if (oculto) oculto.value = nivel;
+    const hidden = document.getElementById('ev-nivel-value');
+    if (hidden) hidden.value = nivel;
 
     // Actualizar botones
     for (let n = 1; n <= 4; n++) {
@@ -492,15 +492,15 @@ function seleccionarNivelEvento(nivel) {
  * Abre el modal para introducir los atributos del evento.
  * @param {L.LatLng[]} vertices
  */
-function abrirModalEvento(vertices) {
-    verticesPendientes = vertices;
-    limpiarPreview();
+function _abrirModalEvento(vertices) {
+    _verticesPendientes = vertices;
+    _limpiarPreview();
 
     // Ocultar botón flotante en móvil
-    if (window.isMobile) ocultarBotonCrearEventoMovil();
+    if (window.isMobile) _ocultarBotonCrearEventoMovil();
 
     // Mostrar preview definitivo (sin trazo, no interactivo)
-    preCapa = L.polygon(vertices, {
+    _previewLayer = L.polygon(vertices, {
         color: '#8e44ad', weight: 2, opacity: 0.8,
         fillColor: '#8e44ad', fillOpacity: 0.12,
         interactive: false
@@ -523,7 +523,7 @@ function abrirModalEvento(vertices) {
     if (elDuracion) elDuracion.value = 2;
 
     // Seleccionar nivel 2 por defecto
-    seleccionarNivelEvento(2);
+    _seleccionarNivelEvento(2);
 
     document.getElementById('evento-modal').style.display = 'flex';
 }
@@ -531,8 +531,8 @@ function abrirModalEvento(vertices) {
 /** Cierra el modal y descarta el polígono pendiente. */
 function cerrarModalEvento() {
     document.getElementById('evento-modal').style.display = 'none';
-    limpiarPreview();
-    verticesPendientes = null;
+    _limpiarPreview();
+    _verticesPendientes = null;
     // Asegura que el botón del panel MSW vuelve al estado inactivo
     if (typeof desactivarModoEvento === 'function') desactivarModoEvento();
 }
@@ -547,7 +547,7 @@ function confirmarEvento() {
     const duracion  = parseFloat(document.getElementById('ev-duracion')?.value ?? 2);
 
     // Helper: marca un campo en rojo, muestra notificación y hace foco
-    function campoError(id, msg) {
+    function _campoError(id, msg) {
         const el = document.getElementById(id);
         if (el) {
             el.style.borderColor = '#e74c3c';
@@ -564,24 +564,24 @@ function confirmarEvento() {
 
     // Validaciones
     if (!nombre) {
-        campoError('ev-nombre', '⚠️ Introduce un nombre para el evento.');
+        _campoError('ev-nombre', '⚠️ Introduce un nombre para el evento.');
         return;
     }
     if (!fechaStr) {
-        campoError('ev-fecha', '⚠️ Selecciona la fecha del evento.');
+        _campoError('ev-fecha', '⚠️ Selecciona la fecha del evento.');
         return;
     }
     const fechaInicio = new Date(`${fechaStr}T${horaStr}:00`);
     if (isNaN(fechaInicio.getTime())) {
-        campoError('ev-hora', '⚠️ Fecha u hora no válidas.');
+        _campoError('ev-hora', '⚠️ Fecha u hora no válidas.');
         return;
     }
     if (isNaN(duracion) || duracion <= 0) {
-        campoError('ev-duracion', '⚠️ La duración debe ser mayor que 0.');
+        _campoError('ev-duracion', '⚠️ La duración debe ser mayor que 0.');
         return;
     }
 
-    if (!verticesPendientes || verticesPendientes.length < 3) {
+    if (!_verticesPendientes || _verticesPendientes.length < 3) {
         showNotification('⚠️ Error interno: no hay polígono dibujado.', 'warning');
         return;
     }
@@ -589,10 +589,10 @@ function confirmarEvento() {
     document.getElementById('evento-modal').style.display = 'none';
     
     // Limpiar el polígono preview antes de crear el evento final
-    limpiarPreview();
+    _limpiarPreview();
     
-    crearEvento(verticesPendientes, nombre, fechaInicio, afluencia, duracion);
-    verticesPendientes = null;
+    _crearEvento(_verticesPendientes, nombre, fechaInicio, afluencia, duracion);
+    _verticesPendientes = null;
     desactivarModoEvento();
 }
 
@@ -607,8 +607,8 @@ function confirmarEvento() {
  * @param {number}     afluencia   - 0-1 (proporción de afluencia máxima)
  * @param {number}     duracion    - Duración en horas
  */
-function crearEvento(vertices, nombre, fechaInicio, afluencia, duracion) {
-    const color = colorEvento(afluencia);
+function _crearEvento(vertices, nombre, fechaInicio, afluencia, duracion) {
+    const color = _colorEvento(afluencia);
 
     // Polígono principal
     const poligono = L.polygon(vertices, {
@@ -637,9 +637,9 @@ function crearEvento(vertices, nombre, fechaInicio, afluencia, duracion) {
     // Fecha fin
     const fechaFin = new Date(fechaInicio.getTime() + duracion * 3600000);
 
-    const indice   = eventos.length; 
+    const idx   = eventos.length;
     const evento = {
-        indice, nombre, fechaInicio, fechaFin, afluencia, duracion,
+        idx, nombre, fechaInicio, fechaFin, afluencia, duracion,
         vertices, poligono, label,
         // Guardamos el polígono de Leaflet para intersección
         bounds: poligono.getBounds()
@@ -647,39 +647,39 @@ function crearEvento(vertices, nombre, fechaInicio, afluencia, duracion) {
     eventos.push(evento);
 
     // Popup con info y botón eliminar
-    poligono.bindPopup(popupEventoHTML(indice));
+    poligono.bindPopup(_popupEventoHTML(idx));
     poligono.on('popupopen', () => {
         // Re-bind para actualizar si se modificó
-        poligono.setPopupContent(popupEventoHTML(indice));
+        poligono.setPopupContent(_popupEventoHTML(idx));
     });
 
-    actualizarListaEventos();
-    const nivel = nivelAfluencia(afluencia);
+    _actualizarListaEventos();
+    const nivel = _nivelAfluencia(afluencia);
     showNotification(`✅ Evento "${nombre}" creado (Nivel ${nivel} — ${NIVELES_EVENTO[nivel].desc}, ${duracion}h)`, 'success');
 }
 
 // ── HTML del popup ────────────────────────────────────────────────────────────
 
-function popupEventoHTML(indice) {
-    const ev   = eventos[indice];
+function _popupEventoHTML(idx) {
+    const ev   = eventos[idx];
     if (!ev) return '';
-    const nivel = nivelAfluencia(ev.afluencia);
+    const nivel = _nivelAfluencia(ev.afluencia);
     const info  = NIVELES_EVENTO[nivel];
     const color = info.color;
-    const fecha  = d => d.toLocaleString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    const _fmt  = d => d.toLocaleString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
 
     return `
         <div style="font-family:sans-serif;min-width:200px;font-size:13px;">
             <strong style="font-size:14px;">🎪 ${ev.nombre}</strong>
             <hr style="margin:6px 0;border:none;border-top:1px solid #eee;">
             <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#555;">
-                <span>📅 Inicio</span>  <span>${fecha(ev.fechaInicio)}</span>
-                <span>🏁 Fin</span>     <span>${fecha(ev.fechaFin)}</span>
+                <span>📅 Inicio</span>  <span>${_fmt(ev.fechaInicio)}</span>
+                <span>🏁 Fin</span>     <span>${_fmt(ev.fechaFin)}</span>
                 <span>⏱️ Duración</span><span>${ev.duracion}h</span>
                 <span>👥 Impacto</span>
                 <span style="color:${color};font-weight:700;">${info.label} — ${info.desc}</span>
             </div>
-            <button onclick="eliminarEvento(${indice})"
+            <button onclick="eliminarEvento(${idx})"
                 style="margin-top:10px;width:100%;padding:6px;background:#e74c3c;
                        color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">
                 🗑️ Eliminar evento
@@ -691,10 +691,10 @@ function popupEventoHTML(indice) {
 
 /**
  * Elimina un evento del mapa y del array.
- * @param {number} indice
+ * @param {number} idx
  */
-function eliminarEvento(indice) {
-    const ev = eventos[indice];
+function eliminarEvento(idx) {
+    const ev = eventos[idx];
     if (!ev) return;
     
     // Cerrar y desvincular popup antes de quitar la capa
@@ -712,8 +712,8 @@ function eliminarEvento(indice) {
     // Cerrar popup si está abierto (por si acaso)
     map.closePopup();
     
-    eventos[indice] = null;
-    actualizarListaEventos();
+    eventos[idx] = null;
+    _actualizarListaEventos();
     showNotification(`Evento "${ev.nombre}" eliminado`, 'info');
 }
 
@@ -732,14 +732,14 @@ function limpiarEventos() {
     });
     map.closePopup();
     eventos = [];
-    actualizarListaEventos();
+    _actualizarListaEventos();
     showNotification('Todos los eventos eliminados', 'info');
 }
 
 // ── Lista de eventos en el panel ──────────────────────────────────────────────
 
 /** Actualiza el panel izquierdo y el panel flotante con la lista de eventos activos. */
-function actualizarListaEventos() {
+function _actualizarListaEventos() {
     const lista     = document.getElementById('lista-eventos');
     const vacia     = document.getElementById('lista-eventos-vacia');
     const contador  = document.getElementById('eventos-contador');
@@ -750,7 +750,7 @@ function actualizarListaEventos() {
     const contadorFlotante = document.getElementById('ev-flotante-contador');
 
     const activos = eventos.filter(Boolean);
-    const esAdmin = window.userRol === 'admin';
+    const esAdmin = window._userRol === 'admin';
 
     // ── Panel flotante: visible si hay eventos y es admin ──
     if (contadorFlotante) contadorFlotante.textContent = activos.length;
@@ -759,7 +759,7 @@ function actualizarListaEventos() {
         const mostrar = activos.length > 0 && esAdmin;
         panelFlotante.style.display = mostrar ? 'flex' : 'none';
         // Reposicionar siempre que cambie visibilidad o contenido
-        if (mostrar) setTimeout(reposicionarPanelEventos, 0);
+        if (mostrar) setTimeout(_reposicionarPanelEventos, 0);
     }
 
     // ── Layer-item en panel izquierdo ──
@@ -778,13 +778,12 @@ function actualizarListaEventos() {
     if (vacia) vacia.style.display = 'none';
     if (contador) contador.textContent = activos.length;
 
-    // formato de fecha para el panel
-    const fecha = d => d.toLocaleString('es-ES', { 
+    const _fmt = d => d.toLocaleString('es-ES', {
         day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'
     });
 
     activos.forEach(ev => {
-        const nivel = nivelAfluencia(ev.afluencia);
+        const nivel = _nivelAfluencia(ev.afluencia);
         const info  = NIVELES_EVENTO[nivel];
         const color = info.color;
 
@@ -798,10 +797,10 @@ function actualizarListaEventos() {
                         <strong>🎪 ${ev.nombre}</strong>
                         <span style="color:${color};margin-left:6px;font-weight:700;">${info.label}</span>
                     </div>
-                    <button class="obs-item-del" onclick="eliminarEvento(${ev.indice})" title="Eliminar">✕</button>
+                    <button class="obs-item-del" onclick="eliminarEvento(${ev.idx})" title="Eliminar">✕</button>
                 </div>
                 <div class="obs-item-sub" style="font-size:11px;color:#7f8c8d;">
-                    📅 ${fecha(ev.fechaInicio)} -> ${fecha(ev.fechaFin)} · ⏱️ ${ev.duracion}h
+                    📅 ${_fmt(ev.fechaInicio)} → ${_fmt(ev.fechaFin)} · ⏱️ ${ev.duracion}h
                 </div>`;
             item.addEventListener('click', (e) => {
                 if (e.target.closest('button')) return;
@@ -822,7 +821,7 @@ function actualizarListaEventos() {
                         🎪 ${ev.nombre}
                     </span>
                     <span style="color:${color};font-weight:700;font-size:12px;white-space:nowrap;">${info.label}</span>
-                    <button onclick="eliminarEvento(${ev.indice})"
+                    <button onclick="eliminarEvento(${ev.idx})"
                         style="background:none;border:none;color:#aab0b7;font-size:14px;
                                cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;"
                         onmouseover="this.style.color='#e74c3c'"
@@ -830,7 +829,7 @@ function actualizarListaEventos() {
                         title="Eliminar">✕</button>
                 </div>
                 <div style="font-size:11px;color:#7f8c8d;margin-top:3px;">
-                    📅 ${fecha(ev.fechaInicio)} -> ${fecha(ev.fechaFin)} · ⏱️ ${ev.duracion}h
+                    📅 ${_fmt(ev.fechaInicio)} → ${_fmt(ev.fechaFin)} · ⏱️ ${ev.duracion}h
                 </div>`;
             fitem.addEventListener('click', (e) => {
                 if (e.target.closest('button')) return;
@@ -857,17 +856,17 @@ async function exportarEventos(options = {}) {
 
     const formato = (options.formato || 'gpkg').toLowerCase();
     const payload = activos.map(ev => ({
-        vertices:     ev.vertices.map(v => [v.lon, v.lat]),  // [lon, lat] para GeoJSON
+        vertices:     ev.vertices.map(v => [v.lng, v.lat]),  // [lon, lat] para GeoJSON
         nombre:       ev.nombre,
         fecha_inicio: ev.fechaInicio.toISOString(),
         fecha_fin:    ev.fechaFin.toISOString(),
-        afluencia:    nivelAfluencia(ev.afluencia) * 25,  // nivel->pct: 1->25, 2->50, 3->75, 4->100
+        afluencia:    _nivelAfluencia(ev.afluencia) * 25,  // nivel→pct: 1→25, 2→50, 3→75, 4→100
         duracion:     ev.duracion,
     }));
 
     try {
         showNotification('⏳ Generando archivo...', 'info');
-        const resp = await fetch('/api/exportar-eventos', { 
+        const resp = await fetch('/api/exportar-eventos', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify({ eventos: payload, formato }),
@@ -911,7 +910,7 @@ function abrirModalExportacionEventos() {
     const fecha = new Date().toISOString().slice(0,10);
     formatoSelect.value = 'gpkg';
     filepathInput.value = `eventos_${fecha}.gpkg`;
-    eventosExportHandle = null;
+    _eventosExportHandle = null;
     modal.style.display = 'flex';
     setTimeout(() => formatoSelect.focus(), 80);
 }
@@ -929,7 +928,7 @@ function cambiarFormatoExportacionEventos() {
     if (!valor) valor = `eventos_${new Date().toISOString().slice(0,10)}.${formatoSelect.value === 'shp' ? 'zip' : 'gpkg'}`;
     valor = valor.replace(/\.(gpkg|zip)$/i, '');
     filepathInput.value = `${valor}.${formatoSelect.value === 'shp' ? 'zip' : 'gpkg'}`;
-    eventosExportHandle = null;
+    _eventosExportHandle = null;
 }
 
 async function explorarRutaExportacionEventos() {
@@ -952,7 +951,7 @@ async function explorarRutaExportacionEventos() {
                 }],
                 excludeAcceptAllOption: true,
             });
-            eventosExportHandle = handle;
+            _eventosExportHandle = handle;
             filepathInput.value = handle.name || sugerido;
         } catch (err) {
             if (err.name !== 'AbortError') console.error(err);
@@ -977,7 +976,7 @@ function obtenerNombreArchivoExportacionEventos() {
 async function confirmarExportacionEventos() {
     const formato = document.getElementById('export-eventos-formato-select')?.value || 'gpkg';
     const filename = obtenerNombreArchivoExportacionEventos();
-    const handle = eventosExportHandle;
+    const handle = _eventosExportHandle;
     cerrarModalExportacionEventos();
     await exportarEventos({ fileHandle: handle, filename, formato });
 }
@@ -1003,12 +1002,12 @@ function importarEventos(input) {
             if (!evs.length) { showNotification('No se encontraron eventos válidos', 'warning'); return; }
             evs.forEach(ev => {
                 try {
-                    const vertices    = ev.vertices.map(([lon, lat]) => L.latLon(lat, lon));
+                    const vertices    = ev.vertices.map(([lon, lat]) => L.latLng(lat, lon));
                     const fechaInicio = new Date(ev.fecha_inicio);
                     const fechaFin    = new Date(ev.fecha_fin);
                     const duracion    = (fechaFin - fechaInicio) / 3600000;
-                    const afluencia   = (ev.afluencia ?? 50) / 100;  // pct->0-1, nivelAfluencia() lo discretiza al crear
-                    crearEvento(vertices, ev.nombre, fechaInicio, afluencia, duracion);
+                    const afluencia   = (ev.afluencia ?? 50) / 100;  // pct→0-1, _nivelAfluencia() lo discretiza al crear
+                    _crearEvento(vertices, ev.nombre, fechaInicio, afluencia, duracion);
                 } catch (e) {
                     console.warn('[event-manager] Error al importar evento:', e);
                 }
@@ -1027,13 +1026,13 @@ function importarEventos(input) {
  *
  * Factor de penalización:
  *   factor = 1 / (1 - afluencia * 0.99)   — idéntica a la fórmula de obstáculos en app.py
- *   -> Nivel 1 (25%) -> ×1.49
- *   -> Nivel 2 (50%) -> ×2.02
- *   -> Nivel 3 (75%) -> ×4.03
- *   -> Nivel 4 (100%) -> ×100  (prácticamente bloqueado, igual que un obstáculo al 100%)
+ *   → Nivel 1 (25%) → ×1.49
+ *   → Nivel 2 (50%) → ×2.02
+ *   → Nivel 3 (75%) → ×4.03
+ *   → Nivel 4 (100%) → ×100  (prácticamente bloqueado, igual que un obstáculo al 100%)
  *
  * Se expone como window.obtenerPenalizacionEventos para ser llamada desde
- * calcularPesosAristas() en route-manager.js.
+ * _calcularPesosAristas() en route-manager.js.
  *
  * @param {number[]} s             - [lon, lat] del inicio del segmento
  * @param {number[]} e             - [lon, lat] del fin del segmento
@@ -1056,13 +1055,13 @@ window.obtenerPenalizacionEventos = function (s, e, fechaEfectiva) {
         if (fechaEfectiva < ev.fechaInicio || fechaEfectiva >= ev.fechaFin) continue;
 
         // Comprobar si el punto medio está dentro del polígono
-        if (!puntoDentroDePoligono(midPt, ev.vertices)) continue;
+        if (!_puntoDentroDePoligono(midPt, ev.vertices)) continue;
 
         // Misma fórmula que el backend usa para obstáculos:
         // factor = 1 / (1 - afluencia * 0.99)
         const factor = 1.0 / (1.0 - Math.min(ev.afluencia, 0.99) * 0.99);
         if (factor > factorMax) factorMax = factor;
-        console.log(`[event-manager] Evento "${ev.nombre}" activo, factor ${factor} para segmento ${s}->${e}`);
+        console.log(`[event-manager] Evento "${ev.nombre}" activo, factor ${factor} para segmento ${s}→${e}`);
     }
 
     return factorMax;
@@ -1074,15 +1073,15 @@ window.obtenerPenalizacionEventos = function (s, e, fechaEfectiva) {
  * @param {L.LatLng[]} vertices - Vértices del polígono
  * @returns {boolean}
  */
-function puntoDentroDePoligono(punto, vertices) {
-    const x = punto.lon;
+function _puntoDentroDePoligono(punto, vertices) {
+    const x = punto.lng;
     const y = punto.lat;
     let dentro = false;
     const n = vertices.length;
 
     for (let i = 0, j = n - 1; i < n; j = i++) {
-        const xi = vertices[i].lon, yi = vertices[i].lat;
-        const xj = vertices[j].lon, yj = vertices[j].lat;
+        const xi = vertices[i].lng, yi = vertices[i].lat;
+        const xj = vertices[j].lng, yj = vertices[j].lat;
         const intersecta = ((yi > y) !== (yj > y)) &&
                            (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
         if (intersecta) dentro = !dentro;
@@ -1093,7 +1092,7 @@ function puntoDentroDePoligono(punto, vertices) {
 // ── Parche sobre calcularRuta ─────────────────────────────────────────────────
 
 /**
- * Extiende calcularPesosAristas para que, después de calcular el peso base
+ * Extiende _calcularPesosAristas para que, después de calcular el peso base
  * de cada arista, lo multiplique por el factor de evento si corresponde.
  *
  * Se aplica monkey-patching sobre la función original de route-manager.js
@@ -1101,23 +1100,23 @@ function puntoDentroDePoligono(punto, vertices) {
  *
  * La fecha efectiva se lee de obtenerFechaEfectiva() (route-manager.js).
  */
-(function parchearPesosAristas() {
-    // Esperar a que route-manager.js haya definido calcularPesosAristas
+(function _parchearPesosAristas() {
+    // Esperar a que route-manager.js haya definido _calcularPesosAristas
     const MAX_INTENTOS = 20;
     let intentos = 0;
 
     function intentarParchear() {
-        if (typeof calcularPesosAristas !== 'function') {
+        if (typeof _calcularPesosAristas !== 'function') {
             if (++intentos < MAX_INTENTOS) setTimeout(intentarParchear, 150);
-            else console.warn('[event-manager] No se pudo parchear calcularPesosAristas.');
+            else console.warn('[event-manager] No se pudo parchear _calcularPesosAristas.');
             return;
         }
 
-        const original = calcularPesosAristas;
+        const _original = _calcularPesosAristas;
 
         // Sobreescribir en el scope global para que cualquier llamada global use la versión parcheada.
         const patched = function () {
-            const pesos = original();
+            const pesos = _original();
 
             // Si no hay eventos activos, devolver sin modificar
             if (!eventos.filter(Boolean).length) return pesos;
@@ -1129,7 +1128,7 @@ function puntoDentroDePoligono(punto, vertices) {
             return pesos.map(p => {
                 const factorEvento = window.obtenerPenalizacionEventos(p.s, p.e, fechaEfectiva);
                 if (factorEvento === 1.0) return p;
-                console.log(`[event-manager] Penalizando segmento ${p.s}->${p.e} con factor ${factorEvento}`);
+                console.log(`[event-manager] Penalizando segmento ${p.s}→${p.e} con factor ${factorEvento}`);
                 return {
                     ...p,
                     peso:       p.peso       * factorEvento,
@@ -1139,9 +1138,9 @@ function puntoDentroDePoligono(punto, vertices) {
             });
         };
 
-        window.calcularPesosAristas = calcularPesosAristas = patched;
+        window._calcularPesosAristas = _calcularPesosAristas = patched;
 
-        console.log('[event-manager] ✅ calcularPesosAristas parcheada con penalización de eventos.');
+        console.log('[event-manager] ✅ _calcularPesosAristas parcheada con penalización de eventos.');
     }
 
     setTimeout(intentarParchear, 100);
@@ -1149,13 +1148,13 @@ function puntoDentroDePoligono(punto, vertices) {
 
 // ── Nota sobre clicks ────────────────────────────────────────────────────────
 // El handler de clic del mapa está en map-widgets.js, que comprueba
-// window.modoEvento y llama a window.clicVertice cuando está activo.
+// window._modoEvento y llama a window._eventoClickHandler cuando está activo.
 // No se registra un listener adicional aquí para evitar dobles llamadas.
 
 
 // ── Posicionamiento del panel de eventos debajo del de obstáculos ──────────
 
-function reposicionarPanelEventos() {
+function _reposicionarPanelEventos() {
     const obs = document.getElementById('obstaculos-panel-flotante');
     const ev  = document.getElementById('eventos-panel-flotante');
     if (!ev) return;
@@ -1167,14 +1166,14 @@ function reposicionarPanelEventos() {
     }
 }
 
-(function observarPanelObstaculos() {
+(function _observarPanelObstaculos() {
     function iniciar() {
         const obs = document.getElementById('obstaculos-panel-flotante');
         if (!obs) { setTimeout(iniciar, 100); return; }
-        new ResizeObserver(reposicionarPanelEventos).observe(obs);
-        new MutationObserver(reposicionarPanelEventos)
+        new ResizeObserver(_reposicionarPanelEventos).observe(obs);
+        new MutationObserver(_reposicionarPanelEventos)
             .observe(obs, { attributes: true, attributeFilter: ['style'] });
-        window.addEventListener('resize', reposicionarPanelEventos);
+        window.addEventListener('resize', _reposicionarPanelEventos);
     }
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', iniciar);
@@ -1190,7 +1189,7 @@ function reposicionarPanelEventos() {
  * Se engancha al sistema genérico toggleLayerVisibility('eventos', checked)
  * parcheándolo una vez que el script que lo define haya cargado.
  */
-(function parchearToggleEventos() {
+(function _parchearToggleEventos() {
     const MAX = 20;
     let intentos = 0;
 
@@ -1199,7 +1198,7 @@ function reposicionarPanelEventos() {
             if (++intentos < MAX) setTimeout(intentar, 150);
             return;
         }
-        const orig = toggleLayerVisibility;
+        const _orig = toggleLayerVisibility;
         window.toggleLayerVisibility = function(capa, visible) {
             if (capa === 'eventos') {
                 eventos.filter(Boolean).forEach(ev => {
@@ -1213,7 +1212,7 @@ function reposicionarPanelEventos() {
                 });
                 return;
             }
-            return orig(capa, visible);
+            return _orig(capa, visible);
         };
         console.log('[event-manager] ✅ toggleLayerVisibility parcheada para eventos.');
     }
@@ -1221,14 +1220,14 @@ function reposicionarPanelEventos() {
 })();
 
 // ── Refrescar panel izquierdo al cambiar de rol (login/logout) ───────────────
-(function observarRol() {
-    let rolActual = window.userRol;
+(function _observarRol() {
+    let _rolActual = window._userRol;
     Object.defineProperty(window, '_userRol', {
-        get: () => rolActual,
+        get: () => _rolActual,
         set: v  => {
-            rolActual = v;
+            _rolActual = v;
             // Actualizar visibilidad de layer-item e import/export sin esperar eventos
-            actualizarListaEventos();
+            _actualizarListaEventos();
         },
         configurable: true,
     });

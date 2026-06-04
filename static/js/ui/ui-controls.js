@@ -101,7 +101,7 @@ function cambiarModo(modo, ev) {
 
 // ==================== PANELS ====================
 
-function togglePanel(panelId, toggleId) {
+function _togglePanel(panelId, toggleId) {
     const panel      = document.getElementById(panelId);
     const sideToggle = document.getElementById(toggleId);
     if (!panel) return;
@@ -130,7 +130,7 @@ function togglePanel(panelId, toggleId) {
     }, 350);
 }
 
-function toggleLeftPanel()  { togglePanel('left-panel',  'side-toggle-left');  }
+function toggleLeftPanel()  { _togglePanel('left-panel',  'side-toggle-left');  }
 
 // ==================== SINCRONIZAR CONTROLES CON PANEL IZQUIERDO ====================
 
@@ -139,7 +139,7 @@ function toggleLeftPanel()  { togglePanel('left-panel',  'side-toggle-left');  }
  * en función del estado del panel izquierdo (abierto/colapsado).
  * Se llama al inicio y cada vez que el panel cambia de estado.
  */
-function actualizarControlesMapa() {
+function _actualizarControlesMapa() {
     const leftPanel   = document.getElementById('left-panel');
     const isOpen      = leftPanel && !leftPanel.classList.contains('collapsed');
     const TABS_W      = 56;
@@ -178,56 +178,56 @@ function actualizarControlesMapa() {
 // frame de la transición CSS del panel (300-350 ms × 60fps ≈ 18-21 disparos
 // por transición, multiplicados por 3 = hasta 63 disparos simultáneos).
 
-(function initLayoutHub() {
+(function _initLayoutHub() {
     // Callbacks registrados por otros módulos
-    window.layoutHubCallbacks = window.layoutHubCallbacks || [];
+    window._layoutHubCallbacks = window._layoutHubCallbacks || [];
 
     // rAF-throttle: colapsa múltiples disparos del mismo frame en uno solo
-    let rafPending = false;
-    function dispatch() {
-        if (rafPending) return;
-        rafPending = true;
+    let _rafPending = false;
+    function _dispatch() {
+        if (_rafPending) return;
+        _rafPending = true;
         requestAnimationFrame(function () {
-            rafPending = false;
-            window.layoutHubCallbacks.forEach(function (cb) {
+            _rafPending = false;
+            window._layoutHubCallbacks.forEach(function (cb) {
                 try { cb(); } catch (e) {}
             });
         });
     }
 
-    // Suscribir actualizarControlesMapa como primer consumidor
-    window.layoutHubCallbacks.push(actualizarControlesMapa);
+    // Suscribir _actualizarControlesMapa como primer consumidor
+    window._layoutHubCallbacks.push(_actualizarControlesMapa);
 
-    function init() {
-        setTimeout(actualizarControlesMapa, 150); // primer cálculo post-Leaflet
+    function _init() {
+        setTimeout(_actualizarControlesMapa, 150); // primer cálculo post-Leaflet
 
         const leftPanel = document.getElementById('left-panel');
         if (leftPanel) {
             if (window.ResizeObserver) {
                 // UN SOLO observador para todo el hub
-                new ResizeObserver(dispatch).observe(leftPanel);
+                new ResizeObserver(_dispatch).observe(leftPanel);
             }
-            leftPanel.addEventListener('transitionend', dispatch);
+            leftPanel.addEventListener('transitionend', _dispatch);
         }
 
         // MutationObserver sobre body.class (tabla-abierta, etc.)
         new MutationObserver(function () {
-            dispatch();
-            setTimeout(dispatch, 360); // garantía post-transición tabla
+            _dispatch();
+            setTimeout(_dispatch, 360); // garantía post-transición tabla
         }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
-        window.addEventListener('resize', dispatch);
+        window.addEventListener('resize', _dispatch);
 
         // Exponer para suscripciones tardías (map-widgets, table-manager)
         window.layoutHubSubscribe = function (cb) {
-            if (typeof cb === 'function') window.layoutHubCallbacks.push(cb);
+            if (typeof cb === 'function') window._layoutHubCallbacks.push(cb);
         };
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', _init);
     } else {
-        init();
+        _init();
     }
 })();
 

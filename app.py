@@ -24,9 +24,9 @@ try:
     from pymongo.errors import ConnectionFailure, DuplicateKeyError
     from bson import ObjectId
     import bcrypt
-    MONGO_DISPONIBLE = True
+    _MONGO_DISPONIBLE = True
 except ImportError:
-    MONGO_DISPONIBLE = False
+    _MONGO_DISPONIBLE = False
     print("⚠️  pymongo o bcrypt no instalados — sistema de usuarios en modo legacy.")
     print("    Ejecuta: pip install pymongo bcrypt")
 
@@ -76,8 +76,8 @@ def EPSG4258(filepath):
     renderiza directamente sin conversión adicional.
 
     Si el CRS no está definido se infiere por el rango de coordenadas:
-      - valores > 180  ->  EPSG:25830 (UTM 30N / ETRS89)
-      - en caso contrario ->  EPSG:4258 ya geográfico
+      - valores > 180  →  EPSG:25830 (UTM 30N / ETRS89)
+      - en caso contrario →  EPSG:4258 ya geográfico
     """
     gdf = gpd.read_file(filepath)
     if gdf.crs is None:
@@ -117,7 +117,7 @@ app.config['DEBUG'] = True # Permite recarga automática y mensajes de error det
 app.config['JSON_AS_ASCII'] = False # Para mantener los caracteres especiales
 app.config['UPLOAD_FOLDER'] = 'static/data' # Carpeta para tempfile.
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024 # Límite de los archivos subidos a 500MB
-app.secret_key = os.urandom(24)   # nueva clave cada arranque -> sesiones previas invalidas
+app.secret_key = os.urandom(24)   # nueva clave cada arranque → sesiones previas invalidas
 
 # — SQLite en la carpeta del proyecto —
 app.config['SQLALCHEMY_DATABASE_URI']        = 'sqlite:///georuta.db'
@@ -125,15 +125,15 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# — SocketIO (threading: no requiere eventlet, más estable) —
-socketio = SocketIO(app, cors_allowed_origins='*', async_mode='threading')
+# — SocketIO (async_mode='eventlet' requiere: pip install eventlet) —
+socketio = SocketIO(app, cors_allowed_origins='*', async_mode='eventlet')
 
 
 # ── Modelos de BD ────────────────────────────────────────────────────────────
 
 class HistorialRuta(db.Model):
     """Una ruta calculada por un usuario registrado."""
-    _tablename__ = 'historial_rutas'
+    __tablename__ = 'historial_rutas'
 
     id            = db.Column(db.Integer,    primary_key=True)
     usuario       = db.Column(db.String(64), nullable=False, index=True)
@@ -152,7 +152,7 @@ class HistorialRuta(db.Model):
 
 class SesionObstaculos(db.Model):
     """Último estado de obstáculos guardado por un usuario."""
-    _tablename__ = 'sesion_obstaculos'
+    __tablename__ = 'sesion_obstaculos'
 
     id           = db.Column(db.Integer,    primary_key=True)
     usuario      = db.Column(db.String(64), nullable=False, unique=True, index=True)
@@ -162,18 +162,18 @@ class SesionObstaculos(db.Model):
 
 
 class ObstaculoCompartido(db.Model):
-    """Obstáculo de la capa compartida, editable por todos los registrados/admin en tiempo real."""
-    _tablename__ = 'obstaculos_compartidos'
+    """Obstáculo de la capa compartida, visible y editable por todos los usuarios registrados."""
+    __tablename__ = 'obstaculos_compartidos'
 
-    id            = db.Column(db.Integer,     primary_key=True)
-    obs_id        = db.Column(db.String(64),  nullable=True)
-    lat           = db.Column(db.Float,       nullable=False)
-    lng           = db.Column(db.Float,       nullable=False)
-    porcentaje    = db.Column(db.Integer,     nullable=False, default=50)
-    portal        = db.Column(db.String(256), nullable=True,  default='')
-    autor         = db.Column(db.String(64),  nullable=False)
-    creado_en     = db.Column(db.DateTime,    default=datetime.utcnow)
-    modificado_en = db.Column(db.DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
+    id           = db.Column(db.Integer,    primary_key=True)
+    obs_id       = db.Column(db.String(64), nullable=True)   # ID/etiqueta opcional
+    lat          = db.Column(db.Float,      nullable=False)
+    lng          = db.Column(db.Float,      nullable=False)
+    porcentaje   = db.Column(db.Integer,    nullable=False, default=50)  # 0-100
+    portal       = db.Column(db.String(256), nullable=True, default='')
+    autor        = db.Column(db.String(64), nullable=False)  # usuario que lo creó/modificó
+    creado_en    = db.Column(db.DateTime,   default=datetime.utcnow)
+    modificado_en= db.Column(db.DateTime,   default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 # Crear tablas si no existen (idempotente, no destruye datos)
@@ -187,40 +187,40 @@ _mongo_client = None
 _db_mongo     = None
 _col_usuarios = None   # colección "usuarios"
 
-def conectar_mongo():
+def _conectar_mongo():
     """Conecta a MongoDB local e inicializa la colección de usuarios.
     Crea índices únicos y el admin por defecto si la BD está vacía.
     Devuelve True si la conexión fue exitosa."""
-    global mongo_client, db_mongo, col_usuarios
-    if not MONGO_DISPONIBLE:
+    global _mongo_client, _db_mongo, _col_usuarios
+    if not _MONGO_DISPONIBLE:
         return False
     try:
-        mongo_client = MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=3000)
-        mongo_client.admin.command('ping')
-        db_mongo     = mongo_client['georuta']
-        col_usuarios = db_mongo['usuarios']
+        _mongo_client = MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=3000)
+        _mongo_client.admin.command('ping')
+        _db_mongo     = _mongo_client['georuta']
+        _col_usuarios = _db_mongo['usuarios']
 
         # Índices únicos sobre email y username
-        col_usuarios.create_index('email',    unique=True)
-        col_usuarios.create_index('username', unique=True)
+        _col_usuarios.create_index('email',    unique=True)
+        _col_usuarios.create_index('username', unique=True)
 
         # Crear admin por defecto si no existe ningún usuario
-        if col_usuarios.count_documents({}) == 0:
-            crear_usuario_defecto()
+        if _col_usuarios.count_documents({}) == 0:
+            _crear_usuario_defecto()
 
-        print(f"✅ MongoDB conectado — {col_usuarios.count_documents({})} usuario(s)")
+        print(f"✅ MongoDB conectado — {_col_usuarios.count_documents({})} usuario(s)")
         return True
     except Exception as e:
         print(f"⚠️  MongoDB no disponible: {e}")
         print("    El sistema de usuarios funcionará en modo legacy (sin BD).")
-        mongo_client = db_mongo = col_usuarios = None
+        _mongo_client = _db_mongo = _col_usuarios = None
         return False
 
 
-def crear_usuario_defecto():
+def _crear_usuario_defecto():
     """Inserta el usuario admin con contraseña admin1234 la primera vez."""
     hash_pw = bcrypt.hashpw('admin1234'.encode(), bcrypt.gensalt())
-    col_usuarios.insert_one({
+    _col_usuarios.insert_one({
         'username':       'admin',
         'email':          'admin@georuta.local',
         'password_hash':  hash_pw,
@@ -233,23 +233,23 @@ def crear_usuario_defecto():
     print("   ⚠️  Cambia la contraseña en el primer inicio de sesión.")
 
 
-def hash_password(plaintext: str) -> bytes:
+def _hash_password(plaintext: str) -> bytes:
     return bcrypt.hashpw(plaintext.encode('utf-8'), bcrypt.gensalt())
 
 
-def verificar_password(plaintext: str, hashed: bytes) -> bool:
+def _verificar_password(plaintext: str, hashed: bytes) -> bool:
     try:
         return bcrypt.checkpw(plaintext.encode('utf-8'), hashed)
     except Exception:
         return False
 
 
-def mongo_ok() -> bool:
-    return col_usuarios is not None
+def _mongo_ok() -> bool:
+    return _col_usuarios is not None
 
 
-def usuario_a_dict(doc) -> dict:
-    """Documento MongoDB -> dict serializable (sin id ni password_hash)."""
+def _usuario_a_dict(doc) -> dict:
+    """Documento MongoDB → dict serializable (sin _id ni password_hash)."""
     return {
         'id':             str(doc['_id']),
         'username':       doc.get('username', ''),
@@ -261,14 +261,14 @@ def usuario_a_dict(doc) -> dict:
     }
 
 
-def requiere_admin(f):
+def _requiere_admin(f):
     """Decorador: devuelve 403 si el usuario no es admin."""
     from functools import wraps
     @wraps(f)
     def wrapper(*args, **kwargs):
         if not session.get('autenticado') or session.get('rol') != 'admin':
             return jsonify({'error': 'Acceso denegado — se requiere rol admin'}), 403
-        if not mongo_ok():
+        if not _mongo_ok():
             return jsonify({'error': 'Base de datos no disponible'}), 503
         return f(*args, **kwargs)
     return wrapper
@@ -285,7 +285,7 @@ portales_gdf        = None # GeoDataFrame de portales (Num_portal.geojson)
 
 # ==================== Carga de capas ====================
 
-def normalizar_nombre_via(nombre):
+def _normalizar_nombre_via(nombre):
     """
     Normaliza un nombre de vía para comparación aproximada:
     minúsculas, sin tildes, sin prefijos de tipo (calle, avenida, etc.).
@@ -372,7 +372,7 @@ def capasDarranque():
         try:
             gdf = EPSG4258(portales_path)
             # Normalizar campos clave para búsqueda
-            gdf['_nombre_norm'] = gdf['nombre_via'].apply(normalizar_nombre_via)
+            gdf['_nombre_norm'] = gdf['nombre_via'].apply(_normalizar_nombre_via)
             gdf['_numero_str']  = gdf['numero'].fillna('').astype(str).str.strip()
             portales_gdf = gdf
             print(f"✅ Portales cargados automáticamente: {len(gdf)} registros")
@@ -388,9 +388,9 @@ def buscar_portal():
     Busca portales (calle + número) en el GeoJSON de numeración postal.
 
     Query params:
-      q      -> texto libre, ej. "Hernán Cortés 3" o "CALLE GRANADA 12"
-      nombre -> nombre de vía (sin número)
-      numero -> número de portal
+      q      → texto libre, ej. "Hernán Cortés 3" o "CALLE GRANADA 12"
+      nombre → nombre de vía (sin número)
+      numero → número de portal
 
     Devuelve lista de candidatos con coordenadas EPSG:4258:
       [ { nombre_via, tipo_vial, numero, lat, lon, cod_postal, municipio }, … ]
@@ -416,7 +416,7 @@ def buscar_portal():
     if not nombre:
         return jsonify({'resultados': []})
 
-    nombre_norm = normalizar_nombre_via(nombre)
+    nombre_norm = _normalizar_nombre_via(nombre)
     numero_norm = numero.strip() if numero else ''
 
     # DEBUG
@@ -479,7 +479,7 @@ def buscar_portal_numeros():
     Devuelve todos los números de portal disponibles para una calle dada.
     
     Query params:
-      nombre -> nombre de vía (ej. "Calle Francia")
+      nombre → nombre de vía (ej. "Calle Francia")
     
     Devuelve:
       { numeros: [32, 45, 67, ...] }  (números ordenados numéricamente)
@@ -491,7 +491,7 @@ def buscar_portal_numeros():
     if not nombre:
         return jsonify({'numeros': []})
     
-    nombre_norm = normalizar_nombre_via(nombre)
+    nombre_norm = _normalizar_nombre_via(nombre)
     
     # Filtrar portales por nombre
     mask = portales_gdf['_nombre_norm'].str.contains(nombre_norm, case=False, na=False, regex=False)
@@ -519,9 +519,9 @@ def portal_por_coordenadas():
     Devuelve el portal más cercano a unas coordenadas dadas.
 
     Query params:
-      lat -> latitud
-      lon -> longitud
-      radio -> radio de búsqueda en metros (defecto 100)
+      lat → latitud
+      lon → longitud
+      radio → radio de búsqueda en metros (defecto 100)
     """
     if portales_gdf is None:
         return jsonify({'error': 'Capa de portales no cargada'}), 503
@@ -570,7 +570,7 @@ def portales_estado():
     # Mostrar primeros registros y estructura para debug
     muestra = []
     if len(portales_gdf) > 0:
-        for idx,  (_, row) in enumerate(portales_gdf.head(3).iterrows()):
+        for idx, (_, row) in enumerate(portales_gdf.head(3).iterrows()):
             muestra.append({
                 'nombre_via': str(row.get('nombre_via', '?')),
                 'numero': str(row.get('numero', '?')),
@@ -643,16 +643,16 @@ def api_entrar():
     password = data.get('password', '')
 
     # Login con MongoDB
-    if mongo_ok() and email and password:
-        doc = col_usuarios.find_one({'email': email})
+    if _mongo_ok() and email and password:
+        doc = _col_usuarios.find_one({'email': email})
         if not doc:
             return jsonify({'ok': False, 'error': 'Email o contraseña incorrectos'}), 401
         if not doc.get('activo', True):
             return jsonify({'ok': False, 'error': 'Cuenta desactivada. Contacta con el administrador.'}), 403
-        if not verificar_password(password, doc['password_hash']):
+        if not _verificar_password(password, doc['password_hash']):
             return jsonify({'ok': False, 'error': 'Email o contraseña incorrectos'}), 401
 
-        col_usuarios.update_one({'_id': doc['_id']}, {'$set': {'ultimo_acceso': datetime.utcnow()}})
+        _col_usuarios.update_one({'_id': doc['_id']}, {'$set': {'ultimo_acceso': datetime.utcnow()}})
 
         rol      = doc.get('rol', 'registrado')
         username = doc.get('username', email)
@@ -684,7 +684,7 @@ def api_entrar():
 @app.route('/api/auth/registrar', methods=['POST'])
 def api_registrar():
     """Registro de nuevo usuario. Requiere MongoDB activo."""
-    if not mongo_ok():
+    if not _mongo_ok():
         return jsonify({'ok': False, 'error': 'Base de datos no disponible'}), 503
 
     data     = request.get_json(force=True, silent=True) or {}
@@ -700,10 +700,10 @@ def api_registrar():
         return jsonify({'ok': False, 'error': 'Email no válido'}), 400
 
     try:
-        col_usuarios.insert_one({
+        _col_usuarios.insert_one({
             'username':       username,
             'email':          email,
-            'password_hash':  hash_password(password),
+            'password_hash':  _hash_password(password),
             'rol':            'registrado',
             'activo':         True,
             'fecha_registro': datetime.utcnow(),
@@ -721,7 +721,7 @@ def api_cambiar_password():
     """Cambia la contraseña del usuario autenticado."""
     if not session.get('autenticado') or session.get('invitado'):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    if not mongo_ok():
+    if not _mongo_ok():
         return jsonify({'ok': False, 'error': 'Base de datos no disponible'}), 503
 
     data         = request.get_json(force=True, silent=True) or {}
@@ -731,13 +731,13 @@ def api_cambiar_password():
     if len(password_new) < 6:
         return jsonify({'ok': False, 'error': 'La nueva contraseña debe tener al menos 6 caracteres'}), 400
 
-    doc = col_usuarios.find_one({'_id': ObjectId(session['user_id'])})
-    if not doc or not verificar_password(password_old, doc['password_hash']):
+    doc = _col_usuarios.find_one({'_id': ObjectId(session['user_id'])})
+    if not doc or not _verificar_password(password_old, doc['password_hash']):
         return jsonify({'ok': False, 'error': 'Contraseña actual incorrecta'}), 401
 
-    col_usuarios.update_one(
+    _col_usuarios.update_one(
         {'_id': doc['_id']},
-        {'$set': {'password_hash': hash_password(password_new)}}
+        {'$set': {'password_hash': _hash_password(password_new)}}
     )
     return jsonify({'ok': True, 'mensaje': 'Contraseña actualizada'})
 
@@ -752,7 +752,7 @@ def api_me():
         'email':        session.get('email', ''),
         'invitado':     session.get('invitado', True),
         'rol':          session.get('rol', 'invitado'),
-        'mongo_activo': mongo_ok(),
+        'mongo_activo': _mongo_ok(),
     })
 
 
@@ -765,15 +765,15 @@ def api_salir():
 # ── API Administración de usuarios (solo admin) ───────────────────────────────
 
 @app.route('/api/admin/usuarios')
-@requiere_admin
+@_requiere_admin
 def admin_listar_usuarios():
     """Lista todos los usuarios sin exponer password_hash."""
-    docs = list(col_usuarios.find({}, {'password_hash': 0}))
-    return jsonify({'usuarios': [usuario_a_dict(d) for d in docs]})
+    docs = list(_col_usuarios.find({}, {'password_hash': 0}))
+    return jsonify({'usuarios': [_usuario_a_dict(d) for d in docs]})
 
 
 @app.route('/api/admin/usuarios', methods=['POST'])
-@requiere_admin
+@_requiere_admin
 def admin_crear_usuario():
     """El admin crea un usuario nuevo con rol a elegir."""
     data     = request.get_json(force=True, silent=True) or {}
@@ -790,10 +790,10 @@ def admin_crear_usuario():
         return jsonify({'ok': False, 'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
 
     try:
-        col_usuarios.insert_one({
+        _col_usuarios.insert_one({
             'username':       username,
             'email':          email,
-            'password_hash':  hash_password(password),
+            'password_hash':  _hash_password(password),
             'rol':            rol,
             'activo':         True,
             'fecha_registro': datetime.utcnow(),
@@ -807,7 +807,7 @@ def admin_crear_usuario():
 
 
 @app.route('/api/admin/usuarios/<user_id>', methods=['PATCH'])
-@requiere_admin
+@_requiere_admin
 def admin_editar_usuario(user_id):
     """Edita rol, estado activo, username, email o resetea contraseña."""
     data = request.get_json(force=True, silent=True) or {}
@@ -829,13 +829,13 @@ def admin_editar_usuario(user_id):
     if 'email' in data and '@' in data['email']:
         cambios['email'] = data['email'].strip().lower()
     if 'password_nueva' in data and len(data['password_nueva']) >= 6:
-        cambios['password_hash'] = hash_password(data['password_nueva'])
+        cambios['password_hash'] = _hash_password(data['password_nueva'])
 
     if not cambios:
         return jsonify({'ok': False, 'error': 'Sin cambios válidos'}), 400
 
     try:
-        result = col_usuarios.update_one({'_id': ObjectId(user_id)}, {'$set': cambios})
+        result = _col_usuarios.update_one({'_id': ObjectId(user_id)}, {'$set': cambios})
         if result.matched_count == 0:
             return jsonify({'ok': False, 'error': 'Usuario no encontrado'}), 404
         return jsonify({'ok': True, 'mensaje': 'Usuario actualizado'})
@@ -846,13 +846,13 @@ def admin_editar_usuario(user_id):
 
 
 @app.route('/api/admin/usuarios/<user_id>', methods=['DELETE'])
-@requiere_admin
+@_requiere_admin
 def admin_eliminar_usuario(user_id):
     """Elimina un usuario. El admin no puede eliminarse a sí mismo."""
     if user_id == session.get('user_id'):
         return jsonify({'ok': False, 'error': 'No puedes eliminar tu propia cuenta'}), 400
 
-    result = col_usuarios.delete_one({'_id': ObjectId(user_id)})
+    result = _col_usuarios.delete_one({'_id': ObjectId(user_id)})
     if result.deleted_count == 0:
         return jsonify({'ok': False, 'error': 'Usuario no encontrado'}), 404
     return jsonify({'ok': True, 'mensaje': 'Usuario eliminado'})
@@ -1094,28 +1094,28 @@ def eliminar_puntos_interes():
     return jsonify({'mensaje': 'Puntos eliminados'})
 
 
-# ── Capa manual: añadir / eliminar POIs individuales ──────────────────────
+# ── Capa _manual: añadir / eliminar POIs individuales ──────────────────────
 
-MANUAL_LAYER = '_manual'   # nombre reservado para POIs creados manualmente
+_MANUAL_LAYER = '_manual'   # nombre reservado para POIs creados manualmente
 
-def asegurar_capa_manual():
-    """Crea la capa manual en PuntosDinteres_dic si no existe."""
-    if MANUAL_LAYER not in PuntosDinteres_dic:
-        PuntosDinteres_dic[MANUAL_LAYER] = gpd.GeoDataFrame(
+def _asegurar_capa_manual():
+    """Crea la capa _manual en PuntosDinteres_dic si no existe."""
+    if _MANUAL_LAYER not in PuntosDinteres_dic:
+        PuntosDinteres_dic[_MANUAL_LAYER] = gpd.GeoDataFrame(
             columns=['geometry', 'nombre', 'tipo', 'poi_id'],
             geometry='geometry',
             crs='EPSG:4326'
         )
 
-def total_pois_manuales():
-    capa = PuntosDinteres_dic.get(MANUAL_LAYER)
+def _total_pois_manuales():
+    capa = PuntosDinteres_dic.get(_MANUAL_LAYER)
     return 0 if capa is None else len(capa)
 
 
 @app.route('/api/añadir-poi', methods=['POST'])
 def añadir_poi():
     """
-    Añade un punto a la capa manual.
+    Añade un punto a la capa _manual.
     Body JSON: { lat, lon, nombre, tipo, poi_id? }
     """
     global PuntosDinteres_dic
@@ -1131,8 +1131,8 @@ def añadir_poi():
     tipo   = str(data.get('tipo',   '')).strip()
     poi_id = str(data.get('poi_id', '')).strip() or None
 
-    asegurar_capa_manual()
-    capa = PuntosDinteres_dic[MANUAL_LAYER]
+    _asegurar_capa_manual()
+    capa = PuntosDinteres_dic[_MANUAL_LAYER]
 
     # Comprobar ID duplicado si se proporcionó
     if poi_id and 'poi_id' in capa.columns and poi_id in capa['poi_id'].values:
@@ -1142,28 +1142,28 @@ def añadir_poi():
         [{'geometry': Point(lon, lat), 'nombre': nombre, 'tipo': tipo, 'poi_id': poi_id}],
         crs='EPSG:4326'
     )
-    PuntosDinteres_dic[MANUAL_LAYER] = gpd.GeoDataFrame(
+    PuntosDinteres_dic[_MANUAL_LAYER] = gpd.GeoDataFrame(
         pd.concat([capa, nueva_fila], ignore_index=True),
         crs='EPSG:4326'
     )
 
-    total = len(PuntosDinteres_dic[MANUAL_LAYER])
+    total = len(PuntosDinteres_dic[_MANUAL_LAYER])
     return jsonify({'mensaje': 'POI añadido', 'total_manual': total})
 
 
 @app.route('/api/eliminar-poi', methods=['POST'])
 def eliminar_poi():
     """
-    Elimina un POI de la capa manual por poi_id o índice.
+    Elimina un POI de la capa _manual por poi_id o índice.
     Body JSON: { poi_id } o { idx }
     """
     global PuntosDinteres_dic
     data = request.get_json(force=True, silent=True) or {}
 
-    if MANUAL_LAYER not in PuntosDinteres_dic:
+    if _MANUAL_LAYER not in PuntosDinteres_dic:
         return jsonify({'error': 'No hay POIs manuales'}), 404
 
-    capa = PuntosDinteres_dic[MANUAL_LAYER]
+    capa = PuntosDinteres_dic[_MANUAL_LAYER]
 
     if 'poi_id' in data and data['poi_id'] is not None:
         mascara = capa['poi_id'] == str(data['poi_id'])
@@ -1178,7 +1178,7 @@ def eliminar_poi():
     else:
         return jsonify({'error': 'Se requiere poi_id o idx'}), 400
 
-    PuntosDinteres_dic[MANUAL_LAYER] = capa
+    PuntosDinteres_dic[_MANUAL_LAYER] = capa
     return jsonify({'mensaje': 'POI eliminado', 'total_manual': len(capa)})
 
 
@@ -1186,7 +1186,7 @@ def eliminar_poi():
 def importar_pois():
     """
     Importa POIs desde .gpkg / .geojson / .shp / .zip / .csv
-    y los AÑADE a la capa manual (no reemplaza).
+    y los AÑADE a la capa _manual (no reemplaza).
     """
     global PuntosDinteres_dic
 
@@ -1237,17 +1237,17 @@ def importar_pois():
 
         # Normalizar columnas nombre / tipo / poi_id
         cols = [c.lower() for c in gdf.columns]
-        def col(opciones):
+        def _col(opciones):
             for op in opciones:
                 if op in cols:
                     return gdf.columns[[c.lower() for c in gdf.columns].index(op)]
             return None
 
-        nom_col  = col(['nombre', 'name', 'denominaci', 'denCorta'])
-        tipo_col = col(['tipo', 'amenity', 'type', 'building', 'tipo_centr'])
-        id_col   = col(['poi_id', 'id', 'fid'])
+        nom_col  = _col(['nombre', 'name', 'denominaci', 'denCorta'])
+        tipo_col = _col(['tipo', 'amenity', 'type', 'building', 'tipo_centr'])
+        id_col   = _col(['poi_id', 'id', 'fid'])
 
-        asegurar_capa_manual()
+        _asegurar_capa_manual()
 
         nuevas_filas = []
         for _, row in gdf.iterrows():
@@ -1259,12 +1259,12 @@ def importar_pois():
             })
 
         nueva_gdf = gpd.GeoDataFrame(nuevas_filas, crs='EPSG:4326')
-        PuntosDinteres_dic[MANUAL_LAYER] = gpd.GeoDataFrame(
-            pd.concat([PuntosDinteres_dic[MANUAL_LAYER], nueva_gdf], ignore_index=True),
+        PuntosDinteres_dic[_MANUAL_LAYER] = gpd.GeoDataFrame(
+            pd.concat([PuntosDinteres_dic[_MANUAL_LAYER], nueva_gdf], ignore_index=True),
             crs='EPSG:4326'
         )
 
-        total = len(PuntosDinteres_dic[MANUAL_LAYER])
+        total = len(PuntosDinteres_dic[_MANUAL_LAYER])
         return jsonify({'mensaje': f'{len(nuevas_filas)} POI(s) importados', 'total_manual': total,
                         'importados': len(nuevas_filas)})
 
@@ -1278,17 +1278,17 @@ def importar_pois():
 @app.route('/api/exportar-pois', methods=['POST'])
 def exportar_pois():
     """
-    Exporta la capa manual como .gpkg, .shp (zip) o .csv.
+    Exporta la capa _manual como .gpkg, .shp (zip) o .csv.
     Body JSON: { formato: 'gpkg'|'shp'|'csv' }
     """
     global PuntosDinteres_dic
 
-    if MANUAL_LAYER not in PuntosDinteres_dic or PuntosDinteres_dic[MANUAL_LAYER].empty:
+    if _MANUAL_LAYER not in PuntosDinteres_dic or PuntosDinteres_dic[_MANUAL_LAYER].empty:
         return jsonify({'error': 'No hay POIs manuales que exportar'}), 400
 
     data    = request.get_json(force=True, silent=True) or {}
     formato = data.get('formato', 'gpkg').lower()
-    capa    = PuntosDinteres_dic[MANUAL_LAYER].copy()
+    capa    = PuntosDinteres_dic[_MANUAL_LAYER].copy()
 
     fecha   = datetime.now().strftime('%Y%m%d_%H%M%S')
     tmp_dir = tempfile.mkdtemp(prefix='poi_export_')
@@ -1341,10 +1341,10 @@ def exportar_pois():
 
 @app.route('/api/limpiar-pois-manuales', methods=['POST'])
 def limpiar_pois_manuales():
-    """Vacía solo la capa manual, dejando las capas del ZIP intactas."""
+    """Vacía solo la capa _manual, dejando las capas del ZIP intactas."""
     global PuntosDinteres_dic
-    if MANUAL_LAYER in PuntosDinteres_dic:
-        PuntosDinteres_dic[MANUAL_LAYER] = gpd.GeoDataFrame(
+    if _MANUAL_LAYER in PuntosDinteres_dic:
+        PuntosDinteres_dic[_MANUAL_LAYER] = gpd.GeoDataFrame(
             columns=['geometry', 'nombre', 'tipo', 'poi_id'],
             geometry='geometry',
             crs='EPSG:4326'
@@ -1390,7 +1390,7 @@ ANCHO_CARRIL_POR_TIPO = {
 }
 
 # Vías exclusivamente peatonales: prohibidas para TODOS los vehículos.
-# Se excluyen del grafo al construirlo -> Dijkstra nunca las considera.
+# Se excluyen del grafo al construirlo → Dijkstra nunca las considera.
 TIPOS_PROHIBIDOS_VEHICULOS = {'footway', 'pedestrian', 'steps', 'path', 'cycleway'}
 
 # Vías que un camión no puede usar físicamente bajo ningún concepto
@@ -1398,15 +1398,15 @@ TIPOS_PROHIBIDOS_VEHICULOS = {'footway', 'pedestrian', 'steps', 'path', 'cyclewa
 TIPOS_PROHIBIDOS_CAMION = TIPOS_PROHIBIDOS_VEHICULOS
 
 # Ancho mínimo cómodo para un camión (2.55 m de vehículo + margen)
-ANCHO_COMODO_CAMION  = 3.5   # por debajo -> penalizar, no eliminar
-ANCHO_MINIMO_CAMION  = 2.8   # por debajo -> penalizar fuerte (×20), pero no eliminar
+ANCHO_COMODO_CAMION  = 3.5   # por debajo → penalizar, no eliminar
+ANCHO_MINIMO_CAMION  = 2.8   # por debajo → penalizar fuerte (×20), pero no eliminar
 
 # Ángulos de giro: solo penalizar, nunca eliminar aristas
 MAX_ANGULO_PENALIZAR = 120   # giros > 80° empiezan a penalizarse
 MAX_ANGULO_FUERTE    = 120  # giros > 120° penalización máxima (×10)
 
 
-def angulo_giro(nodo_prev, nodo_actual, nodo_next):
+def _angulo_giro(nodo_prev, nodo_actual, nodo_next):
     """
     Calcula el ángulo de cambio de dirección en nodo_actual.
     Devuelve grados [0, 180]: 0° = recto, 90° = escuadra, 180° = inversión.
@@ -1426,14 +1426,14 @@ def angulo_giro(nodo_prev, nodo_actual, nodo_next):
     return angulo
 
 
-def angulo_acumulado(ruta, i, ventana=2):
+def _angulo_acumulado(ruta, i, ventana=2):
     """
     Ángulo de desvío total entre la dirección de entrada al nodo i y la
     dirección resultante 'ventana' nodos más adelante.
 
     Detecta cambios de sentido distribuidos en varios segmentos cortos
     (p.ej. la intersección en Y de una autopista donde cada nodo gira ~90°
-    pero la suma total es ~180°), que angulo_giro nodo-a-nodo no captura.
+    pero la suma total es ~180°), que _angulo_giro nodo-a-nodo no captura.
 
     Devuelve [0, 180]: 0° = sin desvío, 180° = inversión completa.
     """
@@ -1474,16 +1474,16 @@ def aplicar_restricciones_camion(G):
     return G
 
 
-def parsear_oneway(valor, junction=None):
+def _parsear_oneway(valor, junction=None):
     """
     Interpreta el atributo oneway de OSM.
     También detecta junction=roundabout, que en OSM implica oneway=yes
     (sentido de la digitización, antihorario en España).
 
     Devuelve:
-      'forward'  -> solo dirección de digitización (s->e)
-      'backward' -> solo dirección inversa        (e->s)
-      'both'     -> bidireccional
+      'forward'  → solo dirección de digitización (s→e)
+      'backward' → solo dirección inversa        (e→s)
+      'both'     → bidireccional
     """
     # Las rotondas siempre son sentido único en la dirección de digitización
     if junction is not None and str(junction).strip().lower() == 'roundabout':
@@ -1499,7 +1499,7 @@ def parsear_oneway(valor, junction=None):
     return 'both'
 
 
-def tiempo_curva_minutos(angulo_grados, maxspeed_kmh):
+def _tiempo_curva_minutos(angulo_grados, maxspeed_kmh):
     """
     Tiempo extra (en minutos) por frenado y aceleración en una curva o cambio
     de dirección, estimado a partir del ángulo de giro y la velocidad de la vía.
@@ -1507,9 +1507,9 @@ def tiempo_curva_minutos(angulo_grados, maxspeed_kmh):
     Modelo simplificado de cinemática constante:
       - Desaceleración/aceleración promedio: 2 m/s²  (conducción urbana normal)
       - Velocidad de paso por curva: decrece linealmente con el ángulo
-          0°  -> sin reducción    (recto)
-          90° -> 50% de la velocidad
-          160°-> 15% de la velocidad (casi inversión)
+          0°  → sin reducción    (recto)
+          90° → 50% de la velocidad
+          160°→ 15% de la velocidad (casi inversión)
       - Tiempo extra = tiempo de frenado + tiempo de aceleración hasta volver
         a la velocidad de la vía, menos el tiempo que hubiera tardado si no
         hubiera reducido.
@@ -1520,7 +1520,7 @@ def tiempo_curva_minutos(angulo_grados, maxspeed_kmh):
         return 0.0
 
     v0_ms   = maxspeed_kmh / 3.6          # velocidad de entrada en m/s
-    # Factor de reducción de velocidad en curva: 1.0 -> 0.15 a medida que el ángulo crece
+    # Factor de reducción de velocidad en curva: 1.0 → 0.15 a medida que el ángulo crece
     ratio   = max(0.15, 1.0 - angulo_grados / 180.0 * 0.85)
     v_curva = v0_ms * ratio               # velocidad al pasar la curva
 
@@ -1552,7 +1552,7 @@ def crear_grafo(gdf):
         lanes    = int(row.get('lanes', 1) or 1)
         highway  = str(row.get('highway', 'unclassified') or 'unclassified')
         junction = row.get('junction', None)
-        oneway   = parsear_oneway(row.get('oneway'), junction)
+        oneway   = _parsear_oneway(row.get('oneway'), junction)
 
         # Las autopistas y sus accesos son siempre sentido único si no se indica lo contrario
         if oneway == 'both' and highway in ('motorway', 'motorway_link'):
@@ -1580,12 +1580,12 @@ def crear_grafo(gdf):
 
                 # ── Tiempo extra por curva/cambio de dirección ──────────────
                 # Se calcula el ángulo de giro en el nodo de entrada (s)
-                # mirando el segmento anterior (i-1->i) y el actual (i->i+1).
-                # En el primer segmento de la línea no hay segmento previo -> 0°.
+                # mirando el segmento anterior (i-1→i) y el actual (i→i+1).
+                # En el primer segmento de la línea no hay segmento previo → 0°.
                 t_curva = 0.0
                 if i > 0:
-                    angulo = angulo_giro(coords[i-1], coords[i], coords[i+1])
-                    t_curva = tiempo_curva_minutos(angulo, maxspeed)
+                    angulo = _angulo_giro(coords[i-1], coords[i], coords[i+1])
+                    t_curva = _tiempo_curva_minutos(angulo, maxspeed)
 
                 tiempo_total = tiempo + t_curva
                 peso         = tiempo_total * factor * f_lanes
@@ -1636,12 +1636,12 @@ def calcular_ruta():
     # Limitar: coeficiente entre 0.5 y 3.0 por seguridad
     coef_temporal = max(0.5, min(3.0, coef_temporal))
     tipo_vehiculo = data.get('tipo_vehiculo', 'coche')   # 'coche' | 'camion'
-    emergencia    = bool(data.get('emergencia', False))   # True -> modo emergencia activo
+    emergencia    = bool(data.get('emergencia', False))   # True → modo emergencia activo
 
     # Opciones de emergencia (solo relevantes si emergencia=True):
-    #   emerg_velocidad: True -> respetar veloc. máx. de la vía  / False -> +20 km/h
-    #   emerg_giros:     True -> respetar restricciones de giro  / False -> giros libres
-    #   emerg_sentido:   True -> respetar sentidos de circulación / False -> puede ir en contramano
+    #   emerg_velocidad: True → respetar veloc. máx. de la vía  / False → +20 km/h
+    #   emerg_giros:     True → respetar restricciones de giro  / False → giros libres
+    #   emerg_sentido:   True → respetar sentidos de circulación / False → puede ir en contramano
     emerg_velocidad = bool(data.get('emerg_velocidad', True))
     emerg_giros     = bool(data.get('emerg_giros',     True))
     emerg_sentido   = bool(data.get('emerg_sentido',   True))
@@ -1657,7 +1657,7 @@ def calcular_ruta():
         pto_ori = (origen['lon'],  origen['lat'])
         pto_dst = (destino['lon'], destino['lat'])
 
-        print(f"🎯 Ruta: {pto_ori} -> {pto_dst} | Obstáculos: {len(obstaculos)}")
+        print(f"🎯 Ruta: {pto_ori} → {pto_dst} | Obstáculos: {len(obstaculos)}")
 
         G = grafo_vias.copy()
         event_factors = {}
@@ -1700,10 +1700,10 @@ def calcular_ruta():
         # Dijkstra decide libremente si merece la pena pasar o buscar alternativa.
         #
         # Fórmula: factor = 1 / (1 - obstruccion * 0.99)
-        #   0%  -> factor 1.0   (sin efecto)
-        #   50% -> factor ~2.0  (la mitad de velocidad -> doble de tiempo)
-        #   90% -> factor ~10.0 (10% de velocidad -> diez veces más tiempo)
-        #   99% -> factor ~100  (casi bloqueado pero Dijkstra aún puede elegir pasar)
+        #   0%  → factor 1.0   (sin efecto)
+        #   50% → factor ~2.0  (la mitad de velocidad → doble de tiempo)
+        #   90% → factor ~10.0 (10% de velocidad → diez veces más tiempo)
+        #   99% → factor ~100  (casi bloqueado pero Dijkstra aún puede elegir pasar)
         penalizados = {}
         for u, v in G.edges():           # Cada segmento de vía (u=inicio, v=fin)
             for obs in obstaculos:        # Cada obstáculo en el mapa
@@ -1821,13 +1821,13 @@ def calcular_ruta():
 
         # --- Modo Emergencia: velocidad máxima +20 km/h en cada arista ---
         # Solo se aplica si el check "Velocidad máx." está DESACTIVADO
-        # (emerg_velocidad=False -> ignorar límite -> circular más rápido).
+        # (emerg_velocidad=False → ignorar límite → circular más rápido).
         if emergencia and not emerg_velocidad:
             print("🚨 Modo emergencia: velocidad +20 km/h en todas las aristas")
             for u, v, d in G.edges(data=True):
                 spd = d.get('maxspeed', 50)
                 if spd and spd > 0:
-                    factor_emg = spd / (spd + 20.0)   # <1 -> reduce el tiempo -> más rápido
+                    factor_emg = spd / (spd + 20.0)   # <1 → reduce el tiempo → más rápido
                     G[u][v]['weight']         *= factor_emg
                     G[u][v]['tiempo_minutos'] *= factor_emg
         elif emergencia and emerg_velocidad:
@@ -1886,11 +1886,11 @@ def calcular_ruta():
             angulo_max_activo = ANGULO_MAX_COCHE
             aplicar_restriccion_giro = True
         elif tipo_vehiculo == 'coche' and emergencia and emerg_giros:
-            # Emergencia con check "Giros" activado -> respetar restricciones normales de turismo
+            # Emergencia con check "Giros" activado → respetar restricciones normales de turismo
             angulo_max_activo = ANGULO_MAX_COCHE
             aplicar_restriccion_giro = True
         else:
-            # Emergencia con check "Giros" desactivado -> giros libres
+            # Emergencia con check "Giros" desactivado → giros libres
             angulo_max_activo = 180
             aplicar_restriccion_giro = False
 
@@ -1925,7 +1925,7 @@ def calcular_ruta():
 
             for i in range(1, len(ruta) - 1):
                 # Comprobación 1: ángulo nodo a nodo
-                ang_local = angulo_giro(ruta[i-1], ruta[i], ruta[i+1])
+                ang_local = _angulo_giro(ruta[i-1], ruta[i], ruta[i+1])
                 if ang_local > angulo_max_activo:
                     u_mal, v_mal = ruta[i], ruta[i+1]
                     if G.has_edge(u_mal, v_mal) and (u_mal, v_mal) not in ya_anadido:
@@ -1934,7 +1934,7 @@ def calcular_ruta():
 
                 # Comprobación 2: ángulo acumulado (solo para turismo sin giros libres)
                 if tipo_vehiculo == 'coche' and (not emergencia or emerg_giros):
-                    ang_acum = angulo_acumulado(ruta, i, ventana=VENTANA_ACUMULADO)
+                    ang_acum = _angulo_acumulado(ruta, i, ventana=VENTANA_ACUMULADO)
                     if ang_acum > ANGULO_MAX_COCHE_ACUM:
                         # Bloquear la arista de salida del nodo problemático
                         u_mal, v_mal = ruta[i], ruta[i+1]
@@ -1948,7 +1948,7 @@ def calcular_ruta():
             etiqueta = 'camión' if tipo_vehiculo == 'camion' else 'turismo'
             print(f"🔄 Iteración {iteracion+1} ({etiqueta}): {len(giros_imposibles)} giro(s) prohibido(s) — recalculando")
             for u_mal, v_mal in giros_imposibles:
-                if G.has_edge(u_mal, v_mal) and (u_mal, v_mal) not in {(a, b) for a, b,  in aristas_bloqueadas_camion}:
+                if G.has_edge(u_mal, v_mal) and (u_mal, v_mal) not in {(a, b) for a, b, _ in aristas_bloqueadas_camion}:
                     attrs_guardados = dict(G[u_mal][v_mal])
                     aristas_bloqueadas_camion.add((u_mal, v_mal, frozenset(attrs_guardados.items())))
                     G.remove_edge(u_mal, v_mal)
@@ -2056,7 +2056,7 @@ def calcular_ruta():
         ]
 
         # Formatear tiempo de forma legible (h/min/s)
-        def fmt_tiempo_legible(minutos):
+        def _fmt_tiempo_legible(minutos):
             total_seg = round(minutos * 60)
             h = total_seg // 3600
             m = (total_seg % 3600) // 60
@@ -2067,7 +2067,7 @@ def calcular_ruta():
                 return f"{m}min {s}s" if s else f"{m}min"
             return f"{s}s"
 
-        mensaje = f"{round(dist_km, 2)} km · {fmt_tiempo_legible(tiempo_min)}"
+        mensaje = f"{round(dist_km, 2)} km · {_fmt_tiempo_legible(tiempo_min)}"
         if obstaculos:
             if usa_obstaculos:
                 mensaje += f" ⚠️ atraviesa {segs_penalizados} tramo(s) bloqueado(s)"
@@ -2205,7 +2205,7 @@ def importar_obstaculos():
         if gdf.empty:
             return jsonify({'error': 'El archivo no contiene geometrías de punto válidas'}), 400
 
-        def val(row, col, default):
+        def _val(row, col, default):
             return row[col] if col in row and row[col] is not None else default
 
         features = []
@@ -2213,10 +2213,10 @@ def importar_obstaculos():
             features.append({
                 'lat':            row.geometry.y,
                 'lon':            row.geometry.x,
-                'id':             val(row, 'id',             None),
-                'pct':            int(val(row, 'pct',            50)),
-                'vias_afectadas': str(val(row, 'vias_afectadas', '')),
-                'fecha_creacion': str(val(row, 'fecha_creacion', '')),
+                'id':             _val(row, 'id',             None),
+                'pct':            int(_val(row, 'pct',            50)),
+                'vias_afectadas': str(_val(row, 'vias_afectadas', '')),
+                'fecha_creacion': str(_val(row, 'fecha_creacion', '')),
             })
 
         return jsonify({'obstaculos': features, 'total': len(features)})
@@ -2338,7 +2338,7 @@ def importar_obstaculos_csv():
                 coord_lat = None
                 coord_lon = None
 
-                # ── Resolver Portal -> coordenadas ──────────────────────────
+                # ── Resolver Portal → coordenadas ──────────────────────────
                 if portal_raw:
                     # Validar que Portal sea un número
                     if not portal_raw.isdigit():
@@ -2356,7 +2356,7 @@ def importar_obstaculos_csv():
                             f"Fila {fila_num}: capa de portales no cargada (Portal='{portal_raw}')")
                     else:
                         # Buscar combinando Calles + Portal, igual que el widget
-                        nombre_norm = normalizar_nombre_via(calles)
+                        nombre_norm = _normalizar_nombre_via(calles)
                         numero_raw  = portal_raw
 
                         df_p = portales_gdf[
@@ -2392,7 +2392,7 @@ def importar_obstaculos_csv():
                         coord_lat = float(row.get('coord_lat', ''))
                         coord_lon = float(row.get('coord_lon', ''))
                     except (ValueError, TypeError):
-                        continue  # Sin coordenadas ni portal válido -> saltar
+                        continue  # Sin coordenadas ni portal válido → saltar
 
                 features.append({
                     'lat':    coord_lat,
@@ -2540,7 +2540,7 @@ def importar_eventos():
         if gdf.empty:
             return jsonify({'error': 'El archivo no contiene polígonos válidos'}), 400
 
-        def val(row, col, default):
+        def _val(row, col, default):
             return row[col] if col in row.index and row[col] is not None else default
 
         features = []
@@ -2552,11 +2552,11 @@ def importar_eventos():
             coords = [[lon, lat] for lon, lat in geom.exterior.coords]
             features.append({
                 'vertices':     coords,
-                'nombre':       str(val(row, 'nombre',       'Evento importado')),
-                'fecha_inicio': str(val(row, 'fecha_inicio', '')),
-                'fecha_fin':    str(val(row, 'fecha_fin',    '')),
-                'afluencia':    int(val(row, 'afluencia',    50)),
-                'duracion':     float(val(row, 'duracion',   1)),
+                'nombre':       str(_val(row, 'nombre',       'Evento importado')),
+                'fecha_inicio': str(_val(row, 'fecha_inicio', '')),
+                'fecha_fin':    str(_val(row, 'fecha_fin',    '')),
+                'afluencia':    int(_val(row, 'afluencia',    50)),
+                'duracion':     float(_val(row, 'duracion',   1)),
             })
 
         return jsonify({'eventos': features, 'total': len(features)})
@@ -2571,14 +2571,14 @@ def importar_eventos():
 # ==================== CALENDARIO ====================
 
 # calendario.json se busca primero junto al script; si no, en static/data/
-base_dir = os.path.dirname(os.path.abspath(__file__))
-candidates = [
-    os.path.join(base_dir, 'calendario.json'),
-    os.path.join(base_dir, 'static', 'data', 'calendario.json'),
+_base_dir = os.path.dirname(os.path.abspath(__file__))
+_candidates = [
+    os.path.join(_base_dir, 'calendario.json'),
+    os.path.join(_base_dir, 'static', 'data', 'calendario.json'),
 ]
-CALENDARIO_PATH = next((p for p in candidates if os.path.exists(p)), candidates[0])
+CALENDARIO_PATH = next((p for p in _candidates if os.path.exists(p)), _candidates[0])
 
-def cargar_calendario_disk():
+def _cargar_calendario_disk():
     if os.path.exists(CALENDARIO_PATH):
         try:
             with open(CALENDARIO_PATH, 'r', encoding='utf-8') as f:
@@ -2587,16 +2587,16 @@ def cargar_calendario_disk():
             pass
     return {}
 
-def guardar_calendario_disk(dias):
+def _guardar_calendario_disk(dias):
     with open(CALENDARIO_PATH, 'w', encoding='utf-8') as f:
         json.dump({'dias': dias}, f, ensure_ascii=False, indent=2)
 
 @app.route('/api/calendario')
 def api_get_calendario():
-    return jsonify({'dias': cargar_calendario_disk()})
+    return jsonify({'dias': _cargar_calendario_disk()})
 
-def defecto_para_fecha(fecha_str):
-    """Devuelve el array por defecto para 'YYYY-MM-DD'. L-V -> lectivo+laborable, S-D -> []."""
+def _defecto_para_fecha(fecha_str):
+    """Devuelve el array por defecto para 'YYYY-MM-DD'. L-V → lectivo+laborable, S-D → []."""
     try:
         dow = datetime.strptime(fecha_str, '%Y-%m-%d').weekday()  # 0=lun … 6=dom
         return ['lectivo', 'laborable'] if dow < 5 else []
@@ -2616,13 +2616,13 @@ def api_set_calendario():
         elif isinstance(v, str) and v in tipos_dias:
             arr = [v]
         else:
-            continue  # entrada inválida -> ignorar
+            continue  # entrada inválida → ignorar
 
         # Solo guardar si se desvía del defecto para ese día
-        if arr != defecto_para_fecha(k):
+        if arr != _defecto_para_fecha(k):
             dias_limpios[k] = arr
 
-    guardar_calendario_disk(dias_limpios)
+    _guardar_calendario_disk(dias_limpios)
     return jsonify({'ok': True, 'total': len(dias_limpios)})
 
 
@@ -2783,15 +2783,14 @@ def api_sesion_confirmar():
     return jsonify({'ok': True})
 
 
-# ==================== SOCKETIO ====================
+# ==================== OBSTÁCULOS COMPARTIDOS ====================
 
-def obs_a_dict(obs):
+def _obs_a_dict(obs):
     return {
         'id':         obs.id,
         'obs_id':     obs.obs_id,
         'lat':        obs.lat,
         'lng':        obs.lng,
-        'lon':        obs.lng,
         'porcentaje': obs.porcentaje,
         'portal':     obs.portal or '',
         'autor':      obs.autor,
@@ -2803,8 +2802,10 @@ def api_obs_compartidos_get():
     if not session.get('autenticado') or session.get('rol') == 'invitado':
         return jsonify({'error': 'No autorizado'}), 401
     todos = ObstaculoCompartido.query.order_by(ObstaculoCompartido.creado_en).all()
-    return jsonify({'obstaculos': [obs_a_dict(o) for o in todos]})
+    return jsonify({'obstaculos': [_obs_a_dict(o) for o in todos]})
 
+
+# ==================== SOCKETIO ====================
 
 @socketio.on('connect')
 def ws_on_connect():
@@ -2818,21 +2819,21 @@ def ws_on_disconnect():
 
 @socketio.on('obs_compartido_crear')
 def ws_obs_crear(data):
+    usuario = session.get('usuario')
     if not session.get('autenticado') or session.get('rol') == 'invitado':
         return
-    lon = data.get('lon', data.get('lng'))
     obs = ObstaculoCompartido(
         obs_id     = data.get('obs_id') or None,
         lat        = float(data['lat']),
-        lng        = float(lon),
+        lng        = float(data['lng']),
         porcentaje = int(data.get('porcentaje', 50)),
         portal     = data.get('portal', ''),
-        autor      = session.get('usuario'),
+        autor      = usuario,
     )
     db.session.add(obs)
     db.session.commit()
-    socketio.emit('obs_compartido_nuevo', obs_a_dict(obs))
-    print(f'[WS] obs_compartido_crear: #{obs.id} por {session.get("usuario")}')
+    socketio.emit('obs_compartido_nuevo', _obs_a_dict(obs))
+    print(f'[WS] obs_compartido_crear: #{obs.id} por {usuario}')
 
 
 @socketio.on('obs_compartido_eliminar')
@@ -2863,7 +2864,7 @@ def ws_obs_mover(data):
     obs.autor         = session.get('usuario')
     obs.modificado_en = datetime.utcnow()
     db.session.commit()
-    socketio.emit('obs_compartido_actualizado', obs_a_dict(obs))
+    socketio.emit('obs_compartido_actualizado', _obs_a_dict(obs))
     print(f'[WS] obs_compartido_mover: #{obs.id} por {session.get("usuario")}')
 
 
@@ -2879,7 +2880,7 @@ def server_error(e):
 
 
 # Conectar MongoDB al importar el módulo
-conectar_mongo()
+_conectar_mongo()
 
 
 # ==================== ARRANQUE ====================
@@ -2895,16 +2896,16 @@ if __name__ == '__main__':
     except Exception:
         pass
 
-    print("🗺️  Servidor GIS - Puerto Lumbreras  ->  http://localhost:5000")
+    print("🗺️  Servidor GIS - Puerto Lumbreras  →  http://localhost:5000")
     print(f"📶 También accesible en la red local: http://{local_ip}:5000")
 
     # Copiar Num_portal.geojson a static/data si todavía no está ahí
-    src_portal = os.path.join(os.path.dirname(__file__), 'Num_portal.geojson')
-    dst_portal = os.path.join('static', 'data', 'Num_portal.geojson')
-    if os.path.exists(src_portal) and not os.path.exists(dst_portal):
-        shutil.copy2(src_portal, dst_portal)
+    _src_portal = os.path.join(os.path.dirname(__file__), 'Num_portal.geojson')
+    _dst_portal = os.path.join('static', 'data', 'Num_portal.geojson')
+    if os.path.exists(_src_portal) and not os.path.exists(_dst_portal):
+        shutil.copy2(_src_portal, _dst_portal)
         print("📋 Num_portal.geojson copiado a static/data/")
 
     capasDarranque()
-    conectar_mongo()
+    _conectar_mongo()
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)

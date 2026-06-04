@@ -17,18 +17,18 @@ let capaPuntosTemporales = null;
 let capaViasTemporales   = null;
 
 // Datos globales para que la ruta pueda penalizar vías temporales
-window.momentViasFactores = [];
+window._momentViasFactores = [];
 window.obtenerFactorMomentoParaSegmento = function (s, e) {
-    if (!estadoTemporal.activo || !Array.isArray(window.momentViasFactores)) return 1.0;
+    if (!estadoTemporal.activo || !Array.isArray(window._momentViasFactores)) return 1.0;
     if (!s || !e || s.length !== 2 || e.length !== 2) return 1.0;
 
     const midLat = (s[1] + e[1]) / 2;
     const midLon = (s[0] + e[0]) / 2;
-    // Radio de 30m en grados aprox (1° lat ≈ 111km -> 30m ≈ 0.00027°)
+    // Radio de 30m en grados aprox (1° lat ≈ 111km → 30m ≈ 0.00027°)
     const RADIO_DEG2 = 0.00027 * 0.00027 * 2; // tolerancia cuadrática combinada lat+lon
     let factorMax = 1.0;
 
-    for (const via of window.momentViasFactores) {
+    for (const via of window._momentViasFactores) {
         const factor = via.factor || 1.0;
         if (factor <= 1.0) continue;
 
@@ -68,9 +68,9 @@ const VIAS_PRINCIPALES = new Set([
 ]);
 
 // Devuelve si una vía puede congestionarse según el contexto del POI
-// 'urbano'    -> solo vías urbanas (colegios, ocio, iglesias)
-// 'acceso'    -> urbanas + principales (oficinas, polígonos industriales)
-function viaEsCongestionable(highway, modo) {
+// 'urbano'    → solo vías urbanas (colegios, ocio, iglesias)
+// 'acceso'    → urbanas + principales (oficinas, polígonos industriales)
+function _viaEsCongestionable(highway, modo) {
     if (!highway) return false;
     const hw = String(highway).toLowerCase();
     if (VIAS_URBANAS.has(hw)) return true;
@@ -150,13 +150,13 @@ function aplicarSimulacionTemporal() {
 
     limpiarCapasTemporales();
 
-    progresoSim(5, 'Buscando POIs activos...');
+    _progresoSim(5, 'Buscando POIs activos...');
 
     setTimeout(() => {
         // ── Paso 1: construir mapa de factor máximo por vía ──────────────────
         const factorPorVia   = new Map();
         const puntosResaltar = [];
-        const factorInterno = (intensidad) =>
+        const _factorInterno = (intensidad) =>
             intensidad === 'alta' ? 1.6 : intensidad === 'media' ? 1.3 : 1.1;
 
         for (const [tipo, config] of Object.entries(PERIODOS_CRITICOS)) {
@@ -171,7 +171,7 @@ function aplicarSimulacionTemporal() {
                 puntosResaltar.push({ punto, config, horario: horarioActivo });
                 const viasProximas = encontrarViasProximas(punto.latlng, config.radioVias);
                 viasProximas.forEach(via => {
-                    const factor = factorInterno(horarioActivo.intensidad);
+                    const factor = _factorInterno(horarioActivo.intensidad);
                     const prev   = factorPorVia.get(via.layer);
                     if (!prev || factor > prev.factor) {
                         factorPorVia.set(via.layer, {
@@ -185,20 +185,20 @@ function aplicarSimulacionTemporal() {
             });
         }
 
-        progresoSim(40, 'Propagando congestión a vías vecinas...');
+        _progresoSim(40, 'Propagando congestión a vías vecinas...');
 
         // ── Paso 1b: propagar congestión a vías próximas (degradado) ────────────
         // Para cada vía ya afectada, buscamos vías cercanas que NO estén
         // en factorPorVia y les asignamos un factor atenuado por distancia.
         // Radio de propagación = radioVias * 1.5 del POI más influyente.
         // Factor propagado = factor_origen * (1 - dist/radio_propagacion) * 0.6
-        // -> el vecino más cercano puede llegar a ×(factor*0.6), el más lejano a ×1.0
+        // → el vecino más cercano puede llegar a ×(factor*0.6), el más lejano a ×1.0
         const RADIO_PROPAGACION_MULTIPLIER = 1.8;  // radio extra respecto al del POI
         const ATENUACION_VECINO            = 0.55; // qué fracción del factor llega al vecino
 
         if (viasLayer) {
             // ── Optimización: aritmética pura en grados, sin crear objetos L.LatLng ──
-            // 1° lat ≈ 111 km -> 1 m ≈ 9e-6°. Usamos distancia cuadrática en grados.
+            // 1° lat ≈ 111 km → 1 m ≈ 9e-6°. Usamos distancia cuadrática en grados.
 
             // Radio máximo de propagación en GRADOS²
             let radioMaxPOI = 60;
@@ -208,7 +208,7 @@ function aplicarSimulacionTemporal() {
                 }
             }
             const radioPropagacionM  = radioMaxPOI * RADIO_PROPAGACION_MULTIPLIER;
-            const radioDeg           = radioPropagacionM / 111000; // metros -> grados aprox
+            const radioDeg           = radioPropagacionM / 111000; // metros → grados aprox
             const radioDeg2          = radioDeg * radioDeg;        // cuadrado para evitar sqrt
 
             // Colectar centroides de vías afectadas como {lat, lon, factor}
@@ -227,7 +227,7 @@ function aplicarSimulacionTemporal() {
                 if (factorPorVia.has(layer)) return;
 
                 const hw = layer.feature?.properties?.highway;
-                if (!viaEsCongestionable(hw, 'urbano') && !viaEsCongestionable(hw, 'acceso')) return;
+                if (!_viaEsCongestionable(hw, 'urbano') && !_viaEsCongestionable(hw, 'acceso')) return;
 
                 const coords = layer.feature?.geometry?.coordinates;
                 if (!coords || !coords.length) return;
@@ -247,50 +247,48 @@ function aplicarSimulacionTemporal() {
                     if (factorVecino > mejorFactor) mejorFactor = factorVecino;
                 }
                 if (mejorFactor > 1.02) {
-                    factorPorVia.set(layer, { factor: mejorFactor, fuentes: [], propagada: true });
+                    factorPorVia.set(layer, { factor: mejorFactor, fuentes: [], _propagada: true });
                 }
             });
         }
 
-        progresoSim(55, 'Coloreando vías...');
+        _progresoSim(55, 'Coloreando vías...');
 
         // ── Paso 2: recolorear viasLayer con setStyle ─────────────────────
-        
-        // Añadir el factor como propiedad temporal al feature para poder
-        // usar viasLayer.setStyle(fn) en un único barrido (más rápido que
-        // eachLayer + setStyle individual para las no-afectadas).
-        //
-        // bindTooltip solo en vías directamente afectadas (no propagadas),
-        // que son pocas. Las propagadas y las libres no necesitan tooltip.
-        
+        // Estrategia:
+        //   a) Añadir el factor como propiedad temporal al feature para poder
+        //      usar viasLayer.setStyle(fn) en un único barrido (más rápido que
+        //      eachLayer + setStyle individual para las no-afectadas).
+        //   b) bindTooltip solo en vías directamente afectadas (no propagadas),
+        //      que son pocas. Las propagadas y las libres no necesitan tooltip.
         if (viasLayer) {
-            window.momentViasFactores = [];
+            window._momentViasFactores = [];
 
             // a) Marcar factores en los features para setStyle batch
             viasLayer.eachLayer(layer => {
                 const info    = factorPorVia.get(layer);
                 if (!info) {
-                    if (layer.feature) layer.feature.simFactor = null;
+                    if (layer.feature) layer.feature._simFactor = null;
                     return;
                 }
                 if (layer.feature) {
-                    layer.feature.simFactor    = info.factor;
-                    layer.feature.simPropagada = info.propagada || false;
+                    layer.feature._simFactor    = info.factor;
+                    layer.feature._simPropagada = info._propagada || false;
                 }
                 const geom = layer.feature?.geometry;
                 if (geom?.type === 'LineString') {
-                    window.momentViasFactores.push({ coords: [geom.coordinates], factor: info.factor });
+                    window._momentViasFactores.push({ coords: [geom.coordinates], factor: info.factor });
                 } else if (geom?.type === 'MultiLineString') {
-                    window.momentViasFactores.push({ coords: geom.coordinates, factor: info.factor });
+                    window._momentViasFactores.push({ coords: geom.coordinates, factor: info.factor });
                 }
             });
 
-            // Un único setStyle batch para todas las vías (no afectadas incluidas)
+            // b) Un único setStyle batch para todas las vías (no afectadas incluidas)
             viasLayer.setStyle(feature => {
-                const factor    = feature?.simFactor ?? 1.0;
+                const factor    = feature?._simFactor ?? 1.0;
                 const afectada  = factor > 1.0;
-                const propagada = feature?.simPropagada || false;
-                const color     = colorPorFactor(factor);
+                const propagada = feature?._simPropagada || false;
+                const color     = _colorPorFactor(factor);
                 return {
                     color,
                     weight:  afectada ? Math.max(propagada ? 1 : 2, Math.round((factor - 1) * (propagada ? 4 : 7))) : 2,
@@ -298,17 +296,17 @@ function aplicarSimulacionTemporal() {
                 };
             });
 
-            // Tooltips solo en vías directamente afectadas
+            // c) Tooltips solo en vías directamente afectadas (nunca en propagadas ni libres)
             viasLayer.eachLayer(layer => {
                 const info = factorPorVia.get(layer);
-                if (!info || info.propagada) {
-                    // Quitar tooltip anterior si lo había
-                    if (layer.tooltip) layer.unbindTooltip();
+                if (!info || info._propagada) {
+                    // Quitar tooltip anterior si lo había (sin llamar unbindTooltip en cada vía libre)
+                    if (layer._tooltip) layer.unbindTooltip();
                     return;
                 }
                 const factor   = info.factor;
-                const color    = colorPorFactor(factor);
-                const etiqueta = etiquetaFactor(factor);
+                const color    = _colorPorFactor(factor);
+                const etiqueta = _etiquetaFactor(factor);
                 const fuentes  = info.fuentes.map(f => `${f.nombre} (${f.tipo})`).join(', ');
                 layer.bindTooltip(
                     `<strong style="color:${color}">● ${etiqueta}</strong><br>` +
@@ -320,24 +318,24 @@ function aplicarSimulacionTemporal() {
             // Limpiar marcadores temporales de feature
             viasLayer.eachLayer(layer => {
                 if (layer.feature) {
-                    delete layer.feature.simFactor;
-                    delete layer.feature.simPropagada;
+                    delete layer.feature._simFactor;
+                    delete layer.feature._simPropagada;
                 }
             });
         }
 
-        progresoSim(90, 'Marcando puntos de interés...');
+        _progresoSim(90, 'Marcando puntos de interés...');
 
         setTimeout(() => {
             const puntosAfectados  = puntosResaltar.length;
-            const viasDirectas     = [...factorPorVia.values()].filter(i => !i.propagada).length;
-            const viasPropagadas   = [...factorPorVia.values()].filter(i =>  i.propagada).length;
+            const viasDirectas     = [...factorPorVia.values()].filter(i => !i._propagada).length;
+            const viasPropagadas   = [...factorPorVia.values()].filter(i =>  i._propagada).length;
             const viasAfectadas    = factorPorVia.size;
 
             actualizarEstadisticasTiempo(puntosAfectados, viasAfectadas);
-            actualizarLeyendaTrafico();
-            progresoSim(100, 'Listo');
-            setTimeout(() => ocultarProgresoSim(), 800);
+            _actualizarLeyendaTrafico();
+            _progresoSim(100, 'Listo');
+            setTimeout(() => _ocultarProgresoSim(), 800);
 
             const { dia, hora } = estadoTemporal;
             const hh = Math.floor(hora);
@@ -352,7 +350,7 @@ function aplicarSimulacionTemporal() {
 }
 
 // ── Barra de progreso de simulación ──────────────────────────────────────────
-function progresoSim(pct, texto) {
+function _progresoSim(pct, texto) {
     let bar = document.getElementById('sim-progress-bar');
     if (!bar) {
         // Crear barra si no existe, dentro del panel de momento
@@ -386,14 +384,14 @@ function progresoSim(pct, texto) {
     }
 }
 
-function ocultarProgresoSim() {
+function _ocultarProgresoSim() {
     const wrap = document.getElementById('sim-progress-wrap');
     if (wrap) wrap.style.display = 'none';
 }
 
 // ── Escala de color por factor ────────────────────────────────────────────────
 // 1.0 = verde fluido, 1.3 = amarillo moderado, 1.6+ = rojo congestionado
-function colorPorFactor(factor) {
+function _colorPorFactor(factor) {
     if (factor <= 1.05) return '#27ae60';       // Verde: fluido
     if (factor <= 1.15) return '#2ecc71';       // Verde claro
     if (factor <= 1.25) return '#f1c40f';       // Amarillo: moderado
@@ -403,7 +401,7 @@ function colorPorFactor(factor) {
     return '#c0392b';                           // Rojo oscuro: muy congestionado
 }
 
-function etiquetaFactor(factor) {
+function _etiquetaFactor(factor) {
     if (factor <= 1.05) return 'Fluido';
     if (factor <= 1.2)  return 'Leve';
     if (factor <= 1.35) return 'Moderado';
@@ -411,7 +409,7 @@ function etiquetaFactor(factor) {
     return 'Muy congestionado';
 }
 
-function actualizarLeyendaTrafico() {
+function _actualizarLeyendaTrafico() {
     // Mostrar leyenda de tráfico en el panel de simulación
     let leyenda = document.getElementById('leyenda-trafico-sim');
     if (!leyenda) {
@@ -451,15 +449,15 @@ function desactivarSimulacionTemporal() {
         viasLayer.setStyle(obtenerEstiloVia);
         // Quitar tooltips de tráfico SOLO en las capas que realmente tienen uno
         // (evita 5000+ llamadas a unbindTooltip en vías sin tooltip)
-        viasLayer.eachLayer(l => { if (l.tooltip) l.unbindTooltip(); });
+        viasLayer.eachLayer(l => { if (l._tooltip) l.unbindTooltip(); });
     }
 
-    window.momentViasFactores = [];
+    window._momentViasFactores = [];
 
     actualizarEstadisticasTiempo(0, 0);
     const leyenda = document.getElementById('leyenda-trafico-sim');
     if (leyenda) leyenda.style.display = 'none';
-    ocultarProgresoSim();
+    _ocultarProgresoSim();
     showNotification('Simulación temporal desactivada', 'info');
 }
 
@@ -509,7 +507,7 @@ function encontrarViasProximas(centro, radioMetros, modoVias) {
     if (!viasLayer) return proximas;
 
     // Convertir radio a grados una sola vez (sin crear L.LatLng en el bucle interno)
-    // 1 grado lat ≈ 111 km -> radio_deg = radioMetros / 111000
+    // 1 grado lat ≈ 111 km → radio_deg = radioMetros / 111000
     const cLat  = centro.lat;
     const cLon  = centro.lng;
     const rDeg  = radioMetros / 111000;
@@ -563,7 +561,7 @@ function resaltarPuntoInteres(punto, color, intensidad) {
         <strong>${punto.nombre}</strong><br>
         Tipo: ${punto.tipo}<br>
         Ocupación: ${intensidad === 'alta' ? 'Alta' : 'Media'}<br>
-        ${obtenerNombreDia(estadoTemporal.dia)} ${horaStr(estadoTemporal.hora)}
+        ${obtenerNombreDia(estadoTemporal.dia)} ${_horaStr(estadoTemporal.hora)}
     `);
 
     capaPuntosTemporales.addLayer(marker);
@@ -609,7 +607,7 @@ function establecerHoraActual() {
     if (estadoTemporal.activo) aplicarSimulacionTemporal();
 
     showNotification(
-        `Hora establecida: ${obtenerNombreDiaCompleto(estadoTemporal.dia)} ${horaStr(estadoTemporal.hora)}`,
+        `Hora establecida: ${obtenerNombreDiaCompleto(estadoTemporal.dia)} ${_horaStr(estadoTemporal.hora)}`,
         'info'
     );
 }
@@ -617,7 +615,7 @@ function establecerHoraActual() {
 function actualizarDisplayHora() {
     const display = document.getElementById('display-hora');
     if (display) {
-        display.textContent = horaStr(estadoTemporal.hora);
+        display.textContent = _horaStr(estadoTemporal.hora);
         display.style.transform = 'scale(1.1)';
         setTimeout(() => { display.style.transform = 'scale(1)'; }, 150);
     }
@@ -689,7 +687,7 @@ function obtenerNombreDiaCompleto(num) {
     return ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][num] || '';
 }
 
-function horaStr(hora) {
+function _horaStr(hora) {
     const hh = Math.floor(hora).toString().padStart(2, '0');
     const mm = Math.round((hora % 1) * 60).toString().padStart(2, '0');
     return `${hh}:${mm}h`;
@@ -709,17 +707,17 @@ if (typeof window !== 'undefined') {
 // Se auto-inicializa en cuanto el mapa de Leaflet esté disponible,
 // sin depender de que index.html llame a inicializarSistemaTemporal().
 
-(function autoInitTemporal() {
-    function tryInit() {
+(function _autoInitTemporal() {
+    function _tryInit() {
         if (typeof map !== 'undefined' && map && typeof map.addLayer === 'function') {
             inicializarSistemaTemporal();
         } else {
-            setTimeout(tryInit, 100);
+            setTimeout(_tryInit, 100);
         }
     }
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', tryInit);
+        document.addEventListener('DOMContentLoaded', _tryInit);
     } else {
-        tryInit();
+        _tryInit();
     }
 })();

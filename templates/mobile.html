@@ -314,7 +314,7 @@
             </div>
 
             <!-- Dropdown opciones emergencia -->
-            <div id="emergencia-opciones-lista" style="display:none;
+            <div id="emergencia-opciones-dropdown" style="display:none;
                 background:#fff3f3;border:1px solid #e74c3c;border-radius:8px;
                 padding:8px 12px;margin:4px 0 2px;font-size:12px;">
                 <div style="font-size:11px;font-weight:700;color:#c0392b;margin-bottom:7px;">🚨 Privilegios de emergencia</div>
@@ -803,24 +803,24 @@
     // ── Wrappers modal obstáculo / evento ────────────────────────────────────
     function confirmarObstaculoMobile() {
         confirmarObstaculo();
-        setBSHeight(BS_HALF);
+        _setBSHeight(BS_HALF);
         document.getElementById('map').style.bottom = '';
         if (typeof desactivarModoObstaculo === 'function') desactivarModoObstaculo();
     }
     function cerrarObstaculoModalMobile() {
         cerrarObstaculoModal();
-        setBSHeight(BS_HALF);
+        _setBSHeight(BS_HALF);
         document.getElementById('map').style.bottom = '';
     }
     function confirmarEventoMobile() {
         confirmarEvento();
-        setBSHeight(BS_HALF);
+        _setBSHeight(BS_HALF);
         document.getElementById('map').style.bottom = '';
         if (typeof desactivarModoEvento === 'function') desactivarModoEvento();
     }
     function cerrarModalEventoMobile() {
         cerrarModalEvento();
-        setBSHeight(BS_HALF);
+        _setBSHeight(BS_HALF);
         document.getElementById('map').style.bottom = '';
     }
 
@@ -850,26 +850,26 @@
     const BS_FULL = Math.round(window.innerHeight * 0.85);
     let   bsHeight = BS_PEEK;
 
-    function setBSHeight(h) {
+    function _setBSHeight(h) {
         bsHeight = Math.max(BS_PEEK, Math.min(BS_FULL, h));
         document.getElementById('m-bottom-sheet').style.height = bsHeight + 'px';
         document.documentElement.style.setProperty('--bs-height', bsHeight + 'px');
     }
-    function cerrarBottomSheet() { setBSHeight(BS_PEEK); }
+    function cerrarBottomSheet() { _setBSHeight(BS_PEEK); }
 
     // Drag del handle
-    let dragStart = null, dragH0 = null;
+    let _dragStart = null, _dragH0 = null;
     function initDragBS(e) {
-        dragStart = e.touches ? e.touches[0].clientY : e.clientY;
-        dragH0    = bsHeight;
+        _dragStart = e.touches ? e.touches[0].clientY : e.clientY;
+        _dragH0    = bsHeight;
         const move = ev => {
             const y = ev.touches ? ev.touches[0].clientY : ev.clientY;
-            setBSHeight(dragH0 + (dragStart - y));
+            _setBSHeight(_dragH0 + (_dragStart - y));
         };
         const up = () => {
             const snaps = [BS_PEEK, BS_HALF, BS_FULL];
             const closest = snaps.reduce((a, b) => Math.abs(b - bsHeight) < Math.abs(a - bsHeight) ? b : a);
-            setBSHeight(closest);
+            _setBSHeight(closest);
             document.removeEventListener('mousemove', move);
             document.removeEventListener('mouseup',   up);
             document.removeEventListener('touchmove', move);
@@ -883,23 +883,23 @@
 
     // Init
     document.addEventListener('DOMContentLoaded', () => {
-        setBSHeight(BS_PEEK);
+        _setBSHeight(BS_PEEK);
 
         // Evitar chincheta al mover obstáculos en móvil
-        window.mobileMovingObstacle = false;
+        window._mobileMovingObstacle = false;
         setTimeout(() => {
             const origIniciarMover = window.iniciarMoverObstaculo;
             if (origIniciarMover) {
                 window.iniciarMoverObstaculo = function(idx) {
-                    window.mobileMovingObstacle = true;
+                    window._mobileMovingObstacle = true;
                     origIniciarMover.call(this, idx);
                 };
             }
-            const orig_moverA = window.moverObstaculoA;
+            const orig_moverA = window._moverObstaculoA;
             if (orig_moverA) {
-                window.moverObstaculoA = function(idx, ll) {
+                window._moverObstaculoA = function(idx, ll) {
                     orig_moverA.call(this, idx, ll);
-                    setTimeout(() => { window.mobileMovingObstacle = false; }, 100);
+                    setTimeout(() => { window._mobileMovingObstacle = false; }, 100);
                 };
             }
         }, 100);
@@ -908,7 +908,7 @@
             if (typeof map !== 'undefined') {
                 map.invalidateSize();
                 map.on('movestart', () => {
-                    setBSHeight(0);
+                    _setBSHeight(0);
                     document.getElementById('map').style.bottom = '0px';
                 });
             }
@@ -917,15 +917,15 @@
         // Observar cambios en las listas de obstáculos/eventos para actualizar empty states
         ['obs-flotante-lista','ev-flotante-lista'].forEach(id => {
             const el = document.getElementById(id);
-            if (el) new MutationObserver(actualizarObsPanel).observe(el, { childList: true });
+            if (el) new MutationObserver(_actualizarObsPanel).observe(el, { childList: true });
         });
     });
 
     // ── Bottom Nav ───────────────────────────────────────────────────────────
-    let modoNavActual = 'explorar';
+    let _modoNavActual = 'explorar';
 
     function selectMobileMode(mode) {
-        modoNavActual = mode;
+        _modoNavActual = mode;
         document.querySelectorAll('.m-nav-btn').forEach(b => b.classList.remove('active'));
         document.getElementById('m-nav-' + mode)?.classList.add('active');
 
@@ -937,7 +937,7 @@
         if (mode === 'explorar') {
             if (typeof modoObstaculo !== 'undefined' && modoObstaculo &&
                 typeof desactivarModoObstaculo === 'function') desactivarModoObstaculo();
-            if (window.modoEvento && typeof desactivarModoEvento === 'function') desactivarModoEvento();
+            if (window._modoEvento && typeof desactivarModoEvento === 'function') desactivarModoEvento();
 
             if (bs) { bs.style.borderTop = ''; bs.style.boxShadow = '0 -4px 24px rgba(0,0,0,0.15)'; }
             document.getElementById('m-nav-obstaculos')?.classList.remove('obs-mode');
@@ -945,7 +945,7 @@
             if (panelObs) panelObs.style.display = 'none';
             if (panelRuta) panelRuta.style.display = 'block';
             if (btnLL) btnLL.style.display = 'none';
-            setBSHeight(BS_HALF);
+            _setBSHeight(BS_HALF);
 
         } else if (mode === 'obstaculos') {
             if (bs) { bs.style.borderTop = '3px solid #e67e22'; bs.style.boxShadow = '0 -4px 24px rgba(230,126,34,0.3)'; }
@@ -954,10 +954,10 @@
             if (panelRuta) panelRuta.style.display = 'none';
             if (btnLL) btnLL.style.display = 'none';
             if (panelObs) { panelObs.style.display = 'flex'; panelObs.style.flexDirection = 'column'; }
-            setBSHeight(BS_HALF);
+            _setBSHeight(BS_HALF);
 
             const evTab = document.getElementById('m-obstab-ev');
-            if (evTab) evTab.style.display = window.userRol === 'admin' ? '' : 'none';
+            if (evTab) evTab.style.display = window._userRol === 'admin' ? '' : 'none';
             selectObsTab('obs');
         }
     }
@@ -971,7 +971,7 @@
         const bs = document.getElementById('m-bottom-sheet');
         if (tab === 'obs') {
             if (bs) { bs.style.borderTop = '3px solid #e67e22'; bs.style.boxShadow = '0 -4px 24px rgba(230,126,34,0.3)'; }
-            if (window.modoEvento && typeof desactivarModoEvento === 'function') desactivarModoEvento();
+            if (window._modoEvento && typeof desactivarModoEvento === 'function') desactivarModoEvento();
         } else {
             if (bs) { bs.style.borderTop = '3px solid #8e44ad'; bs.style.boxShadow = '0 -4px 24px rgba(142,68,173,0.3)'; }
             if (typeof modoObstaculo !== 'undefined' && modoObstaculo &&
@@ -980,7 +980,7 @@
     }
 
     // Empty states
-    function actualizarObsPanel() {
+    function _actualizarObsPanel() {
         const obsLista = document.getElementById('obs-flotante-lista');
         const evLista  = document.getElementById('ev-flotante-lista');
         const obsEmpty = document.getElementById('m-obs-empty-obs');
@@ -1008,16 +1008,16 @@
 
     <!-- Control de capas base para móvil — con reintentos robustos -->
     <script>
-    (function initCapasBase() {
-        let intentos = 0;
+    (function _initCapasBase() {
+        let _intentos = 0;
         const MAX_INTENTOS = 30;
 
-        function tryInit() {
-            intentos++;
+        function _tryInit() {
+            _intentos++;
             // Buscar el control en cualquier posición del DOM de Leaflet
             const ctrl = document.querySelector('.leaflet-control-layers');
             if (!ctrl) {
-                if (intentos < MAX_INTENTOS) setTimeout(tryInit, 200);
+                if (_intentos < MAX_INTENTOS) setTimeout(_tryInit, 200);
                 return;
             }
 
@@ -1092,29 +1092,29 @@
                 }
             });
 
-            console.log('[mobile] ✅ Botón capas base creado (intento ' + intentos + ')');
+            console.log('[mobile] ✅ Botón capas base creado (intento ' + _intentos + ')');
         }
 
         // Primer intento tras DOMContentLoaded, luego con retardo
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() { setTimeout(tryInit, 400); });
+            document.addEventListener('DOMContentLoaded', function() { setTimeout(_tryInit, 400); });
         } else {
-            setTimeout(tryInit, 400);
+            setTimeout(_tryInit, 400);
         }
     })();
     </script>
 
     <!-- Override historial para móvil: panel centrado en pantalla en vez de junto al widget MSW -->
     <script>
-    (function historialMobileOverride() {
-        function patchHistorial() {
+    (function _historialMobileOverride() {
+        function _patchHistorial() {
             if (typeof toggleHistorial !== 'function') {
-                setTimeout(patchHistorial, 200);
+                setTimeout(_patchHistorial, 200);
                 return;
             }
 
             // Sobreescribir posicionamiento: en móvil el panel se centra en pantalla
-            window.reposicionarPanelHistorial = function() {
+            window._reposicionarPanelHistorial = function() {
                 const panel = document.getElementById('historial-panel');
                 if (!panel) return;
                 // Centrado horizontal, encima del bottom sheet
@@ -1132,35 +1132,35 @@
             const bsEl = document.getElementById('m-bottom-sheet');
             if (bsEl) {
                 new MutationObserver(function() {
-                    if (typeof window.reposicionarPanelHistorial === 'function') {
-                        window.reposicionarPanelHistorial();
+                    if (typeof window._reposicionarPanelHistorial === 'function') {
+                        window._reposicionarPanelHistorial();
                     }
                 }).observe(bsEl, { attributes: true, attributeFilter: ['style'] });
             }
         }
-        setTimeout(patchHistorial, 600);
+        setTimeout(_patchHistorial, 600);
     })();
     </script>
 
     <!-- Sincronizar controles POI según rol -->
     <script>
     (function() {
-        function sincronizarControlesPoi(rol) {
+        function _sincronizarControlesPoi(rol) {
             const el = document.getElementById('pois-controles-registrado');
             if (!el) return;
             el.style.display = (rol === 'registrado' || rol === 'admin') ? '' : 'none';
         }
         fetch('/api/auth/me')
             .then(r => r.json())
-            .then(data => sincronizarControlesPoi(data.rol || 'invitado'))
+            .then(data => _sincronizarControlesPoi(data.rol || 'invitado'))
             .catch(() => {});
-        const waitAuth = setInterval(function() {
+        const _waitAuth = setInterval(function() {
             if (typeof window.cerrarSesion === 'function') {
-                clearInterval(waitAuth);
+                clearInterval(_waitAuth);
                 if (typeof window.abrirModalRegistro === 'function') {
-                    const orig = window.abrirModalRegistro;
+                    const _orig = window.abrirModalRegistro;
                     window.abrirModalRegistro = function() {
-                        const ret = orig.apply(this, arguments);
+                        const ret = _orig.apply(this, arguments);
                         fetch('/api/auth/me').then(r=>r.json()).then(d=>_sincronizarControlesPoi(d.rol||'invitado')).catch(()=>{});
                         return ret;
                     };

@@ -3,7 +3,7 @@
  * Comunicación en tiempo real (Socket.IO) + gestión de la capa compartida de obstáculos.
  *
  * CAPA COMPARTIDA:
- *   - window.toggleCapaCompartida()  -> abre/cierra la capa compartida
+ *   - window.toggleCapaCompartida()  → abre/cierra la capa compartida
  *   - Mientras está activa, TODO el sistema de obstáculos opera sobre ella
  *   - Los cambios (crear/mover/eliminar) se emiten por WS y se persisten en BD
  *   - Al recibir un evento WS, el mapa se actualiza en tiempo real
@@ -12,16 +12,17 @@
 
 // ==================== BADGE DE ESTADO WS ====================
 
-function actualizarBadgeWS(estado) {
+function _actualizarBadgeWS(estado) {
     let badge = document.getElementById('ws-badge');
     if (!badge) {
         badge = document.createElement('div');
         badge.id = 'ws-badge';
         badge.style.cssText = `
-            display:inline-flex;align-items:center;gap:6px;font-size:12px;
-            padding:4px 10px;border-radius:12px;font-weight:400;
-            letter-spacing:0em;margin-left:6px;transition:background 0.3s,color 0.3s;
+            display:inline-flex;align-items:center;gap:4px;font-size:11px;
+            padding:2px 7px;border-radius:10px;font-weight:600;
+            letter-spacing:0.02em;margin-left:6px;transition:background 0.3s,color 0.3s;
         `;
+        
         const statusBadge = document.querySelector('.status-badge');
         if (statusBadge?.parentNode) {
             statusBadge.parentNode.insertBefore(badge, statusBadge.nextSibling);
@@ -29,16 +30,17 @@ function actualizarBadgeWS(estado) {
             document.querySelector('.header-left')?.appendChild(badge);
         }
     }
+    
     const config = {
-        online:  { bg: '#dcfce7', color: '#166534', dot: '#22c55e', label: 'WS·ON' },
-        offline:  { bg: '#f1f5f9', color: '#64748b', dot: '#94a3b8', label: 'WS·OFF' },
-        error:   { bg: '#fee2e2', color: '#991b1b', dot: '#ef4444', label: 'WS·ERR' },
+        online:  { bg: '#dcfce7', color: '#166534', dot: '#22c55e', label: 'WS' },
+        offline: { bg: '#fef3c7', color: '#92400e', dot: '#f59e0b', label: 'WS' },
+        error:   { bg: '#fee2e2', color: '#991b1b', dot: '#ef4444', label: 'WS' },
         stub:    { bg: '#f1f5f9', color: '#64748b', dot: '#94a3b8', label: 'WS·OFF' },
     };
     const c = config[estado] || config.stub;
     badge.style.background = c.bg;
     badge.style.color      = c.color;
-    badge.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:${c.dot};display:inline-block;"></span>${c.label}`;
+    badge.innerHTML = `<span style="width:6px;height:6px;border-radius:50%;background:${c.dot};display:inline-block;"></span>${c.label}`;
     badge.title = {
         online:  'WebSocket conectado — cambios en tiempo real activos',
         offline: 'WebSocket desconectado — reconectando…',
@@ -51,25 +53,25 @@ function actualizarBadgeWS(estado) {
 
 // ==================== CONEXIÓN SOCKET.IO ====================
 
-window.rt = (function () {
+window._rt = (function () {
 
-    const ioAvailable = typeof io === 'function';
+    const _ioAvailable = typeof io === 'function';
 
     if (!_ioAvailable) {
         console.info('[realtime] Socket.IO no disponible — modo stub.');
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => actualizarBadgeWS('stub'));
+            document.addEventListener('DOMContentLoaded', () => _actualizarBadgeWS('stub'));
         } else {
-            setTimeout(() => actualizarBadgeWS('stub'), 0);
+            setTimeout(() => _actualizarBadgeWS('stub'), 0);
         }
         return { on: () => {}, emit: () => {}, connected: false, stub: true };
     }
 
     // Badge inicial mientras intenta conectar
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => actualizarBadgeWS('stub'));
+        document.addEventListener('DOMContentLoaded', () => _actualizarBadgeWS('stub'));
     } else {
-        setTimeout(() => actualizarBadgeWS('stub'), 0);
+        setTimeout(() => _actualizarBadgeWS('stub'), 0);
     }
 
     const socket = io({
@@ -78,62 +80,57 @@ window.rt = (function () {
         reconnectionAttempts: 10,
     });
 
-    let errCount = 0;
+    let _errCount = 0;
 
     socket.on('connect', function () {
         console.info('[realtime] Conectado — ID:', socket.id);
-        errCount = 0;
-        rt.connected = true;
-        // Si el modo offline está activo, no mostrar WS·ON
-        if (window.offlineActivado) {
-            actualizarBadgeWS('offline');
-        } else {
-            actualizarBadgeWS('online');
-        }
+        _errCount = 0;
+        _rt.connected = true;
+        _actualizarBadgeWS('online');
     });
 
     socket.on('disconnect', function (reason) {
         console.warn('[realtime] Desconectado:', reason);
-        rt.connected = false;
-        actualizarBadgeWS('offline');
+        _rt.connected = false;
+        _actualizarBadgeWS('offline');
     });
 
     socket.on('connect_error', function (err) {
-        errCount++;
-        console.warn(`[realtime] Error WS (intento ${errCount}):`, err.message);
-        actualizarBadgeWS(errCount >= 3 ? 'stub' : 'error');
+        _errCount++;
+        console.warn(`[realtime] Error WS (intento ${_errCount}):`, err.message);
+        _actualizarBadgeWS(_errCount >= 3 ? 'stub' : 'error');
     });
 
     // ── Eventos de la capa compartida ────────────────────────────────────────
 
     socket.on('obs_compartido_nuevo', function (data) {
         console.info('[realtime] obs_compartido_nuevo:', data);
-        if (window.capaCompartidaActiva) {
-            recibirObstaculoCompartido(data);
+        if (window._capaCompartidaActiva) {
+            _recibirObstaculoCompartido(data);
         }
     });
 
     socket.on('obs_compartido_eliminado', function (data) {
         console.info('[realtime] obs_compartido_eliminado:', data);
-        if (window.capaCompartidaActiva) {
-            eliminarObstaculoCompartidoLocal(data.id);
+        if (window._capaCompartidaActiva) {
+            _eliminarObstaculoCompartidoLocal(data.id);
         }
     });
 
     socket.on('obs_compartido_actualizado', function (data) {
         console.info('[realtime] obs_compartido_actualizado:', data);
-        if (window.capaCompartidaActiva) {
-            actualizarObstaculoCompartidoLocal(data);
+        if (window._capaCompartidaActiva) {
+            _actualizarObstaculoCompartidoLocal(data);
         }
     });
 
-    const rt = {
+    const _rt = {
         connected: false,
         stub: false,
-        handlers: {},
+        _handlers: {},
         on(evento, handler) {
-            if (!this.handlers[evento]) this.handlers[evento] = [];
-            this.handlers[evento].push(handler);
+            if (!this._handlers[evento]) this._handlers[evento] = [];
+            this._handlers[evento].push(handler);
             socket.on(evento, handler);
         },
         emit(evento, datos) {
@@ -141,7 +138,7 @@ window.rt = (function () {
         },
     };
 
-    return rt;
+    return _rt;
 })();
 
 
@@ -149,26 +146,26 @@ window.rt = (function () {
 
 /**
  * Estado de la capa compartida.
- * obsCompartidosMap: Map<bd_id, obs> — índice para actualizaciones/eliminaciones rápidas.
- * obstaculosPrivadosBackup: copia del array `obstaculos` privado antes de activar la capa.
+ * _obsCompartidosMap: Map<bd_id, obs> — índice para actualizaciones/eliminaciones rápidas.
+ * _obstaculosPrivadosBackup: copia del array `obstaculos` privado antes de activar la capa.
  */
-window.capaCompartidaActiva      = false;
-let obsCompartidosMap            = new Map();  // bd_id -> objeto obs en memoria
-let obstaculosPrivadosBackup     = null;
+window._capaCompartidaActiva      = false;
+let _obsCompartidosMap            = new Map();  // bd_id → objeto obs en memoria
+let _obstaculosPrivadosBackup     = null;
 
 // ── Activar / desactivar ──────────────────────────────────────────────────────
 
 window.toggleCapaCompartida = function () {
-    if (window.capaCompartidaActiva) {
-        cerrarCapaCompartida();
+    if (window._capaCompartidaActiva) {
+        _cerrarCapaCompartida();
     } else {
-        abrirCapaCompartida();
+        _abrirCapaCompartida();
     }
 };
 
-async function abrirCapaCompartida() {
+async function _abrirCapaCompartida() {
     // Solo usuarios registrados/admin
-    const rol = window.userRol || 'invitado';
+    const rol = window._userRol || 'invitado';
     if (rol === 'invitado') {
         showNotification('Inicia sesión para acceder a la capa compartida', 'warning');
         return;
@@ -177,7 +174,7 @@ async function abrirCapaCompartida() {
     showNotification('⏳ Cargando capa compartida…', 'info');
 
     // 1. Hacer backup de los obstáculos privados y limpiar el mapa
-    obstaculosPrivadosBackup = obstaculos.slice();
+    _obstaculosPrivadosBackup = obstaculos.slice();
     limpiarObstaculos();   // limpia el array global y el mapa
 
     // 2. Cargar obstáculos compartidos desde BD
@@ -186,16 +183,16 @@ async function abrirCapaCompartida() {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || r.status);
 
-        window.capaCompartidaActiva = true;
-        obsCompartidosMap.clear();
+        window._capaCompartidaActiva = true;
+        _obsCompartidosMap.clear();
 
         // Pintar cada obstáculo compartido
         for (const obs of (data.obstaculos || [])) {
-            recibirObstaculoCompartido(obs);
+            _recibirObstaculoCompartido(obs);
         }
 
         // 3. Activar indicador visual en el botón
-        actualizarBotonCompartida(true);
+        _actualizarBotonCompartida(true);
 
         showNotification(
             `🚧 Capa compartida activa — ${data.obstaculos.length} obstáculo(s)`,
@@ -203,43 +200,39 @@ async function abrirCapaCompartida() {
         );
     } catch (err) {
         // Restaurar privados si falla
-        obstaculos = obstaculosPrivadosBackup || [];
-        obstaculosPrivadosBackup = null;
+        obstaculos = _obstaculosPrivadosBackup || [];
+        _obstaculosPrivadosBackup = null;
         showNotification('Error al cargar capa compartida: ' + err.message, 'error');
     }
 }
 
-function cerrarCapaCompartida() {
+function _cerrarCapaCompartida() {
     // 1. Limpiar obstáculos compartidos del mapa
     limpiarObstaculos();
-    obsCompartidosMap.clear();
+    _obsCompartidosMap.clear();
 
-    window.capaCompartidaActiva = false;
+    window._capaCompartidaActiva = false;
 
     // 2. Restaurar obstáculos privados
-    if (obstaculosPrivadosBackup) {
-        for (const obs of obstaculosPrivadosBackup.filter(Boolean)) {
+    if (_obstaculosPrivadosBackup) {
+        for (const obs of _obstaculosPrivadosBackup.filter(Boolean)) {
             // Re-pintar cada obstáculo privado
             crearObstaculo(obs.latlng, obs.obstruccion, obs.obsId, obs.portal || '');
         }
-        obstaculosPrivadosBackup = null;
+        _obstaculosPrivadosBackup = null;
     }
 
-    actualizarBotonCompartida(false);
+    _actualizarBotonCompartida(false);
     showNotification('Capa compartida cerrada — modo privado', 'info');
 }
 
 // ── Pintar obstáculo compartido recibido por WS o carga inicial ──────────────
 
-function parseLon(data) {
-    return data.lon !== undefined ? data.lon : data.lng;
-}
-
-function recibirObstaculoCompartido(data) {
+function _recibirObstaculoCompartido(data) {
     // Evitar duplicados (el emisor también recibe su propio evento)
-    if (obsCompartidosMap.has(data.id)) return;
+    if (_obsCompartidosMap.has(data.id)) return;
 
-    const latlng     = L.latLng(data.lat, parseLon(data));
+    const latlng     = L.latLng(data.lat, data.lng);
     const obstruccion = data.porcentaje / 100;
 
     // Usar crearObstaculo normal — el monkey-patch de más abajo redirigirá
@@ -247,15 +240,15 @@ function recibirObstaculoCompartido(data) {
     const idxAntes = obstaculos.length;
 
     // Marcador y círculo directamente (evitamos que crearObstaculo emita WS de vuelta)
-    crearObstaculoLocalSilencioso(latlng, obstruccion, data.obs_id, data.portal, data.id);
+    _crearObstaculoLocalSilencioso(latlng, obstruccion, data.obs_id, data.portal, data.id);
 }
 
 /**
  * Crea el obstáculo en el mapa SIN emitir por WebSocket.
  * Se usa para los obstáculos recibidos del servidor.
  */
-function crearObstaculoLocalSilencioso(latlng, obstruccion, obsId, portal, bdId) {
-    const color  = colorObs(obstruccion);
+function _crearObstaculoLocalSilencioso(latlng, obstruccion, obsId, portal, bdId) {
+    const color  = _colorObs(obstruccion);
     const marker = L.marker(latlng, {
         icon: L.divIcon({
             className: 'marker-obstaculo',
@@ -268,7 +261,7 @@ function crearObstaculoLocalSilencioso(latlng, obstruccion, obsId, portal, bdId)
         radius: 5, color, fillColor: color, fillOpacity: 0.25, weight: 2
     }).addTo(map);
 
-    const segmentosBloqueados = segmentosViasEnRadio(latlng, 5).map(({ p1, p2 }) =>
+    const segmentosBloqueados = _segmentosViasEnRadio(latlng, 5).map(({ p1, p2 }) =>
         L.polyline([p1, p2], {
             color, weight: 6, opacity: 1, dashArray: '10, 10', className: 'via-bloqueada'
         }).addTo(map)
@@ -278,39 +271,39 @@ function crearObstaculoLocalSilencioso(latlng, obstruccion, obsId, portal, bdId)
     const obs = {
         obsId, marker, circulo, latlng, obstruccion,
         segmentosBloqueados, portal: portal || '',
-        bdId: bdId,        // id en BD — necesario para WS emit al editar/eliminar
-        compartido: true,  // flag para que el monkey-patch sepa que es compartido
+        _bdId: bdId,        // id en BD — necesario para WS emit al editar/eliminar
+        _compartido: true,  // flag para que el monkey-patch sepa que es compartido
     };
     obstaculos.push(obs);
-    obsCompartidosMap.set(bdId, obs);
+    _obsCompartidosMap.set(bdId, obs);
 
-    marker.bindPopup(popupHTML(idx), { maxWidth: 230 });
-    marker.on('popupclose', () => aplicarPctPopup(idx));
+    marker.bindPopup(_popupHTML(idx), { maxWidth: 230 });
+    marker.on('popupclose', () => _aplicarPctPopup(idx));
 
-    actualizarListaObstaculos();
+    _actualizarListaObstaculos();
     if (typeof window.refrescarTablaObstaculosSiAbierta === 'function')
         window.refrescarTablaObstaculosSiAbierta();
 }
 
 // ── Recibir actualización de posición/porcentaje ──────────────────────────────
 
-function actualizarObstaculoCompartidoLocal(data) {
-    const obs = obsCompartidosMap.get(data.id);
+function _actualizarObstaculoCompartidoLocal(data) {
+    const obs = _obsCompartidosMap.get(data.id);
     if (!obs) {
         // Obstáculo que no tenemos (puede que llegara mientras no estábamos suscritos)
-        recibirObstaculoCompartido(data);
+        _recibirObstaculoCompartido(data);
         return;
     }
     // Actualizar posición si cambió
-    if (data.lat !== undefined && (data.lon !== undefined || data.lng !== undefined)) {
-        const nuevaLatlng = L.latLng(data.lat, parseLon(data));
+    if (data.lat !== undefined && data.lng !== undefined) {
+        const nuevaLatlng = L.latLng(data.lat, data.lng);
         obs.latlng = nuevaLatlng;
         obs.marker.setLatLng(nuevaLatlng);
         if (obs.circulo) obs.circulo.setLatLng(nuevaLatlng);
         obs.segmentosBloqueados?.forEach(s => map.removeLayer(s));
-        obs.segmentosBloqueados = segmentosViasEnRadio(nuevaLatlng, 5).map(({ p1, p2 }) =>
+        obs.segmentosBloqueados = _segmentosViasEnRadio(nuevaLatlng, 5).map(({ p1, p2 }) =>
             L.polyline([p1, p2], {
-                color: colorObs(obs.obstruccion), weight: 6, opacity: 1,
+                color: _colorObs(obs.obstruccion), weight: 6, opacity: 1,
                 dashArray: '10, 10', className: 'via-bloqueada'
             }).addTo(map)
         );
@@ -318,17 +311,17 @@ function actualizarObstaculoCompartidoLocal(data) {
     // Actualizar porcentaje si cambió
     if (data.porcentaje !== undefined) {
         obs.obstruccion = data.porcentaje / 100;
-        const color = colorObs(obs.obstruccion);
+        const color = _colorObs(obs.obstruccion);
         obs.circulo?.setStyle({ color, fillColor: color });
         obs.segmentosBloqueados?.forEach(s => s.setStyle({ color }));
     }
-    actualizarListaObstaculos();
+    _actualizarListaObstaculos();
 }
 
 // ── Eliminar obstáculo compartido recibido por WS ────────────────────────────
 
-function eliminarObstaculoCompartidoLocal(bdId) {
-    const obs = obsCompartidosMap.get(bdId);
+function _eliminarObstaculoCompartidoLocal(bdId) {
+    const obs = _obsCompartidosMap.get(bdId);
     if (!obs) return;
     const idx = obstaculos.indexOf(obs);
     if (idx !== -1) {
@@ -338,15 +331,15 @@ function eliminarObstaculoCompartidoLocal(bdId) {
         obs.segmentosBloqueados?.forEach(s => map.removeLayer(s));
         obstaculos[idx] = null;
     }
-    obsCompartidosMap.delete(bdId);
-    actualizarListaObstaculos();
+    _obsCompartidosMap.delete(bdId);
+    _actualizarListaObstaculos();
     if (typeof window.refrescarTablaObstaculosSiAbierta === 'function')
         window.refrescarTablaObstaculosSiAbierta();
 }
 
 // ── Visual del botón ──────────────────────────────────────────────────────────
 
-function actualizarBotonCompartida(activo) {
+function _actualizarBotonCompartida(activo) {
     const btn = document.getElementById('btn-capa-compartida');
     if (!btn) return;
     if (activo) {
@@ -365,98 +358,95 @@ function actualizarBotonCompartida(activo) {
 // ==================== MONKEY-PATCH DE crearObstaculo / eliminarObstaculo ====================
 /**
  * Cuando la capa compartida está activa, interceptamos crearObstaculo,
- * eliminarObstaculo y moverObstaculoA para emitir los eventos WS
+ * eliminarObstaculo y _moverObstaculoA para emitir los eventos WS
  * y asignar el bdId al obstáculo recién creado.
  */
 
-(function parchearObstaculos() {
-    function intentar() {
+(function _parchearObstaculos() {
+    function _intentar() {
         if (typeof crearObstaculo !== 'function' || typeof eliminarObstaculo !== 'function') {
-            setTimeout(intentar, 150);
+            setTimeout(_intentar, 150);
             return;
         }
 
         // ── crearObstaculo ──
-        const origCrear = crearObstaculo;
+        const _origCrear = crearObstaculo;
         window.crearObstaculo = function (latlng, obstruccion, obsId, portal) {
-            if (!window.capaCompartidaActiva) {
-                return origCrear.apply(this, arguments);
+            if (!window._capaCompartidaActiva) {
+                return _origCrear.apply(this, arguments);
             }
             // Emitir al servidor; el servidor responde con obs_compartido_nuevo
             // que incluirá el bdId. Mientras tanto creamos localmente con bdId=null
             // y lo actualizamos cuando llegue la confirmación.
-            rt.emit('obs_compartido_crear', {
+            _rt.emit('obs_compartido_crear', {
                 obs_id:     obsId || null,
                 lat:        latlng.lat,
-                lon:        latlng.lng,
                 lng:        latlng.lng,
                 porcentaje: Math.round(obstruccion * 100),
                 portal:     portal || '',
             });
-            // La creación visual la hace recibirObstaculoCompartido cuando
+            // La creación visual la hace _recibirObstaculoCompartido cuando
             // el servidor nos devuelve obs_compartido_nuevo (incluido a nosotros mismos)
         };
 
         // ── eliminarObstaculo ──
-        const origEliminar = eliminarObstaculo;
+        const _origEliminar = eliminarObstaculo;
         window.eliminarObstaculo = function (index) {
-            if (!window.capaCompartidaActiva) {
-                return origEliminar.apply(this, arguments);
+            if (!window._capaCompartidaActiva) {
+                return _origEliminar.apply(this, arguments);
             }
             const obs = obstaculos[index];
             if (!obs) return;
-            if (obs.bdId) {
+            if (obs._bdId) {
                 // Emitir al servidor; la eliminación visual la gestiona obs_compartido_eliminado
-                rt.emit('obs_compartido_eliminar', { id: obs.bdId });
+                _rt.emit('obs_compartido_eliminar', { id: obs._bdId });
             } else {
                 // Sin bdId (raro): eliminar solo localmente
-                origEliminar.apply(this, arguments);
+                _origEliminar.apply(this, arguments);
             }
         };
 
         // ── limpiarObstaculos ──
-        const origLimpiar = limpiarObstaculos;
+        const _origLimpiar = limpiarObstaculos;
         window.limpiarObstaculos = function () {
-            if (!window.capaCompartidaActiva) {
-                return origLimpiar.apply(this, arguments);
+            if (!window._capaCompartidaActiva) {
+                return _origLimpiar.apply(this, arguments);
             }
             // Emitir eliminación de cada obstáculo compartido
             obstaculos.filter(Boolean).forEach(obs => {
-                if (obs.bdId) rt.emit('obs_compartido_eliminar', { id: obs.bdId });
+                if (obs._bdId) _rt.emit('obs_compartido_eliminar', { id: obs._bdId });
             });
             // Limpiar visualmente de inmediato (no esperamos confirmación WS)
-            origLimpiar.apply(this, arguments);
-            obsCompartidosMap.clear();
+            _origLimpiar.apply(this, arguments);
+            _obsCompartidosMap.clear();
         };
 
-        // ── moverObstaculoA ──
-        const origMover = window.moverObstaculoA || function(){};
-        window.moverObstaculoA = function (idx, nuevaLatlng) {
-            origMover.apply(this, arguments);
-            if (!window.capaCompartidaActiva) return;
+        // ── _moverObstaculoA ──
+        const _origMover = window._moverObstaculoA || function(){};
+        window._moverObstaculoA = function (idx, nuevaLatlng) {
+            _origMover.apply(this, arguments);
+            if (!window._capaCompartidaActiva) return;
             const obs = obstaculos[idx];
-            if (!obs || !obs.bdId) return;
-            rt.emit('obs_compartido_mover', {
-                id:         obs.bdId,
+            if (!obs || !obs._bdId) return;
+            _rt.emit('obs_compartido_mover', {
+                id:         obs._bdId,
                 lat:        nuevaLatlng.lat,
-                lon:        nuevaLatlng.lng,
                 lng:        nuevaLatlng.lng,
                 porcentaje: Math.round((obs.obstruccion || 0.5) * 100),
                 portal:     obs.portal || '',
             });
         };
 
-        // ── aplicarPctPopup (cambio de % desde popup) ──
-        const origAplicarPct = window.aplicarPctPopup || function(){};
-        window.aplicarPctPopup = function (idx) {
-            origAplicarPct.apply(this, arguments);
-            if (!window.capaCompartidaActiva) return;
+        // ── _aplicarPctPopup (cambio de % desde popup) ──
+        const _origAplicarPct = window._aplicarPctPopup || function(){};
+        window._aplicarPctPopup = function (idx) {
+            _origAplicarPct.apply(this, arguments);
+            if (!window._capaCompartidaActiva) return;
             const obs = obstaculos[idx];
-            if (!obs || !obs.bdId) return;
-            rt.emit('obs_compartido_mover', {
-                id:         obs.bdId,
+            if (!obs || !obs._bdId) return;
+            _rt.emit('obs_compartido_mover', {
+                id:         obs._bdId,
                 lat:        obs.latlng.lat,
-                lon:        obs.latlng.lng,
                 lng:        obs.latlng.lng,
                 porcentaje: Math.round((obs.obstruccion || 0.5) * 100),
                 portal:     obs.portal || '',
@@ -465,5 +455,5 @@ function actualizarBotonCompartida(activo) {
 
         console.log('[realtime] ✅ Obstáculos parcheados para capa compartida.');
     }
-    setTimeout(intentar, 200);
+    setTimeout(_intentar, 200);
 })();

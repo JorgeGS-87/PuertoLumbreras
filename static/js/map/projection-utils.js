@@ -8,14 +8,14 @@
  * (que trabaja en WGS84) las trata directamente sin conversión adicional.
  *
  * Si el servidor devuelve datos en coordenadas proyectadas (UTM zona 30 / EPSG:25830)
- * la función reproyectarGeoJSON se encarga de transformarlos a EPSG:4258 para
+ * la función _reprojectGeoJSON se encarga de transformarlos a EPSG:4258 para
  * su uso en el mapa.
  */
 
 // ── Definiciones proj4 ──────────────────────────────────────────────────────
 
 /** Registra EPSG:4258 (ETRS89 geográfico) en proj4 */
-function registrarETRS89() {
+function _registrarETRS89() {
     try {
         proj4.defs(
             "EPSG:4258",
@@ -25,7 +25,7 @@ function registrarETRS89() {
 }
 
 /** Registra EPSG:25830 (UTM zona 30N / ETRS89) en proj4 */
-function registrarUTM30() {
+function _registrarUTM30() {
     try {
         proj4.defs(
             "EPSG:25830",
@@ -36,8 +36,7 @@ function registrarUTM30() {
 
 // ── Detección ────────────────────────────────────────────────────────────────
 
-// Extrae un par de coordenadas [x, y] de ejemplo de un GeoJSON, o null si no encuentra.
-function CoordEjemplo(geojson) {
+function _findSampleCoord(geojson) {
     if (!geojson || !Array.isArray(geojson.features)) return null;
     for (const f of geojson.features) {
         if (!f || !f.geometry || !f.geometry.coordinates) continue;
@@ -52,8 +51,8 @@ function CoordEjemplo(geojson) {
  * Detecta si el GeoJSON está en coordenadas proyectadas (métricas).
  * Valores > 10 000 en cualquier eje indican UTM u otra proyección plana.
  */
-function puedeUTM(geojson) {
-    const sample = CoordEjemplo(geojson);
+function _isLikelyProjected(geojson) {
+    const sample = _findSampleCoord(geojson);
     if (!sample) return false;
     const [a, b] = sample.map(Math.abs);
     return a > 10000 || b > 10000;
@@ -65,34 +64,34 @@ function puedeUTM(geojson) {
  * Transforma un GeoJSON de EPSG:25830 (UTM 30N / ETRS89) a EPSG:4258
  * (ETRS89 geográfico), que Leaflet puede renderizar directamente.
  *
- * Sustituye a la antigua función reproyectarGeoJSON_25830To4326.
+ * Sustituye a la antigua función _reprojectGeoJSONFrom25830To4326.
  * El resultado es semánticamente EPSG:4258; a efectos prácticos sus
  * valores numéricos son idénticos a EPSG:4326 en la Península Ibérica.
  */
-function reproyectarGeoJSON(geojson) {
-    registrarETRS89();
-    registrarUTM30();
+function _reprojectGeoJSON(geojson) {
+    _registrarETRS89();
+    _registrarUTM30();
 
-    const sistOrigen = "EPSG:25830";
-    const sistDestino = "EPSG:4258";   // ← ETRS89 geográfico (proyecto)
+    const src = "EPSG:25830";
+    const dst = "EPSG:4258";   // ← ETRS89 geográfico (proyecto)
 
-    function recorrerCoord(coords) {
+    function walk(coords) {
         if (typeof coords[0] === 'number') {
             const [x, y] = coords;
-            const [lon, lat] = proj4(sistOrigen, sistDestino, [x, y]);
+            const [lon, lat] = proj4(src, dst, [x, y]);
             return [lon, lat];
         }
-        return coords.map(recorrerCoord);
+        return coords.map(walk);
     }
 
-    const copia = JSON.parse(JSON.stringify(geojson));
-    for (const f of copia.features) {
+    const clone = JSON.parse(JSON.stringify(geojson));
+    for (const f of clone.features) {
         if (f && f.geometry && f.geometry.coordinates) {
-            f.geometry.coordinates = recorrerCoord(f.geometry.coordinates);
+            f.geometry.coordinates = walk(f.geometry.coordinates);
         }
     }
-    return copia;
+    return clone;
 }
 
 // Alias de compatibilidad — layer-manager.js llama a la función antigua
-const reproyectarGeoJSON_25830To4326 = reproyectarGeoJSON;
+const _reprojectGeoJSONFrom25830To4326 = _reprojectGeoJSON;

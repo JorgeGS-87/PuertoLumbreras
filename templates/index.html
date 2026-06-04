@@ -154,7 +154,7 @@
                 <span id="user-name">Invitado</span>
                 <span id="user-rol-badge" class="user-rol-badge">invitado</span>
             </div>
-            <button onclick="botonSalir()" title="Cerrar sesión" class="btn-logout">
+            <button onclick="cerrarSesion()" title="Cerrar sesión" class="btn-logout">
                 ⏻ Salir
             </button>
         </div>
@@ -178,8 +178,6 @@
             </svg>
         </button>
         <button class="side-bar-item"        id="tab-momento" data-title="Momento" onclick="selectLeftTab('momento')">⏱️</button>
-        <div style="flex:1"></div>
-        <button class="side-bar-item" id="tab-info" data-title="Información / Créditos" onclick="selectLeftTab('info')" style="margin-bottom:12px; opacity:0.7; font-size:20px; font-weight:700; font-style:italic; font-family:Georgia,serif;">ℹ</button>
     </nav>
 
 
@@ -325,46 +323,6 @@
 
                 </div>
 
-                <!-- ── Sección Info ── -->
-                <div id="info-section" style="display:none;">
-                    <h3 style="margin-bottom:20px; font-size:14px; color:#2c3e50; padding-bottom:8px; border-bottom:2px solid #3498db;">
-                        ℹ️ Información
-                    </h3>
-
-                    <!-- Pestañas -->
-                    <div style="display:flex; border-bottom:1px solid #e8ecf0; margin-bottom:16px; gap:2px;">
-                        <button class="info-panel-tab active" data-tab="contacto" onclick="switchInfoPanelTab(this)"
-                            style="flex:1; padding:8px 4px; background:none; border:none; border-bottom:2px solid #3498db;
-                                   color:#2c3e50; font-size:12px; font-weight:600; cursor:pointer;">
-                            📬 Contacto
-                        </button>
-                        <button class="info-panel-tab" data-tab="documentacion" onclick="switchInfoPanelTab(this)"
-                            style="flex:1; padding:8px 4px; background:none; border:none; border-bottom:2px solid transparent;
-                                   color:#95a5a6; font-size:12px; cursor:pointer;">
-                            📖 Docs
-                        </button>
-                        <button class="info-panel-tab" data-tab="creditos" onclick="switchInfoPanelTab(this)"
-                            style="flex:1; padding:8px 4px; background:none; border:none; border-bottom:2px solid transparent;
-                                   color:#95a5a6; font-size:12px; cursor:pointer;">
-                            ⭐ Créditos
-                        </button>
-                    </div>
-
-                    <!-- Contenidos -->
-                    <div id="info-panel-contacto">
-                        <!-- Aquí irá el contenido de Contacto -->
-                        <p style="font-size:13px; color:#95a5a6; font-style:italic;">Contenido de Contacto pendiente de añadir.</p>
-                    </div>
-                    <div id="info-panel-documentacion" style="display:none;">
-                        <!-- Aquí irá el contenido de Documentación -->
-                        <p style="font-size:13px; color:#95a5a6; font-style:italic;">Contenido de Documentación pendiente de añadir.</p>
-                    </div>
-                    <div id="info-panel-creditos" style="display:none;">
-                        <!-- Aquí irán los Créditos -->
-                        <p style="font-size:13px; color:#95a5a6; font-style:italic;">Contenido de Créditos pendiente de añadir.</p>
-                    </div>
-                </div>
-
                 <!-- ── Sección Momento ── -->
                 <div class="momento-section" id="momento-section" style="display: none;">
                     <h3 style="margin-bottom: 20px; font-size: 14px; color: #2c3e50; padding-bottom: 8px; border-bottom: 2px solid #3498db">
@@ -376,7 +334,7 @@
                         <label style="display: block; font-size: 13px; color: #2c3e50; margin-bottom: 8px; font-weight: 600;">
                             📅 Día de la semana
                         </label>
-                        <select id="select-dia" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #dfe6e9; font-size: 14px; background: white;" onchange="if(window.estadoTemporal) { window.estadoTemporal.dia = parseInt(this.value); if(typeof actualizarDisplayHora === 'function') actualizarDisplayHora(); clearTimeout(window.simDebounce); window.simDebounce = setTimeout(function(){ if(window.estadoTemporal && window.estadoTemporal.activo && typeof aplicarSimulacionTemporal === 'function') aplicarSimulacionTemporal(); }, 300); }">
+                        <select id="select-dia" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #dfe6e9; font-size: 14px; background: white;" onchange="if(window.estadoTemporal) { window.estadoTemporal.dia = parseInt(this.value); if(typeof actualizarDisplayHora === 'function') actualizarDisplayHora(); clearTimeout(window._simDebounce); window._simDebounce = setTimeout(function(){ if(window.estadoTemporal && window.estadoTemporal.activo && typeof aplicarSimulacionTemporal === 'function') aplicarSimulacionTemporal(); }, 300); }">
                             <option value="1">Lunes</option>
                             <option value="2">Martes</option>
                             <option value="3">Miércoles</option>
@@ -412,8 +370,8 @@
                             step="0.25" 
                             value="12"
                             style="width: 100%; height: 8px; border-radius: 5px; background: linear-gradient(to right, #34495e 0%, #3498db 25%, #f39c12 50%, #e74c3c 75%, #34495e 100%); outline: none; cursor: pointer;"
-                            oninput="if(window.estadoTemporal) { window.estadoTemporal.hora = parseFloat(this.value); if(typeof actualizarDisplayHora === 'function') actualizarDisplayHora(); clearTimeout(window.simDebounce); window.simDebounce = setTimeout(function(){ if(window.estadoTemporal && window.estadoTemporal.activo && typeof aplicarSimulacionTemporal === 'function') aplicarSimulacionTemporal(); }, 400); }"
-                            onchange="if(window.estadoTemporal) { window.estadoTemporal.hora = parseFloat(this.value); if(typeof actualizarDisplayHora === 'function') actualizarDisplayHora(); clearTimeout(window.simDebounce); window.simDebounce = setTimeout(function(){ if(window.estadoTemporal && window.estadoTemporal.activo && typeof aplicarSimulacionTemporal === 'function') aplicarSimulacionTemporal(); }, 400); }">
+                            oninput="if(window.estadoTemporal) { window.estadoTemporal.hora = parseFloat(this.value); if(typeof actualizarDisplayHora === 'function') actualizarDisplayHora(); clearTimeout(window._simDebounce); window._simDebounce = setTimeout(function(){ if(window.estadoTemporal && window.estadoTemporal.activo && typeof aplicarSimulacionTemporal === 'function') aplicarSimulacionTemporal(); }, 400); }"
+                            onchange="if(window.estadoTemporal) { window.estadoTemporal.hora = parseFloat(this.value); if(typeof actualizarDisplayHora === 'function') actualizarDisplayHora(); clearTimeout(window._simDebounce); window._simDebounce = setTimeout(function(){ if(window.estadoTemporal && window.estadoTemporal.activo && typeof aplicarSimulacionTemporal === 'function') aplicarSimulacionTemporal(); }, 400); }">
                         
                         <!-- Marcadores de hora -->
                         <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 10px; color: #7f8c8d;">
@@ -518,7 +476,7 @@
                 </div>
 
                 <!-- Dropdown opciones de emergencia (visible solo cuando emergencia está activa) -->
-                <div id="emergencia-opciones-lista" style="display:none;
+                <div id="emergencia-opciones-dropdown" style="display:none;
                     background:#fff3f3;border:1px solid #e74c3c;border-radius:8px;
                     padding:8px 12px;margin:4px 0 2px;font-size:12px;">
                     <div style="font-size:11px;font-weight:700;color:#c0392b;margin-bottom:7px;
@@ -685,194 +643,8 @@
          position:fixed no quede atrapado en el stacking context del mapa -->
     <div class="map-controls" id="map-controls">
         <button class="control-btnHome" onclick="resetView()" title="Vista inicial">🏠</button>
-        <button class="control-btnHome" id="btn-capas-base" title="Capas base" onclick="toggleCapasBasePanel()">🗺️</button>
-        <button class="control-btnHome" id="btn-capa-compartida" title="Abrir capa de obstáculos compartida" onclick="window.toggleCapaCompartida && window.toggleCapaCompartida()">🚧</button>
+        <button class="control-btnHome" id="btn-capas-base" title="Capas base">🗺️</button>
     </div>
-
-    <!-- Panel selector de capas base -->
-    <div id="capas-base-panel" style="
-        display: none;
-        position: fixed;
-        bottom: 80px;
-        right: 16px;
-        background: #fff;
-        border-radius: 12px;
-        box-shadow: 0 6px 24px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10);
-        z-index: 2000;
-        min-width: 210px;
-        font-family: 'Segoe UI', system-ui, sans-serif;
-        overflow: hidden;
-        border: 1px solid #e0e0e0;">
-        <div style="padding: 10px 14px 8px; border-bottom: 1px solid #f0f0f0;
-                    font-size: 12px; font-weight: 700; color: #2c3e50;
-                    letter-spacing: 0.05em; text-transform: uppercase;">
-            🗺️ Capa base
-        </div>
-        <div id="capas-base-lista" style="padding: 6px 0;">
-            <!-- Las opciones se generan con JS -->
-        </div>
-    </div>
-
-    <script>
-    // ── Definición de capas base disponibles ─────────────────────────────────
-    var CAPAS_BASE = [
-        {
-            id:    'osm',
-            label: '🗺️ OpenStreetMap',
-            url:   'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            attr:  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 19
-        },
-        {
-            id:    'topo',
-            label: '🏔️ OpenTopoMap',
-            url:   'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-            attr:  '© <a href="https://opentopomap.org">OpenTopoMap</a> contributors',
-            maxZoom: 17
-        },
-        {
-            id:    'satellite',
-            label: '🛰️ Satélite (ESRI)',
-            url:   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            attr:  'Tiles © Esri — Source: Esri, USGS, NOAA',
-            maxZoom: 19
-        },
-        {
-            id:    'hybrid',
-            label: '🛰️ Híbrido (ESRI)',
-            url:   'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-            attr:  'Tiles © Esri',
-            maxZoom: 19,
-            overlay: true  // se superpone sobre satélite
-        },
-        {
-            id:    'carto-light',
-            label: '☀️ CartoDB Claro',
-            url:   'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-            attr:  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
-            maxZoom: 19
-        },
-        {
-            id:    'carto-dark',
-            label: '🌑 CartoDB Oscuro',
-            url:   'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-            attr:  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
-            maxZoom: 19
-        },
-        {
-            id:    'stamen-terrain',
-            label: '🌿 Stamen Terrain',
-            url:   'https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png',
-            attr:  '© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://stamen.com/">Stamen Design</a>',
-            maxZoom: 18
-        },
-        {
-            id:    'watercolor',
-            label: '🎨 Stamen Acuarela',
-            url:   'https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg',
-            attr:  '© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://stamen.com/">Stamen Design</a>',
-            maxZoom: 16
-        },
-        {
-            id:    'cycle',
-            label: '🚴 OpenCycleMap',
-            url:   'https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png',
-            attr:  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 17
-        },
-        {
-            id:    'none',
-            label: '⬜ Sin capa base',
-            url:   null,
-            attr:  '',
-            maxZoom: 22
-        }
-    ];
-
-    var capaBaseActual = null;   // referencia a la capa Leaflet activa
-    var capaBaseId     = 'osm';  // ID de la seleccionada
-
-    // Renderiza los botones del panel
-    function renderCapasBase() {
-        var lista = document.getElementById('capas-base-lista');
-        if (!lista) return;
-        lista.innerHTML = CAPAS_BASE.map(function(c) {
-            var activa = c.id === capaBaseId;
-            return '<button onclick="seleccionarCapaBase(\'' + c.id + '\')" style="\
-                display:block;width:100%;text-align:left;border:none;background:' +
-                (activa ? '#eaf3fb' : 'transparent') + ';\
-                padding:8px 16px;font-size:13px;color:' + (activa ? '#2980b9' : '#2c3e50') + ';\
-                font-weight:' + (activa ? '700' : '400') + ';\
-                cursor:pointer;transition:background 0.1s;\
-                border-left:3px solid ' + (activa ? '#3498db' : 'transparent') + ';\
-                " onmouseover="if(\'' + c.id + '\'!==_capaBaseId)this.style.background=\'#f5f7fa\'" \
-                   onmouseout="if(\'' + c.id + '\'!==_capaBaseId)this.style.background=\'transparent\'">\
-                ' + c.label + '</button>';
-        }).join('');
-    }
-
-    // Abre/cierra el panel
-    function toggleCapasBasePanel() {
-        var panel = document.getElementById('capas-base-panel');
-        if (!panel) return;
-        var visible = panel.style.display !== 'none';
-        panel.style.display = visible ? 'none' : 'block';
-        if (!visible) renderCapasBase();
-    }
-
-    // Cierra el panel al hacer clic fuera de él
-    document.addEventListener('click', function(e) {
-        var panel = document.getElementById('capas-base-panel');
-        var btn   = document.getElementById('btn-capas-base');
-        if (panel && panel.style.display !== 'none') {
-            if (!panel.contains(e.target) && e.target !== btn) {
-                panel.style.display = 'none';
-            }
-        }
-    });
-
-    // Cambia la capa base en el mapa Leaflet
-    function seleccionarCapaBase(id) {
-        capaBaseId = id;
-        renderCapasBase();
-
-        // Esperar a que window.map esté disponible (definido en map-config.js)
-        var intentos = 0;
-        function aplicar() {
-            if (!window.map) {
-                if  (intentos++ < 40) setTimeout (aplicar, 250);
-                return;
-            }
-            // Eliminar capa base anterior
-            if  (capaBaseActual) {
-                window.map.removeLayer (capaBaseActual);
-                capaBaseActual = null;
-            }
-            var def = CAPAS_BASE.find(function(c) { return c.id === id; });
-            if (!def || !def.url) return; // "Sin capa base"
-
-            capaBaseActual = L.tileLayer(def.url, {
-                attribution: def.attr,
-                maxZoom:     def.maxZoom || 19,
-                subdomains:  'abc'
-            }).addTo(window.map);
-
-            // Asegurarse de que quede por debajo de las capas vectoriales
-            capaBaseActual.setZIndex(0);
-        }
-        aplicar();
-        document.getElementById('capas-base-panel').style.display = 'none';
-    }
-
-    // Hook: cuando map-config.js crea el mapa, reemplazar su capa base inicial
-    // por la seleccionada aquí (por defecto OSM, igual que antes).
-    // Si map-config.js ya usa OSM no hay conflicto; si usa otra, esta la gestiona.
-    window.addEventListener('load', function() {
-        setTimeout(function() {
-            if (window.map && capaBaseId) seleccionarCapaBase (capaBaseId);
-        }, 800);
-    });
-    </script>
 
     <div id="notification" class="notification" style="display:none;"></div>
 
@@ -1531,7 +1303,7 @@
          para pois-controles-registrado (visible con rol registrado o admin). -->
     <script>
     (function() {
-        function sincronizarControlesPoi(rol) {
+        function _sincronizarControlesPoi(rol) {
             const el = document.getElementById('pois-controles-registrado');
             if (!el) return;
             el.style.display = (rol === 'registrado' || rol === 'admin') ? '' : 'none';
@@ -1541,39 +1313,33 @@
         // Detectar rol inicial desde la API (se llama al cargar la página)
         fetch('/api/auth/me')
             .then(r => r.json())
-            .then(data => {
-                window.userRol = data.rol || 'invitado';
-                sincronizarControlesPoi(window.userRol);
-            })
+            .then(data => _sincronizarControlesPoi(data.rol || 'invitado'))
             .catch(() => {});
 
         // Parchear las funciones globales que auth.js expone para actualizar la UI
         // cuando el usuario inicia/cierra sesión.
-        const hookFn = function(original) {
+        const _hookFn = function(original) {
             return function() {
                 const ret = original.apply(this, arguments);
                 fetch('/api/auth/me')
                     .then(r => r.json())
-                    .then(data => {
-                        window.userRol = data.rol || 'invitado';
-                        sincronizarControlesPoi(window.userRol);
-                    })
+                    .then(data => _sincronizarControlesPoi(data.rol || 'invitado'))
                     .catch(() => {});
                 return ret;
             };
         };
 
         // Esperar a que auth.js defina las funciones y entonces parchearlas
-        const waitAuth = setInterval(function() {
+        const _waitAuth = setInterval(function() {
             if (typeof window.entrar === 'function' || typeof window.cerrarSesion === 'function') {
-                clearInterval (waitAuth);
-                if (typeof window.entrar       === 'function') window.entrar       = hookFn(window.entrar);
-                if (typeof window.cerrarSesion === 'function') window.cerrarSesion = hookFn(window.cerrarSesion);
+                clearInterval(_waitAuth);
+                if (typeof window.entrar       === 'function') window.entrar       = _hookFn(window.entrar);
+                if (typeof window.cerrarSesion === 'function') window.cerrarSesion = _hookFn(window.cerrarSesion);
                 // También parchear abrirModalRegistro por si se llama directamente
                 if (typeof window.abrirModalRegistro === 'function') {
-                    const orig = window.abrirModalRegistro;
+                    const _orig = window.abrirModalRegistro;
                     window.abrirModalRegistro = function() {
-                        const ret = orig.apply(this, arguments);
+                        const ret = _orig.apply(this, arguments);
                         fetch('/api/auth/me').then(r=>r.json()).then(d=>_sincronizarControlesPoi(d.rol||'invitado')).catch(()=>{});
                         return ret;
                     };
@@ -1581,90 +1347,6 @@
             }
         }, 150);
     })();
-    </script>
-
-    <!-- Lógica del botón Salir:
-         - Si el usuario está autenticado con cuenta real -> cierra sesión y pasa a invitado
-         - Si ya es invitado -> redirige al login -->
-    <script>
-    async function botonSalir() {
-        try {
-            const r    = await fetch('/api/auth/me');
-            const data = await r.json();
-            const esInvitado = data.invitado === true || data.rol === 'invitado';
-
-            if (esInvitado) {
-                // Ya es invitado -> ir al login
-                window.location.href = '/login';
-            } else {
-                // Tiene sesión real -> cerrar sesión y reconvertir a invitado
-                await fetch('/api/auth/salir', { method: 'POST' });
-                await fetch('/api/auth/entrar', {
-                    method:  'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body:    JSON.stringify({ usuario: 'Invitado', invitado: true })
-                });
-                // Notificar al resto de la app si auth.js expone una función de refresco
-                if (typeof window.cerrarSesion === 'function') {
-                    window.cerrarSesion();
-                } else {
-                    window.location.reload();
-                }
-            }
-        } catch (e) {
-            // Si falla la petición, ir al login de forma segura
-            window.location.href = '/login';
-        }
-    }
-    </script>
-    <script>
-    function switchInfoPanelTab(btn) {
-        document.querySelectorAll('.info-panel-tab').forEach(b => {
-            b.style.borderBottom = '2px solid transparent';
-            b.style.color = '#95a5a6';
-            b.style.fontWeight = 'normal';
-        });
-        btn.style.borderBottom = '2px solid #3498db';
-        btn.style.color = '#2c3e50';
-        btn.style.fontWeight = '600';
-        ['contacto','documentacion','creditos'].forEach(t => {
-            document.getElementById('info-panel-' + t).style.display = 'none';
-        });
-        document.getElementById('info-panel-' + btn.dataset.tab).style.display = 'block';
-    }
-
-    /* Integración de la pestaña "info" en selectLeftTab.
-       Se parchea tras DOMContentLoaded para no pisar la definición original. */
-    document.addEventListener('DOMContentLoaded', function() {
-        const origSelectLeftTab = window.selectLeftTab;
-        window.selectLeftTab = function(tab) {
-            if (tab === 'info') {
-                // Abrir el panel si está colapsado
-                const panel = document.getElementById('left-panel');
-                if (panel && panel.classList.contains('collapsed')) {
-                    if (typeof toggleLeftPanel === 'function') toggleLeftPanel();
-                }
-                // Ocultar todas las secciones conocidas
-                ['layers-section','momento-section','info-section'].forEach(id => {
-                    const el = document.getElementById(id);
-                    if (el) el.style.display = 'none';
-                });
-                document.getElementById('info-section').style.display = 'block';
-                // Actualizar título del panel
-                const titulo = document.getElementById('left-panel-title');
-                if (titulo) titulo.textContent = 'ℹ️ Información';
-                // Marcar pestaña activa en la barra lateral
-                document.querySelectorAll('.side-bar-item').forEach(b => b.classList.remove('active'));
-                const tabBtn = document.getElementById('tab-info');
-                if (tabBtn) tabBtn.classList.add('active');
-            } else {
-                if (typeof origSelectLeftTab === 'function') origSelectLeftTab(tab);
-                // Si se cambia de pestaña, ocultar info-section
-                const infoSec = document.getElementById('info-section');
-                if (infoSec) infoSec.style.display = 'none';
-            }
-        };
-    });
     </script>
 
 </body>

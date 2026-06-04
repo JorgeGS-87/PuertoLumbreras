@@ -5,189 +5,183 @@
 
 // ==================== HELPERS INTERNOS ====================
 
-// Construye los elementos de la leyenda
-function dibujarLeyenda(listaLeyenda, valoresUnicos, obtenerColor) {
-    // Limpiar leyenda previa
-    listaLeyenda.innerHTML = '';
-    // Crea nueva leyenda
-    valoresUnicos.forEach(v => {
-        // 
-        const itemLeyenda  = document.createElement('li'); 
-        itemLeyenda.className = 'legend-item';
-        const boxColor  = document.createElement('div');
-        boxColor.className        = 'legend-swatch'; // Cuadrado de color
-        boxColor.style.background = obtenerColor(v);
-        const textoLeyenda = document.createElement('div');
-        textoLeyenda.textContent = v;
-        itemLeyenda.appendChild(boxColor);
-        itemLeyenda.appendChild(textoLeyenda);
-        listaLeyenda.appendChild(itemLeyenda);
+function _buildLegendItems(ul, values, colorFn) {
+    ul.innerHTML = '';
+    values.forEach(v => {
+        const li  = document.createElement('li');
+        li.className = 'legend-item';
+        const sw  = document.createElement('div');
+        sw.className        = 'legend-swatch';
+        sw.style.background = colorFn(v);
+        const txt = document.createElement('div');
+        txt.textContent = v;
+        li.appendChild(sw);
+        li.appendChild(txt);
+        ul.appendChild(li);
     });
 }
 
-// Obtiene los valores únicos de un atributo en un conjunto de features, normalizando nulos/vacíos a 'Desconocido'
-function obtenerValoresUnicos(features, atributo) {
+function _getUniqueValues(features, attribute) {
     const values = new Set();
     for (const f of features) {
-        const v = f?.properties?.[atributo];
+        const v = f?.properties?.[attribute];
         values.add((v === undefined || v === null || v === '') ? 'Desconocido' : String(v));
     }
     return Array.from(values).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
 }
 
-// Construye el desplegable de atributos
-function desplegableLeyenda(selector, atributoOpt, alcambiar) {
-    selector.innerHTML = '';
-    if (!atributoOpt.length) {
-        selector.disabled = true;
-        selector.innerHTML = '<option value="">— Sin atributos —</option>';
+function _buildDropdown(sel, cols, onChangeFn) {
+    sel.innerHTML = '';
+    if (!cols.length) {
+        sel.disabled = true;
+        sel.innerHTML = '<option value="">— Sin atributos —</option>';
         return;
     }
     const defaultOpt = document.createElement('option');
     defaultOpt.value = '';
     defaultOpt.textContent = '— Selecciona un atributo —';
-    selector.appendChild(defaultOpt);
-    atributoOpt.forEach(c => { 
-        const opcion = document.createElement('option'); 
-        opcion.value = opcion.textContent = c;
-        selector.appendChild(opcion);
+    sel.appendChild(defaultOpt);
+    cols.forEach(c => {
+        const o = document.createElement('option');
+        o.value = o.textContent = c;
+        sel.appendChild(o);
     });
-    selector.disabled = false;
-    selector.onchange = () => alcambiar(selector.value);
-    const listaLeyenda = document.getElementById('legend-list');
-    if (listaLeyenda) listaLeyenda.innerHTML = '';
+    sel.disabled = false;
+    sel.onchange = () => onChangeFn(sel.value);
+    const ul = document.getElementById('legend-list');
+    if (ul) ul.innerHTML = '';
 }
 
 // ==================== VÍAS ====================
 
-function cargarListaVias(geojson) {
-    const selector = document.getElementById('vias-attribute-select');
-    if (!selector) return;
+function populateAttributeDropdownVias(geojson) {
+    const sel = document.getElementById('vias-attribute-select');
+    if (!sel) return;
 
     if (!geojson?.features?.length) {
-        selector.disabled = true;
-        selector.innerHTML = '<option value="">— Capa no cargada —</option>';
+        sel.disabled = true;
+        sel.innerHTML = '<option value="">— Capa no cargada —</option>';
         return;
     }
 
     window.currentViasGeoJSON = geojson;
 
     // Leer columnas dinámicamente del GeoJSON en memoria (sin hardcode)
-    const atributosEncontrados = new Set();
-    geojson.features.forEach(f => f?.properties && Object.keys(f.properties).forEach(k => atributosEncontrados.add(k)));
-    const atributoOpt = Array.from(atributosEncontrados).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+    const set = new Set();
+    geojson.features.forEach(f => f?.properties && Object.keys(f.properties).forEach(k => set.add(k)));
+    const cols = Array.from(set).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
 
-    desplegableLeyenda(selector, atributoOpt, atributoSeleccionado => {
+    _buildDropdown(sel, cols, attr => {
         viasAttrColors = {};
-        actualizarLeyendaVias(atributoSeleccionado);
+        updateViasAttributeLegend(attr);
     });
 }
 
-function actualizarLeyendaVias(atributo) {
-    const listaLeyenda = document.getElementById('legend-list');
-    if (!listaLeyenda) return;
+function updateViasAttributeLegend(attribute) {
+    const ul = document.getElementById('legend-list');
+    if (!ul) return;
 
-    if (!atributo) {
-        listaLeyenda.innerHTML = '';
-        recolorearViasPorAtributo(null);
+    if (!attribute) {
+        ul.innerHTML = '';
+        recolorViasByAttribute(null);
         return;
     }
 
     const geojson = window.currentViasGeoJSON;
     if (!geojson?.features?.length) {
-        listaLeyenda.innerHTML = '<li class="legend-item" style="color:#7f8c8d;">No hay datos</li>';
+        ul.innerHTML = '<li class="legend-item" style="color:#7f8c8d;">No hay datos</li>';
         return;
     }
 
-    const values = obtenerValoresUnicos(geojson.features, atributo);
+    const values = _getUniqueValues(geojson.features, attribute);
     if (!values.length) {
-        listaLeyenda.innerHTML = '<li class="legend-item" style="color:#7f8c8d;">Sin valores para este atributo</li>';
-        recolorearViasPorAtributo(null);
+        ul.innerHTML = '<li class="legend-item" style="color:#7f8c8d;">Sin valores para este atributo</li>';
+        recolorViasByAttribute(null);
         return;
     }
 
-    dibujarLeyenda(listaLeyenda, values, colorVia);
-    recolorearViasPorAtributo(atributo);
+    _buildLegendItems(ul, values, assignColorForVia);
+    recolorViasByAttribute(attribute);
 }
 
-function recolorearViasPorAtributo(atributo) {
+function recolorViasByAttribute(attribute) {
     if (!viasLayer) return;
-    if (!atributo) {
+    if (!attribute) {
         viasLayer.setStyle(obtenerEstiloVia);
         return;
     }
     viasLayer.setStyle(feature => {
-        const valor = feature?.properties?.[atributo];
-        const suColor = (valor === null || valor === undefined || valor === '') ? 'Desconocido' : String(valor);
-        return { color: colorVia(suColor), weight: 2, opacity: 0.9 };
+        const val = feature?.properties?.[attribute];
+        const key = (val === null || val === undefined || val === '') ? 'Desconocido' : String(val);
+        return { color: assignColorForVia(key), weight: 2, opacity: 0.9 };
     });
 }
 
 // ==================== PUNTOS DE INTERÉS ====================
 
-function atributosPOI(geojson) {
-    const selector = document.getElementById('puntos-attribute-select');
-    if (!selector) return;
+function populateAttributeDropdownPuntos(geojson) {
+    const sel = document.getElementById('puntos-attribute-select');
+    if (!sel) return;
 
     if (!geojson?.features?.length) {
-        selector.disabled = true;
-        selector.innerHTML = '<option value="">— Capa no cargada —</option>';
+        sel.disabled = true;
+        sel.innerHTML = '<option value="">— Capa no cargada —</option>';
         return;
     }
 
     window.currentPuntosGeoJSON = geojson;
 
-    const atributosEncontrados = new Set();
-    geojson.features.forEach(f => f?.properties && Object.keys(f.properties).forEach(k => atributosEncontrados.add(k)));
-    const atributoOpt = Array.from(atributosEncontrados).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+    const set = new Set();
+    geojson.features.forEach(f => f?.properties && Object.keys(f.properties).forEach(k => set.add(k)));
+    const cols = Array.from(set).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
 
-    desplegableLeyenda(selector, atributoOpt, atributoSeleccionado => {
+    _buildDropdown(sel, cols, attr => {
         puntosAttrColors = {};
-        actualizarLeyendaPuntos(atributoSeleccionado);
+        updatePuntosAttributeLegend(attr);
     });
 }
 
-function actualizarLeyendaPuntos(atributo) {
-    const listaLeyenda = document.getElementById('legend-list');
-    if (!listaLeyenda) return;
+function updatePuntosAttributeLegend(attribute) {
+    const ul = document.getElementById('legend-list');
+    if (!ul) return;
 
-    if (!atributo) {
-        listaLeyenda.innerHTML = '';
-        recolorearPuntosPorAtributo(null);
+    if (!attribute) {
+        ul.innerHTML = '';
+        recolorPuntosByAttribute(null);
         return;
     }
 
     const geojson = window.currentPuntosGeoJSON;
     if (!geojson?.features?.length) {
-        listaLeyenda.innerHTML = '<li class="legend-item" style="color:#7f8c8d;">No hay datos</li>';
+        ul.innerHTML = '<li class="legend-item" style="color:#7f8c8d;">No hay datos</li>';
         return;
     }
 
-    const values = obtenerValoresUnicos(geojson.features, atributo);
+    const values = _getUniqueValues(geojson.features, attribute);
     if (!values.length) {
-        listaLeyenda.innerHTML = '<li class="legend-item" style="color:#7f8c8d;">Sin valores para este atributo</li>';
-        recolorearPuntosPorAtributo(null);
+        ul.innerHTML = '<li class="legend-item" style="color:#7f8c8d;">Sin valores para este atributo</li>';
+        recolorPuntosByAttribute(null);
         return;
     }
 
-    dibujarLeyenda(listaLeyenda, values, colorPunto);
-    recolorearPuntosPorAtributo(atributo);
+    _buildLegendItems(ul, values, assignColorForPunto);
+    recolorPuntosByAttribute(attribute);
 }
 
-function recolorearPuntosPorAtributo(atributo) {
+function recolorPuntosByAttribute(attribute) {
     if (!window.puntosLayer) return;
 
     // Los circleMarker no tienen setStyle() global como L.geoJSON:
     // hay que iterar cada capa individualmente.
-    window.puntosLayer.eachLayer(marcador => {
-        if (!atributo) {
-            // Restaurar color original asignado por capa
-            const capa  = marcador.feature?.properties?.capa || 'desconocido';
-            marcador.setStyle({ fillColor: colorPunto(capa), color: '#fff' });
+    window.puntosLayer.eachLayer(layer => {
+        if (!attribute) {
+            // Restaurar color original asignado por _capa
+            const capa  = layer.feature?.properties?._capa || 'desconocido';
+            layer.setStyle({ fillColor: assignColorForPunto(capa), color: '#fff' });
             return;
         }
-        const valor  = marcador.feature?.properties?.[atributo];
-        const suColor   = (valor === null || valor === undefined || valor === '') ? 'Desconocido' : String(valor);
-        marcador.setStyle({ fillColor: colorPunto(suColor), color: '#fff' });
+        const val   = layer.feature?.properties?.[attribute];
+        const key   = (val === null || val === undefined || val === '') ? 'Desconocido' : String(val);
+        layer.setStyle({ fillColor: assignColorForPunto(key), color: '#fff' });
     });
 }

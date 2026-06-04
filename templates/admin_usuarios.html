@@ -450,9 +450,9 @@
 // ════════════════════════════════════════════════════════════════
 //  Estado
 // ════════════════════════════════════════════════════════════════
-let usuarios      = [];   // lista completa de usuarios de la BD
-let editandoId    = null; // id del usuario que se está editando (null = nuevo)
-let eliminandoId  = null; // id del usuario a eliminar
+let _usuarios      = [];   // lista completa de usuarios de la BD
+let _editandoId    = null; // id del usuario que se está editando (null = nuevo)
+let _eliminandoId  = null; // id del usuario a eliminar
 
 // ════════════════════════════════════════════════════════════════
 //  Toast
@@ -461,8 +461,8 @@ function toast(msg, tipo = 'info') {
     const el = document.getElementById('toast');
     el.textContent = msg;
     el.className   = 'show ' + tipo;
-    clearTimeout(el.t);
-    el.t = setTimeout(() => { el.className = ''; }, 3200);
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.className = ''; }, 3200);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -473,9 +473,9 @@ async function cargarUsuarios() {
         const r    = await fetch('/api/admin/usuarios');
         const data = await r.json();
         if (!r.ok) { toast(data.error || 'Error al cargar usuarios', 'error'); return; }
-        usuarios = data.usuarios || [];
+        _usuarios = data.usuarios || [];
         actualizarStats();
-        renderTabla(usuarios);
+        renderTabla(_usuarios);
     } catch (e) {
         toast('Error de conexión', 'error');
     }
@@ -485,10 +485,10 @@ async function cargarUsuarios() {
 //  Stats
 // ════════════════════════════════════════════════════════════════
 function actualizarStats() {
-    document.getElementById('stat-total').textContent    = usuarios.length;
-    document.getElementById('stat-activos').textContent  = usuarios.filter(u => u.activo).length;
-    document.getElementById('stat-admin').textContent    = usuarios.filter(u => u.rol === 'admin').length;
-    document.getElementById('stat-inactivos').textContent = usuarios.filter(u => !u.activo).length;
+    document.getElementById('stat-total').textContent    = _usuarios.length;
+    document.getElementById('stat-activos').textContent  = _usuarios.filter(u => u.activo).length;
+    document.getElementById('stat-admin').textContent    = _usuarios.filter(u => u.rol === 'admin').length;
+    document.getElementById('stat-inactivos').textContent = _usuarios.filter(u => !u.activo).length;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -505,7 +505,7 @@ function renderTabla(lista) {
         return;
     }
 
-    const fmt = iso => {
+    const _fmt = iso => {
         if (!iso || iso === 'None' || iso === '') return '—';
         try {
             const d = new Date(iso);
@@ -516,9 +516,9 @@ function renderTabla(lista) {
     tbody.innerHTML = lista.map(u => `
         <tr data-id="${u.id}">
             <td>
-                <div style="font-weight:600;">${esc(u.username)}</div>
+                <div style="font-weight:600;">${_esc(u.username)}</div>
             </td>
-            <td style="color:#7f8c8d;">${esc(u.email)}</td>
+            <td style="color:#7f8c8d;">${_esc(u.email)}</td>
             <td>
                 <span class="badge ${u.rol === 'admin' ? 'badge-admin' : 'badge-registrado'}">
                     ${u.rol === 'admin' ? '🔑 Admin' : '👤 Registrado'}
@@ -529,19 +529,19 @@ function renderTabla(lista) {
                     ${u.activo ? '✅ Activo' : '🚫 Inactivo'}
                 </span>
             </td>
-            <td style="color:#7f8c8d;font-size:12px;">${fmt(u.fecha_registro)}</td>
-            <td style="color:#7f8c8d;font-size:12px;">${fmt(u.ultimo_acceso)}</td>
+            <td style="color:#7f8c8d;font-size:12px;">${_fmt(u.fecha_registro)}</td>
+            <td style="color:#7f8c8d;font-size:12px;">${_fmt(u.ultimo_acceso)}</td>
             <td>
                 <div class="actions">
                     <button class="btn btn-ghost btn-sm" onclick="abrirModalEditar('${u.id}')">✏️ Editar</button>
-                    <button class="btn btn-danger btn-sm" onclick="pedirConfirmarEliminar('${u.id}', '${esc(u.username)}')">🗑️</button>
+                    <button class="btn btn-danger btn-sm" onclick="pedirConfirmarEliminar('${u.id}', '${_esc(u.username)}')">🗑️</button>
                 </div>
             </td>
         </tr>
     `).join('');
 }
 
-function esc(s) {
+function _esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
@@ -553,7 +553,7 @@ function filtrarTabla() {
     const rol     = document.getElementById('filtro-rol').value;
     const estado  = document.getElementById('filtro-estado').value;
 
-    const filtrados = usuarios.filter(u => {
+    const filtrados = _usuarios.filter(u => {
         const coincideQ      = !q || u.username.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
         const coincideRol    = !rol || u.rol === rol;
         const coincideEstado = !estado || (estado === 'activo' ? u.activo : !u.activo);
@@ -566,7 +566,7 @@ function filtrarTabla() {
 //  Modal — Nuevo usuario
 // ════════════════════════════════════════════════════════════════
 function abrirModalNuevo() {
-    editandoId = null;
+    _editandoId = null;
     document.getElementById('modal-titulo').textContent   = '➕ Nuevo usuario';
     document.getElementById('modal-btn-guardar').textContent = '💾 Crear usuario';
     document.getElementById('edit-id').value       = '';
@@ -586,9 +586,9 @@ function abrirModalNuevo() {
 //  Modal — Editar usuario
 // ════════════════════════════════════════════════════════════════
 function abrirModalEditar(id) {
-    const u = usuarios.find(x => x.id === id);
+    const u = _usuarios.find(x => x.id === id);
     if (!u) return;
-    editandoId = id;
+    _editandoId = id;
     document.getElementById('modal-titulo').textContent      = '✏️ Editar usuario';
     document.getElementById('modal-btn-guardar').textContent = '💾 Guardar cambios';
     document.getElementById('edit-id').value       = u.id;
@@ -606,7 +606,7 @@ function abrirModalEditar(id) {
 
 function cerrarModal() {
     document.getElementById('modal-usuario').classList.remove('open');
-    editandoId = null;
+    _editandoId = null;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -644,7 +644,7 @@ async function guardarUsuario() {
             // ── Editar existente ──
             const payload = { username, email, rol, activo };
             if (password) payload.password_nueva = password;
-            r    = await fetch(`/api/admin/usuarios/${editandoId}`, {
+            r    = await fetch(`/api/admin/usuarios/${_editandoId}`, {
                 method:  'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body:    JSON.stringify(payload),
@@ -665,7 +665,7 @@ async function guardarUsuario() {
         mostrarErrorModal('Error de conexión con el servidor.');
     } finally {
         btn.disabled    = false;
-        btn.textContent = editandoId ? '💾 Guardar cambios' : '💾 Crear usuario';
+        btn.textContent = _editandoId ? '💾 Guardar cambios' : '💾 Crear usuario';
     }
 }
 
@@ -675,21 +675,21 @@ function mostrarErrorModal(msg) {
     el.style.display  = 'block';
     const btn = document.getElementById('modal-btn-guardar');
     btn.disabled    = false;
-    btn.textContent = editandoId ? '💾 Guardar cambios' : '💾 Crear usuario';
+    btn.textContent = _editandoId ? '💾 Guardar cambios' : '💾 Crear usuario';
 }
 
 // ════════════════════════════════════════════════════════════════
 //  Eliminar usuario
 // ════════════════════════════════════════════════════════════════
 function pedirConfirmarEliminar(id, nombre) {
-    eliminandoId = id;
+    _eliminandoId = id;
     document.getElementById('confirmar-nombre').textContent = nombre;
     document.getElementById('modal-confirmar').classList.add('open');
 }
 
 function cerrarModalConfirmar() {
     document.getElementById('modal-confirmar').classList.remove('open');
-    eliminandoId = null;
+    _eliminandoId = null;
 }
 
 async function confirmarEliminar() {
@@ -698,7 +698,7 @@ async function confirmarEliminar() {
     btn.disabled = true; btn.textContent = '⏳ Eliminando…';
 
     try {
-        const r    = await fetch(`/api/admin/usuarios/${eliminandoId}`, { method: 'DELETE' });
+        const r    = await fetch(`/api/admin/usuarios/${_eliminandoId}`, { method: 'DELETE' });
         const data = await r.json();
         if (!r.ok || !data.ok) {
             toast(data.error || 'No se pudo eliminar', 'error');

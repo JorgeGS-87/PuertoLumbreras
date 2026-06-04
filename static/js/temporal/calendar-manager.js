@@ -9,9 +9,9 @@
  *  - Por defecto: L-V = ['lectivo', 'laborable'], S-D = ['festivo'].
  *  - Nueva etiqueta: 'evento'.
  *  - Al pulsar un tipo sobre una celda:
- *      · Si el día no tiene ese tipo -> se añade.
- *      · Si ya lo tiene -> se elimina.
- *      · 'reset' -> vacía el array (vuelve a defecto).
+ *      · Si el día no tiene ese tipo → se añade.
+ *      · Si ya lo tiene → se elimina.
+ *      · 'reset' → vacía el array (vuelve a defecto).
  */
 
 // ==================== FESTIVOS FIJOS DE PUERTO LUMBRERAS ====================
@@ -21,7 +21,7 @@
  * Formato: 'MM-DD' — se compara contra mes y día sin importar el año,
  * de modo que aplican a cualquier año mientras no haya edición manual.
  */
-const Festivos = new Set([
+const _FESTIVOS_PL = new Set([
     '01-01', // Año Nuevo
     '01-06', // Epifanía del Señor
     '03-19', // San José
@@ -39,10 +39,10 @@ const Festivos = new Set([
 ]);
 
 /** Devuelve true si la fecha es un festivo fijo de Puerto Lumbreras. */
-function esFestivoFijo(fecha) {
+function _esFestivoFijo(fecha) {
     const mm = String(fecha.getMonth() + 1).padStart(2, '0');
     const dd = String(fecha.getDate()).padStart(2, '0');
-    return Festivos.has(`${mm}-${dd}`);
+    return _FESTIVOS_PL.has(`${mm}-${dd}`);
 }
 
 // ==================== ESTADO ====================
@@ -55,7 +55,7 @@ const TIPOS_DIA = {
     evento:    { label: 'Evento',    color: '#9b59b6', emoji: '⭐' },
 };
 
-// Orden canónico de visualización: azul -> verde -> rojo -> morado
+// Orden canónico de visualización: azul → verde → rojo → morado
 const ORDEN_TIPOS = ['lectivo', 'laborable', 'festivo', 'evento'];
 
 // Coeficientes por tipo de día y franja horaria
@@ -103,29 +103,29 @@ const COEFICIENTES = {
 /**
  * Calendario en memoria — solo excepciones al defecto.
  * Formato: { 'YYYY-MM-DD': ['laborable', 'lectivo', ...] }
- * Si la clave no existe -> el día es defecto (L-V: lectivo+laborable, S-D: []).
+ * Si la clave NO existe → el día es defecto (L-V: lectivo+laborable, S-D: []).
  * Solo aparecen festivos, eventos puntuales, o días con etiquetas modificadas.
  */
-let calendarioDias = {};
+let _calendarioDias = {};
 
 // Referencia al mes/año que muestra el modal
-let calModalAno  = new Date().getFullYear();
-let calModalMes = new Date().getMonth(); // 0-based
+let _calModalYear  = new Date().getFullYear();
+let _calModalMonth = new Date().getMonth(); // 0-based
 
 // ==================== CARGA DESDE SERVIDOR ====================
 
 // ==================== PERSISTENCIA LOCAL ====================
-// Clave para localStorage (se guarda toda la estructura de calendarioDias)
-const ClaveLS = 'calendarioDias_v2';
 
-function cargarDesdeLocalStorage() {
+const _LS_KEY = 'calendarioDias_v2';
+
+function _cargarDesdeLocalStorage() {
     try {
-        const raw = localStorage.getItem(ClaveLS);
+        const raw = localStorage.getItem(_LS_KEY);
         if (!raw) return false;
         const parsed = JSON.parse(raw);
-        calendarioDias = {};
+        _calendarioDias = {};
         for (const [k, v] of Object.entries(parsed)) {
-            calendarioDias[k] = Array.isArray(v) ? v : [v];
+            _calendarioDias[k] = Array.isArray(v) ? v : [v];
         }
         console.info('Calendario cargado desde localStorage.');
         return true;
@@ -135,9 +135,9 @@ function cargarDesdeLocalStorage() {
     }
 }
 
-function guardarEnLocalStorage() {
+function _guardarEnLocalStorage() {
     try {
-        localStorage.setItem(ClaveLS, JSON.stringify(calendarioDias));
+        localStorage.setItem(_LS_KEY, JSON.stringify(_calendarioDias));
     } catch (e) {
         console.warn('No se pudo guardar en localStorage:', e);
     }
@@ -151,17 +151,17 @@ async function cargarCalendario() {
 
         // Compatibilidad: el servidor puede devolver arrays o strings (v1)
         const raw = data.dias || {};
-        calendarioDias = {};
+        _calendarioDias = {};
         for (const [k, v] of Object.entries(raw)) {
-            // Compatibilidad v1: string -> array; preservar arrays vacíos (= sin etiquetas)
-            calendarioDias[k] = Array.isArray(v) ? v : [v];
+            // Compatibilidad v1: string → array; preservar arrays vacíos (= sin etiquetas)
+            _calendarioDias[k] = Array.isArray(v) ? v : [v];
         }
         // Sincronizar localStorage con los datos del servidor
-        guardarEnLocalStorage();
+        _guardarEnLocalStorage();
     } catch (e) {
         console.warn('No se pudo cargar el calendario desde el servidor, intentando localStorage…', e);
-        if (!cargarDesdeLocalStorage()) {
-            calendarioDias = {};
+        if (!_cargarDesdeLocalStorage()) {
+            _calendarioDias = {};
         }
     }
 }
@@ -170,15 +170,15 @@ async function cargarCalendario() {
 
 /**
  * Devuelve el array de tipos para una fecha dada.
- * Defecto: L-V -> ['laborable', 'lectivo'], S-D -> ['festivo']
+ * Defecto: L-V → ['laborable', 'lectivo'], S-D → ['festivo']
  */
 function tiposDia(fecha) {
-    const key = fechaKey(fecha);
+    const key = _fechaKey(fecha);
     // Si la clave existe, fue editada manualmente (prevalece sobre cualquier defecto)
-    if (key in calendarioDias) return calendarioDias[key];
-    // Festivo fijo de Puerto Lumbreras -> siempre festivo
-    if (esFestivoFijo(fecha)) return ['festivo'];
-    // Sin clave -> defecto según día de la semana
+    if (key in _calendarioDias) return _calendarioDias[key];
+    // Festivo fijo de Puerto Lumbreras → siempre festivo
+    if (_esFestivoFijo(fecha)) return ['festivo'];
+    // Sin clave → defecto según día de la semana
     const dow = fecha.getDay(); // 0=dom, 6=sab
     return (dow === 0 || dow === 6) ? ['festivo'] : ['lectivo', 'laborable'];
 }
@@ -235,7 +235,7 @@ function infoCoeficiente(fecha) {
  * Usa franjas absolutas + overflow:hidden en el contenedor para que
  * el border-radius recorte limpiamente sin artefactos en los extremos.
  */
-function colorCeldaMultiple(tipos, numero) {
+function _buildCellInner(tipos, numero) {
     const colors = (tipos && tipos.length > 0)
         ? tipos.map(t => TIPOS_DIA[t]?.color || '#cccccc')
         : ['#bdc3c7'];
@@ -250,8 +250,8 @@ function colorCeldaMultiple(tipos, numero) {
     return `${strips}<span style="position:relative;z-index:1;color:#fff;font-size:12px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,0.35);">${numero}</span>`;
 }
 
-/** @deprecated solo para compatibilidad con toggleDia visual update */
-function colorCelda(tipos) {
+/** @deprecated solo para compatibilidad con _toggleDia visual update */
+function _buildCellBackground(tipos) {
     if (!tipos || tipos.length === 0) return { bg: '#bdc3c7', color: '#fff' };
     const colors = tipos.map(t => TIPOS_DIA[t]?.color || '#cccccc');
     if (colors.length === 1) return { bg: colors[0], color: '#fff' };
@@ -267,7 +267,7 @@ function colorCelda(tipos) {
 /**
  * Devuelve el tooltip para una celda.
  */
-function nombreCelda(tipos, isDefault) {
+function _buildCellTitle(tipos, isDefault) {
     const labels = tipos.map(t => TIPOS_DIA[t]?.label || t).join(' + ');
     return isDefault ? `${labels} (defecto)` : labels;
 }
@@ -277,13 +277,13 @@ function nombreCelda(tipos, isDefault) {
 function abrirCalendario() {
     let modal = document.getElementById('cal-modal');
     if (!modal) {
-        modal = crearModalCalendario();
+        modal = _crearModalCalendario();
         document.body.appendChild(modal);
     }
-    calModalAno  = new Date().getFullYear();
-    calModalMes = new Date().getMonth();
+    _calModalYear  = new Date().getFullYear();
+    _calModalMonth = new Date().getMonth();
     modal.style.display = 'flex';
-    renderCalModal();
+    _renderCalModal();
 }
 
 function cerrarCalendario() {
@@ -291,7 +291,7 @@ function cerrarCalendario() {
     if (modal) modal.style.display = 'none';
 }
 
-function crearModalCalendario() {
+function _crearModalCalendario() {
     const modal = document.createElement('div');
     modal.id = 'cal-modal';
     modal.style.cssText = `
@@ -321,7 +321,7 @@ function crearModalCalendario() {
             <div style="display:flex;gap:8px;padding:10px 16px;background:#f8f9fa;
                         border-bottom:1px solid #e0e0e0;flex-wrap:nowrap;align-items:center;">
                 ${Object.entries(TIPOS_DIA).map(([k, v]) => `
-                    <button onclick="window.calTipoSeleccionado='${k}'; actualizarTipoActivo();"
+                    <button onclick="window._calTipoSeleccionado='${k}'; _actualizarTipoActivo();"
                         id="cal-tipo-${k}"
                         style="display:flex;align-items:center;gap:5px;padding:5px 10px;
                                border:2px solid ${v.color};border-radius:20px;cursor:pointer;
@@ -330,7 +330,7 @@ function crearModalCalendario() {
                         ${v.emoji} ${v.label}
                     </button>
                 `).join('')}
-                <button onclick="window.calTipoSeleccionado='reset'; actualizarTipoActivo();"
+                <button onclick="window._calTipoSeleccionado='reset'; _actualizarTipoActivo();"
                     id="cal-tipo-reset"
                     style="display:flex;align-items:center;gap:5px;padding:5px 10px;
                            border:2px solid #95a5a6;border-radius:20px;cursor:pointer;
@@ -380,41 +380,41 @@ function crearModalCalendario() {
     `;
 
     modal.addEventListener('click', e => { if (e.target === modal) cerrarCalendario(); });
-    window.calTipoSeleccionado = 'lectivo';
+    window._calTipoSeleccionado = 'lectivo';
     return modal;
 }
 
-function calNavMes(delta) {
-    calModalMes += delta;
-    if (calModalMes > 11) { calModalMes = 0;  calModalAno++; }
-    if (calModalMes < 0)  { calModalMes = 11; calModalAno--; }
-    renderCalModal();
+function _calNavMes(delta) {
+    _calModalMonth += delta;
+    if (_calModalMonth > 11) { _calModalMonth = 0;  _calModalYear++; }
+    if (_calModalMonth < 0)  { _calModalMonth = 11; _calModalYear--; }
+    _renderCalModal();
 }
 
-function actualizarTipoActivo() {
+function _actualizarTipoActivo() {
     [...Object.keys(TIPOS_DIA), 'reset'].forEach(k => {
         const btn = document.getElementById('cal-tipo-' + k);
         if (!btn) return;
-        const sel   = window.calTipoSeleccionado === k;
+        const sel   = window._calTipoSeleccionado === k;
         const color = TIPOS_DIA[k]?.color || '#95a5a6';
         btn.style.background = sel ? color : '#fff';
         btn.style.color      = sel ? '#fff' : color;
     });
 }
 
-function renderCalModal() {
+function _renderCalModal() {
     const label = document.getElementById('cal-mes-label');
     const grid  = document.getElementById('cal-grid');
     if (!label || !grid) return;
 
     const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                    'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    label.textContent = `${meses[calModalMes]} ${calModalAno}`;
+    label.textContent = `${meses[_calModalMonth]} ${_calModalYear}`;
 
-    const primerDia = new Date(calModalAno, calModalMes, 1);
+    const primerDia = new Date(_calModalYear, _calModalMonth, 1);
     const offset    = (primerDia.getDay() + 6) % 7; // lunes primero
-    const diasMes   = new Date(calModalAno, calModalMes + 1, 0).getDate();
-    const hoy       = fechaKey(new Date());
+    const diasMes   = new Date(_calModalYear, _calModalMonth + 1, 0).getDate();
+    const hoy       = _fechaKey(new Date());
 
     grid.innerHTML = '';
 
@@ -424,13 +424,13 @@ function renderCalModal() {
     }
 
     for (let d = 1; d <= diasMes; d++) {
-        const fecha     = new Date(calModalAno, calModalMes, d);
-        const key       = fechaKey(fecha);
-        const isDefault = !(key in calendarioDias);
-        const tipos     = isDefault ? tiposDia(fecha) : calendarioDias[key];
+        const fecha     = new Date(_calModalYear, _calModalMonth, d);
+        const key       = _fechaKey(fecha);
+        const isDefault = !(key in _calendarioDias);
+        const tipos     = isDefault ? tiposDia(fecha) : _calendarioDias[key];
 
-        const { bg, color } = colorCelda(tipos);
-        const title = nombreCelda(tipos, isDefault);
+        const { bg, color } = _buildCellBackground(tipos);
+        const title = _buildCellTitle(tipos, isDefault);
 
         const cell = document.createElement('div');
         cell.style.cssText = `
@@ -440,44 +440,43 @@ function renderCalModal() {
             transition:opacity 0.12s;user-select:none;min-height:28px;
             display:flex;align-items:center;justify-content:center;
         `;
-        // Crear fondo con franjas para múltiples tipos
-        cell.innerHTML = colorCeldaMultiple(tipos, d);
+        cell.innerHTML = _buildCellInner(tipos, d);
         cell.title = title;
-        cell.addEventListener('click', () => toggleDia(key, cell, fecha));
+        cell.addEventListener('click', () => _toggleDia(key, cell, fecha));
         grid.appendChild(cell);
     }
 
-    actualizarTipoActivo();
+    _actualizarTipoActivo();
 }
 
 /**
  * Toggle de etiqueta en una celda:
- *  - 'reset'       -> eliminar array completo (vuelve a defecto).
- *  - tipo presente -> eliminarlo del array.
- *  - tipo ausente  -> añadirlo al array.
+ *  - 'reset'       → eliminar array completo (vuelve a defecto).
+ *  - tipo presente → eliminarlo del array.
+ *  - tipo ausente  → añadirlo al array.
  */
-function toggleDia(key, cell, fecha) {
-    const tipo = window.calTipoSeleccionado;
+function _toggleDia(key, cell, fecha) {
+    const tipo = window._calTipoSeleccionado;
 
     if (tipo === 'reset') {
-        // Volver al defecto real -> eliminar la clave (no guardar nada)
-        delete calendarioDias[key];
+        // Volver al defecto real → eliminar la clave (no guardar nada)
+        delete _calendarioDias[key];
     } else {
         // Partir del estado actual: si no hay clave, usar el defecto como base
-        let arr = (key in calendarioDias)
-            ? [...calendarioDias[key]]
+        let arr = (key in _calendarioDias)
+            ? [..._calendarioDias[key]]
             : [...tiposDia(fecha)]; // copia del defecto para editar desde él
 
         const idx = arr.indexOf(tipo);
         if (idx >= 0) {
-            // Ya tiene este tipo -> quitarlo
+            // Ya tiene este tipo → quitarlo
             arr.splice(idx, 1);
         } else {
-            // No lo tiene -> añadirlo
+            // No lo tiene → añadirlo
             arr.push(tipo);
         }
 
-        // Ordenar según el orden canónico: lectivo -> laborable -> festivo -> evento
+        // Ordenar según el orden canónico: lectivo → laborable → festivo → evento
         arr.sort((a, b) => {
             const ia = ORDEN_TIPOS.indexOf(a);
             const ib = ORDEN_TIPOS.indexOf(b);
@@ -485,34 +484,34 @@ function toggleDia(key, cell, fecha) {
         });
 
         // Solo guardar si el resultado se desvía del defecto
-        if (esDefecto(fecha, arr)) {
-            delete calendarioDias[key]; // coincide con el defecto -> no es excepción
+        if (_esDefecto(fecha, arr)) {
+            delete _calendarioDias[key]; // coincide con el defecto → no es excepción
         } else {
-            calendarioDias[key] = arr;
+            _calendarioDias[key] = arr;
         }
     }
 
     // Actualizar visual de la celda
-    const isDefault = !(key in calendarioDias);
-    const tipos     = isDefault ? tiposDia(fecha) : calendarioDias[key];
+    const isDefault = !(key in _calendarioDias);
+    const tipos     = isDefault ? tiposDia(fecha) : _calendarioDias[key];
 
-    cell.innerHTML = colorCeldaMultiple(tipos, new Date(key + 'T12:00:00').getDate());
-    cell.title = nombreCelda(tipos, isDefault);
+    cell.innerHTML = _buildCellInner(tipos, new Date(key + 'T12:00:00').getDate());
+    cell.title = _buildCellTitle(tipos, isDefault);
 }
 
-async function guardarCalendario() {
+async function _guardarCalendario() {
     const btn = document.getElementById('cal-guardar-btn');
     if (btn) { btn.textContent = '⏳ Guardando…'; btn.disabled = true; }
 
     // Guardar siempre en localStorage primero (persistencia garantizada sin servidor)
-    guardarEnLocalStorage();
+    _guardarEnLocalStorage();
 
     let servidorOk = false;
     try {
         const r = await fetch('/api/calendario', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ dias: calendarioDias }),
+            body:    JSON.stringify({ dias: _calendarioDias }),
         });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         servidorOk = true;
@@ -537,15 +536,15 @@ async function guardarCalendario() {
     }
 }
 
-function limpiarCalendario() {
+function _limpiarCalendario() {
     if (!confirm('¿Eliminar todas las asignaciones personalizadas? Se volverán a los valores por defecto (L-V: Lectivo + Laborable, S-D: sin etiquetas).')) return;
-    calendarioDias = {};
-    renderCalModal();
+    _calendarioDias = {};
+    _renderCalModal();
 }
 
 // ==================== HELPERS ====================
 
-function fechaKey(fecha) {
+function _fechaKey(fecha) {
     const y = fecha.getFullYear();
     const m = String(fecha.getMonth() + 1).padStart(2, '0');
     const d = String(fecha.getDate()).padStart(2, '0');
@@ -554,12 +553,12 @@ function fechaKey(fecha) {
 
 /**
  * Comprueba si un array de tipos coincide exactamente con el defecto
- * para esa fecha (L-V -> ['lectivo','laborable'], S-D -> []).
+ * para esa fecha (L-V → ['lectivo','laborable'], S-D → []).
  */
-function esDefecto(fecha, arr) {
+function _esDefecto(fecha, arr) {
     const dow = fecha.getDay(); // 0=dom, 6=sab
-    // Festivo fijo -> defecto es ['festivo']
-    if (esFestivoFijo(fecha)) {
+    // Festivo fijo → defecto es ['festivo']
+    if (_esFestivoFijo(fecha)) {
         return arr.length === 1 && arr[0] === 'festivo';
     }
     const defecto = (dow === 0 || dow === 6) ? [] : ['lectivo', 'laborable'];

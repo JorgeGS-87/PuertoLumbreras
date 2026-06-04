@@ -2,18 +2,18 @@
 // js/ui/auth.js
 // Gestión de autenticación, rol global, y modal de cuenta de usuario.
 // Pestañas dinámicas según rol:
-//   • Invitado  -> Iniciar sesión | Registrarse
-//   • Registrado -> Mi cuenta (cambiar nombre/email/contraseña) | Cerrar sesión
-//   • Admin     -> Mi cuenta | Administrar usuarios | Cerrar sesión
+//   • Invitado  → Iniciar sesión | Registrarse
+//   • Registrado → Mi cuenta (cambiar nombre/email/contraseña) | Cerrar sesión
+//   • Admin     → Mi cuenta | Administrar usuarios | Cerrar sesión
 // =============================================================================
 
 
 // ==================== ROL GLOBAL ====================
 
-window.userRol = 'invitado';
+window._userRol = 'invitado';
 
-function aplicarPermisos(rol, usuario) {
-    window.userRol = rol;
+function _aplicarPermisos(rol, usuario) {
+    window._userRol = rol;
 
     const nameEl   = document.getElementById('user-name');
     const rolBadge = document.getElementById('user-rol-badge');
@@ -26,44 +26,44 @@ function aplicarPermisos(rol, usuario) {
     const esReg   = (rol === 'registrado' || rol === 'admin');
     const esAdmin = (rol === 'admin');
 
-    const show = (id, v) => { const el = document.getElementById(id); if (el) el.style.display = v ? '' : 'none'; };
-    const showB = (id, v) => { const el = document.getElementById(id); if (el) el.style.display = v ? 'block' : 'none'; };
-    const showG = (id, v) => { const el = document.getElementById(id); if (el) el.style.display = v ? 'grid'  : 'none'; };
+    const _show = (id, v) => { const el = document.getElementById(id); if (el) el.style.display = v ? '' : 'none'; };
+    const _showB = (id, v) => { const el = document.getElementById(id); if (el) el.style.display = v ? 'block' : 'none'; };
+    const _showG = (id, v) => { const el = document.getElementById(id); if (el) el.style.display = v ? 'grid'  : 'none'; };
 
-    show('btn-tabla-vias',          esReg);
-    show('btn-tabla-puntos',        esReg);
-    show('btn-editar',              esAdmin);
-    show('btn-config-campos',       esReg);
-    showB('admin-vias-controls',    esReg);
-    showB('admin-puntos-controls',  esAdmin);
-    show('btn-calendario-momento',  esAdmin);
-    if (!esReg) show('btn-tabla-obstaculos-layer', false);
-    showG('obstaculos-import-export-top',  esReg);
-    showG('obstaculos-registrado-controls', esReg);
-    if (!esReg) show('btn-tabla-obstaculos', false);
-    showG('obstaculos-admin-controls', esReg);
-    show('layer-eventos',           esAdmin);
-    showB('admin-eventos-controls', esAdmin);
-    show('msw-btn-evento',          esAdmin);
-    show('msw-btn-obstaculo',       true);
+    _show('btn-tabla-vias',          esReg);
+    _show('btn-tabla-puntos',        esReg);
+    _show('btn-editar',              esAdmin);
+    _show('btn-config-campos',       esReg);
+    _showB('admin-vias-controls',    esReg);
+    _showB('admin-puntos-controls',  esAdmin);
+    _show('btn-calendario-momento',  esAdmin);
+    if (!esReg) _show('btn-tabla-obstaculos-layer', false);
+    _showG('obstaculos-import-export-top',  esReg);
+    _showG('obstaculos-registrado-controls', esReg);
+    if (!esReg) _show('btn-tabla-obstaculos', false);
+    _showG('obstaculos-admin-controls', esReg);
+    _show('layer-eventos',           esAdmin);
+    _showB('admin-eventos-controls', esAdmin);
+    _show('msw-btn-evento',          esAdmin);
+    _show('msw-btn-obstaculo',       true);
 
     if (rol === 'invitado' && typeof cerrarTabla === 'function') cerrarTabla();
     if (typeof initSesionPersistencia === 'function') initSesionPersistencia();
 
     // Actualizar cabecera del modal si está abierto
-    actualizarHeaderModal(rol, usuario);
+    _actualizarHeaderModal(rol, usuario);
 }
 
 
 // ==================== MODAL DE CUENTA ====================
 
-let cuentaTabActual = null;
+let _cuentaTabActual = null;
 
 function abrirModalCuenta() {
     const modal = document.getElementById('cuenta-modal');
     if (!modal) return;
     modal.classList.add('open');
-    renderizarTabsCuenta();
+    _renderizarTabsCuenta();
 }
 
 // Mantener compatibilidad con el nombre anterior usado en el HTML
@@ -71,11 +71,11 @@ function abrirModalRegistro() { abrirModalCuenta(); }
 
 function cerrarModalCuenta()  {
     document.getElementById('cuenta-modal')?.classList.remove('open');
-    cuentaTabActual = null;
+    _cuentaTabActual = null;
 }
 function cerrarModalRegistro() { cerrarModalCuenta(); }
 
-function actualizarHeaderModal(rol, usuario) {
+function _actualizarHeaderModal(rol, usuario) {
     const iconos = { invitado: '👤', registrado: '🙋', admin: '🔑' };
     const el = document.getElementById('cuenta-header-icon');
     const nm = document.getElementById('cuenta-header-nombre');
@@ -85,26 +85,26 @@ function actualizarHeaderModal(rol, usuario) {
     if (rl) rl.textContent = rol;
 }
 
-function renderizarTabsCuenta() {
-    const rol     = window.userRol || 'invitado';
+function _renderizarTabsCuenta() {
+    const rol     = window._userRol || 'invitado';
     const tabsEl  = document.getElementById('cuenta-tabs');
     const bodyEl  = document.getElementById('cuenta-body');
     if (!tabsEl || !bodyEl) return;
 
-    const tabs = tabsParaRol(rol);
-    if (!_cuentaTabActual || !tabs.find(t => t.id === cuentaTabActual))
-        cuentaTabActual = tabs[0]?.id;
+    const tabs = _tabsParaRol(rol);
+    if (!_cuentaTabActual || !tabs.find(t => t.id === _cuentaTabActual))
+        _cuentaTabActual = tabs[0]?.id;
 
     tabsEl.innerHTML = tabs.map(t => `
-        <div class="cuenta-tab ${t.id === cuentaTabActual ? 'activa' : ''}"
+        <div class="cuenta-tab ${t.id === _cuentaTabActual ? 'activa' : ''}"
              onclick="_cambiarTabCuenta('${t.id}')">
             ${t.icono} ${t.label}
         </div>`).join('');
 
-    renderizarBodyCuenta(cuentaTabActual);
+    _renderizarBodyCuenta(_cuentaTabActual);
 }
 
-function tabsParaRol(rol) {
+function _tabsParaRol(rol) {
     if (rol === 'invitado') return [
         { id: 'login',    icono: '🔐', label: 'Iniciar sesión' },
         { id: 'registro', icono: '✍️',  label: 'Registrarse' },
@@ -118,30 +118,30 @@ function tabsParaRol(rol) {
     ];
 }
 
-function cambiarTabCuenta(tabId) {
-    cuentaTabActual = tabId;
-    renderizarTabsCuenta();
+function _cambiarTabCuenta(tabId) {
+    _cuentaTabActual = tabId;
+    _renderizarTabsCuenta();
 }
 
-function renderizarBodyCuenta(tabId) {
+function _renderizarBodyCuenta(tabId) {
     const bodyEl = document.getElementById('cuenta-body');
     if (!bodyEl) return;
     const renders = {
-        login:    htmlLogin,
-        registro: htmlRegistro,
-        cuenta:   htmlCuenta,
-        admin:    htmlAdmin,
+        login:    _htmlLogin,
+        registro: _htmlRegistro,
+        cuenta:   _htmlCuenta,
+        admin:    _htmlAdmin,
     };
     bodyEl.innerHTML = (renders[tabId] || (() => ''))();
 
     // Post-render hooks
-    if (tabId === 'admin') cargarAdminUsuarios();
+    if (tabId === 'admin') _cargarAdminUsuarios();
 }
 
 
 // ── Pestaña: Iniciar sesión ───────────────────────────────────────────────────
 
-function htmlLogin() {
+function _htmlLogin() {
     return `
         <div class="cm-section-title">🔐 Iniciar sesión</div>
         <div id="cm-login-msg" class="cm-msg"></div>
@@ -165,12 +165,11 @@ function htmlLogin() {
         </p>`;
 }
 
-// cm significa "cuenta modal"
 async function cmLogin() {
     const email = document.getElementById('cm-login-email')?.value.trim();
     const pw    = document.getElementById('cm-login-pw')?.value;
     const msg   = document.getElementById('cm-login-msg');
-    if (!email || !pw) { cmMsg(msg, 'Introduce email y contraseña.', 'error'); return; }
+    if (!email || !pw) { _cmMsg(msg, 'Introduce email y contraseña.', 'error'); return; }
 
     const btn = document.querySelector('#cuenta-body .cm-btn-primary');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Entrando…'; }
@@ -182,12 +181,12 @@ async function cmLogin() {
     const data = await res.json();
 
     if (!res.ok || data.error) {
-        cmMsg(msg, data.error || 'Credenciales incorrectas.', 'error');
+        _cmMsg(msg, data.error || 'Credenciales incorrectas.', 'error');
         if (btn) { btn.disabled = false; btn.textContent = '🔐 Entrar'; }
         return;
     }
 
-    aplicarPermisos(data.rol, data.usuario);
+    _aplicarPermisos(data.rol, data.usuario);
     cerrarModalCuenta();
     showNotification(`✅ Bienvenido, ${data.usuario}`, 'success');
 }
@@ -195,7 +194,7 @@ async function cmLogin() {
 
 // ── Pestaña: Registrarse ──────────────────────────────────────────────────────
 
-function htmlRegistro() {
+function _htmlRegistro() {
     return `
         <div class="cm-section-title">✍️ Crear cuenta</div>
         <div id="cm-reg-msg" class="cm-msg"></div>
@@ -227,8 +226,8 @@ async function cmRegistrar() {
     const email = document.getElementById('cm-reg-email')?.value.trim();
     const pw    = document.getElementById('cm-reg-pw')?.value;
     const msg   = document.getElementById('cm-reg-msg');
-    if (!user || !email || !pw) { cmMsg(msg, 'Rellena todos los campos.', 'error'); return; }
-    if (pw.length < 6)          { cmMsg(msg, 'La contraseña debe tener al menos 6 caracteres.', 'error'); return; }
+    if (!user || !email || !pw) { _cmMsg(msg, 'Rellena todos los campos.', 'error'); return; }
+    if (pw.length < 6)          { _cmMsg(msg, 'La contraseña debe tener al menos 6 caracteres.', 'error'); return; }
 
     const btn = document.querySelector('#cuenta-body .cm-btn-primary');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando cuenta…'; }
@@ -240,7 +239,7 @@ async function cmRegistrar() {
     const data = await res.json();
 
     if (!res.ok || data.error) {
-        cmMsg(msg, data.error || 'No se pudo registrar.', 'error');
+        _cmMsg(msg, data.error || 'No se pudo registrar.', 'error');
         if (btn) { btn.disabled = false; btn.textContent = '✅ Crear cuenta'; }
         return;
     }
@@ -248,7 +247,7 @@ async function cmRegistrar() {
     // Si el backend devuelve rol y usuario, aplicar permisos directamente.
     // Si no (algunos backends devuelven solo {message}), hacer login automático.
     if (data.rol && data.usuario) {
-        aplicarPermisos(data.rol, data.usuario);
+        _aplicarPermisos(data.rol, data.usuario);
         cerrarModalCuenta();
         showNotification(`✅ Cuenta creada. Bienvenido, ${data.usuario}`, 'success');
     } else {
@@ -259,13 +258,13 @@ async function cmRegistrar() {
         });
         const loginData = await loginRes.json();
         if (loginRes.ok && !loginData.error) {
-            aplicarPermisos(loginData.rol, loginData.usuario);
+            _aplicarPermisos(loginData.rol, loginData.usuario);
             cerrarModalCuenta();
             showNotification(`✅ Cuenta creada. Bienvenido, ${loginData.usuario}`, 'success');
         } else {
             // Registro OK pero login falló: mostrar mensaje y redirigir a login
-            cmMsg(msg, '✅ Cuenta creada. Inicia sesión para continuar.', 'success');
-            setTimeout(() => cambiarTabCuenta('login'), 1800);
+            _cmMsg(msg, '✅ Cuenta creada. Inicia sesión para continuar.', 'success');
+            setTimeout(() => _cambiarTabCuenta('login'), 1800);
         }
     }
 }
@@ -273,7 +272,7 @@ async function cmRegistrar() {
 
 // ── Pestaña: Mi cuenta ────────────────────────────────────────────────────────
 
-function htmlCuenta() {
+function _htmlCuenta() {
     const nombre = document.getElementById('user-name')?.textContent || '';
     return `
         <div class="cm-section-title">✏️ Cambiar datos</div>
@@ -318,7 +317,7 @@ async function cmGuardarDatos() {
     const nombre = document.getElementById('cm-nuevo-nombre')?.value.trim();
     const email  = document.getElementById('cm-nuevo-email')?.value.trim();
     const msg    = document.getElementById('cm-cuenta-msg');
-    if (!nombre && !email) { cmMsg(msg, 'Introduce al menos un campo para actualizar.', 'error'); return; }
+    if (!nombre && !email) { _cmMsg(msg, 'Introduce al menos un campo para actualizar.', 'error'); return; }
 
     const payload = {};
     if (nombre) payload.username = nombre;
@@ -330,17 +329,17 @@ async function cmGuardarDatos() {
     });
     const data = await res.json();
 
-    if (!res.ok || data.error) { cmMsg(msg, data.error || 'Error al guardar.', 'error'); return; }
-    cmMsg(msg, '✅ Datos actualizados correctamente.', 'success');
-    if (nombre) aplicarPermisos(window.userRol, nombre);
+    if (!res.ok || data.error) { _cmMsg(msg, data.error || 'Error al guardar.', 'error'); return; }
+    _cmMsg(msg, '✅ Datos actualizados correctamente.', 'success');
+    if (nombre) _aplicarPermisos(window._userRol, nombre);
 }
 
 async function cmCambiarPassword() {
     const actual = document.getElementById('cm-pw-actual')?.value;
     const nueva  = document.getElementById('cm-pw-nueva')?.value;
     const msg    = document.getElementById('cm-pw-msg');
-    if (!actual || !nueva) { cmMsg(msg, 'Introduce la contraseña actual y la nueva.', 'error'); return; }
-    if (nueva.length < 6)  { cmMsg(msg, 'La nueva contraseña debe tener al menos 6 caracteres.', 'error'); return; }
+    if (!actual || !nueva) { _cmMsg(msg, 'Introduce la contraseña actual y la nueva.', 'error'); return; }
+    if (nueva.length < 6)  { _cmMsg(msg, 'La nueva contraseña debe tener al menos 6 caracteres.', 'error'); return; }
 
     const res  = await fetch('/api/auth/cambiar-password', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -348,8 +347,8 @@ async function cmCambiarPassword() {
     });
     const data = await res.json();
 
-    if (!res.ok || data.error) { cmMsg(msg, data.error || 'Error al cambiar contraseña.', 'error'); return; }
-    cmMsg(msg, '✅ Contraseña cambiada correctamente.', 'success');
+    if (!res.ok || data.error) { _cmMsg(msg, data.error || 'Error al cambiar contraseña.', 'error'); return; }
+    _cmMsg(msg, '✅ Contraseña cambiada correctamente.', 'success');
     document.getElementById('cm-pw-actual').value = '';
     document.getElementById('cm-pw-nueva').value  = '';
 }
@@ -357,7 +356,7 @@ async function cmCambiarPassword() {
 
 // ── Pestaña: Admin usuarios ───────────────────────────────────────────────────
 
-function htmlAdmin() {
+function _htmlAdmin() {
     return `
         <div class="cm-section-title">👥 Usuarios del sistema</div>
         <div id="cm-admin-msg" class="cm-msg"></div>
@@ -370,11 +369,11 @@ function htmlAdmin() {
         </button>`;
 }
 
-async function cargarAdminUsuarios() {
+async function _cargarAdminUsuarios() {
     const res  = await fetch('/api/admin/usuarios/online').catch(() => null);
     if (!res || !res.ok) {
         const msg = document.getElementById('cm-admin-msg');
-        if (msg) cmMsg(msg, 'No se pudo cargar la lista de usuarios.', 'error');
+        if (msg) _cmMsg(msg, 'No se pudo cargar la lista de usuarios.', 'error');
         return;
     }
     const data    = await res.json();
@@ -397,7 +396,7 @@ async function cargarAdminUsuarios() {
             <div style="flex:1;min-width:0;">
                 <div style="font-weight:600;font-size:13px;color:#2c3e50;
                             white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                    ${esc(u.username)}
+                    ${_esc(u.username)}
                     <span style="font-size:10px;font-weight:400;color:#7f8c8d;margin-left:4px;">${u.rol}</span>
                 </div>
                 <div style="font-size:11px;color:#95a5a6;margin-top:1px;">
@@ -415,14 +414,14 @@ async function cargarAdminUsuarios() {
         </div>`).join('');
 }
 
-function esc(s) {
+function _esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function cmMsg(el, texto, tipo) {
+function _cmMsg(el, texto, tipo) {
     if (!el) return;
     el.textContent  = texto;
     el.className    = 'cm-msg ' + tipo;
@@ -445,7 +444,7 @@ function confirmarRegistro() { cmLogin(); }
 async function cerrarSesion() {
     await fetch('/api/auth/salir', { method: 'POST' });
     cerrarModalCuenta();
-    aplicarPermisos('invitado', 'Invitado');
+    _aplicarPermisos('invitado', 'Invitado');
     showNotification('Sesión cerrada. Continuando como invitado.', 'info');
 }
 
@@ -460,9 +459,9 @@ async function cerrarSesion() {
 (async function init() {
     try {
         const me = await fetch('/api/auth/me').then(r => r.json());
-        aplicarPermisos(me.rol || 'invitado', me.usuario || 'Invitado');
+        _aplicarPermisos(me.rol || 'invitado', me.usuario || 'Invitado');
     } catch (e) {
-        aplicarPermisos('invitado', 'Invitado');
+        _aplicarPermisos('invitado', 'Invitado');
         console.warn('No se pudo obtener datos de usuario', e);
     }
 

@@ -27,7 +27,7 @@
     const textOrig = document.getElementById('progress-text');
 
     /** Intervalo que sincroniza la barra inline con la barra original. */
-    let mirrorInterval = null;
+    let _mirrorInterval = null;
 
     /** Muestra la barra de progreso inline y oculta el botón. */
     function mostrarProgreso() {
@@ -41,8 +41,8 @@
     function ocultarProgreso() {
         progWrap.style.display = 'none';
         btnCalc.style.display  = 'flex';
-        clearInterval(mirrorInterval);
-        mirrorInterval = null;
+        clearInterval(_mirrorInterval);
+        _mirrorInterval = null;
     }
 
     /**
@@ -50,15 +50,15 @@
      * original en la barra inline cada 80 ms.
      */
     function iniciarMirror() {
-        if (mirrorInterval) return;
-        mirrorInterval = setInterval(() => {
+        if (_mirrorInterval) return;
+        _mirrorInterval = setInterval(() => {
             if (!fillOrig || !textOrig) return;
             progFill.style.width = fillOrig.style.width || '0%';
             if (textOrig.textContent) progText.textContent = textOrig.textContent;
         }, 80);
     }
 
-    // Observa cuándo la barra original se oculta -> la ruta ha terminado
+    // Observa cuándo la barra original se oculta → la ruta ha terminado
     const observer = new MutationObserver(() => {
         if (progOrig && progOrig.style.display === 'none' && progWrap.style.display === 'block') {
             progFill.style.width = '100%';
@@ -109,9 +109,9 @@
  * originales (#btn-capas-base, resetView) se delegan a este control.
  */
 document.addEventListener('DOMContentLoaded', function () {
-    function initMapButtons() {
+    function _initMapButtons() {
         if (typeof L === 'undefined' || typeof map === 'undefined') {
-            setTimeout(initMapButtons, 200); return;
+            setTimeout(_initMapButtons, 200); return;
         }
 
         const MapButtonsControl = L.Control.extend({
@@ -136,21 +136,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 btnCapas.innerHTML = '🗺️';
                 btnCapas.title    = 'Capas base';
                 btnCapas.type     = 'button';
-                // El click lo conecta initLayerControl en el bloque siguiente
+                // El click lo conecta _initLayerControl en el bloque siguiente
 
-                // Botón Capa Compartida de Obstáculos
+                // Botón Capa Compartida
                 const btnComp = L.DomUtil.create('button', 'map-btn-ctrl', container);
                 btnComp.id        = 'btn-capa-compartida';
                 btnComp.innerHTML = '🚧';
-                btnComp.title     = 'Abrir capa de obstáculos compartida';
+                btnComp.title     = 'Capa de obstáculos compartida';
                 btnComp.type      = 'button';
                 L.DomEvent.on(btnComp, 'click', function (e) {
                     L.DomEvent.stopPropagation(e);
-                    if (typeof window.toggleCapaCompartida === 'function') {
-                        window.toggleCapaCompartida();
-                    } else {
-                        console.error('[map-widgets] toggleCapaCompartida no está definida — ¿cargó realtime.js?');
-                    }
+                    if (typeof window.toggleCapaCompartida === 'function') window.toggleCapaCompartida();
                 });
 
                 L.DomEvent.disableClickPropagation(container);
@@ -165,7 +161,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const old = document.getElementById('map-controls');
         if (old) old.style.display = 'none';
     }
-    setTimeout(initMapButtons, 100);
+    setTimeout(_initMapButtons, 100);
 });
 
 
@@ -181,14 +177,14 @@ document.addEventListener('DOMContentLoaded', function () {
  */
 document.addEventListener('DOMContentLoaded', function () {
 
-    function initLayerControl(intentos) {
+    function _initLayerControl(intentos) {
         intentos = intentos || 0;
         // Leaflet puede añadirlo en topleft o bottomleft según map-config
         const ctrl = document.querySelector('.leaflet-control-layers');
         const btn  = document.getElementById('btn-capas-base');
 
         if (!ctrl || !btn) {
-            if (intentos < 20) setTimeout(() => initLayerControl(intentos + 1), 200);
+            if (intentos < 20) setTimeout(() => _initLayerControl(intentos + 1), 200);
             return;
         }
 
@@ -235,7 +231,7 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('[map-widgets] ✅ Control de capas base conectado.');
     }
 
-    setTimeout(() => initLayerControl(0), 600);
+    setTimeout(() => _initLayerControl(0), 600);
 });
 
 
@@ -251,44 +247,44 @@ document.addEventListener('DOMContentLoaded', function () {
  * - Panel colapsado: left = ancho de la barra lateral de tabs (56px) + margen
  * - Panel abierto  : left = 56px + 320px (ancho del panel) + margen
  */
-(function mswReposicionar() {
+(function _mswReposicionar() {
     const SIDEBAR_TABS_W = 56;   // px — ancho de .column.left (tabs iconos)
     const PANEL_W        = 320;  // px — ancho de .left-panel cuando está abierto
     const MARGIN         = 10;   // px — margen entre panel y widget
 
-    function calcLeft() {
+    function _calcLeft() {
         const leftPanel = document.getElementById('left-panel');
         const isOpen    = leftPanel && !leftPanel.classList.contains('collapsed');
         return SIDEBAR_TABS_W + (isOpen ? PANEL_W : 0) + MARGIN;
     }
 
-    function aplicar() {
+    function _aplicar() {
         const widget = document.getElementById('map-search-widget');
         if (!widget) return;
-        widget.style.left = calcLeft() + 'px';
+        widget.style.left = _calcLeft() + 'px';
     }
 
-    function init() {
-        aplicar();
+    function _init() {
+        _aplicar();
 
         // Suscribirse al hub central en vez de crear otro ResizeObserver sobre #left-panel
         if (typeof window.layoutHubSubscribe === 'function') {
-            window.layoutHubSubscribe(aplicar);
+            window.layoutHubSubscribe(_aplicar);
         } else {
             // Hub aún no inicializado: registrar en la lista compartida
-            window.layoutHubCallbacks = window.layoutHubCallbacks || [];
-            window.layoutHubCallbacks.push(aplicar);
+            window._layoutHubCallbacks = window._layoutHubCallbacks || [];
+            window._layoutHubCallbacks.push(_aplicar);
         }
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', _init);
     } else {
-        init();
+        _init();
     }
 
     // Exponer para que ui-controls.js pueda llamarlo si necesita forzar un refresco
-    window.msw_actualizarPosicion = aplicar;
+    window.msw_actualizarPosicion = _aplicar;
 })();
 
 
@@ -302,10 +298,10 @@ document.addEventListener('DOMContentLoaded', function () {
  */
 (function () {
     /** Marcador (chincheta) que indica el punto clicado. */
-    let chincheta = null;
+    let _chincheta    = null;
 
     /** Objeto latlng del último clic; sirve para cancelar fetches anteriores. */
-    let latlngActual = null;
+    let _latlngActual = null;
 
     // ── API pública ──────────────────────────────────────────────────────────
 
@@ -317,11 +313,11 @@ document.addEventListener('DOMContentLoaded', function () {
      */
     window.cerrarClickWidget = function (mantenerChincheta) {
         document.getElementById('click-info-widget').style.display = 'none';
-        if (!mantenerChincheta && chincheta) {
-            map.removeLayer(chincheta);
-            chincheta = null;
+        if (!mantenerChincheta && _chincheta) {
+            map.removeLayer(_chincheta);
+            _chincheta = null;
         }
-        latlngActual = null;
+        _latlngActual = null;
     };
 
     /**
@@ -333,7 +329,7 @@ document.addEventListener('DOMContentLoaded', function () {
      * @param {L.LatLng} [latlngExterno] - Coordenadas opcionales desde búsqueda
      */
     window.clickWidgetComoLlegar = function (latlngExterno) {
-        const latlng = latlngExterno || latlngActual;
+        const latlng = latlngExterno || _latlngActual;
         if (!latlng) {
             console.error('❌ clickWidgetComoLlegar: sin coordenadas');
             showNotification('Error: sin coordenadas válidas', 'error');
@@ -344,7 +340,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Cerrar widget manteniendo chincheta (la ruta pondrá su propio marcador)
         cerrarClickWidget(true);
-        if (chincheta) { map.removeLayer(chincheta); chincheta = null; }
+        if (_chincheta) { map.removeLayer(_chincheta); _chincheta = null; }
 
         // Abrir panel de rutas (MSW)
         const mswPanel      = document.getElementById('msw-panel');
@@ -362,7 +358,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (marcadorDestino) map.removeLayer(marcadorDestino);
         if (typeof rutaLayer !== 'undefined' && rutaLayer) { map.removeLayer(rutaLayer); rutaLayer = null; }
         puntoDestino    = latlng;
-        marcadorDestino = L.marcador(latlng, { icon: crearIconoMarcador('🎯') }).addTo(map);
+        marcadorDestino = L.marker(latlng, { icon: crearIconoMarcador('🎯') }).addTo(map);
 
         // Actualizar label destino en el widget MSW
         const dl = document.getElementById('msw-destino-label');
@@ -371,12 +367,12 @@ document.addEventListener('DOMContentLoaded', function () {
             dl.classList.remove('placeholder');
         }
         // Sincronizar labels del panel derecho si existe
-        if (typeof actualizarLabels === 'function') actualizarLabels();
+        if (typeof _actualizarLabels === 'function') _actualizarLabels();
 
         // NOTA: Ya NO activamos automáticamente el modo "esperando origen"
         // El usuario debe seleccionar manualmente origen y destino por separado
-        // window.esperandoOrigen  = true;
-        // window.esperandoDestino = false;
+        // window._esperandoOrigen  = true;
+        // window._esperandoDestino = false;
         // mostrarInstruccionOrigen();
         // showNotification('🎯 Destino fijado. Ahora selecciona el origen en el mapa', 'success');
 
@@ -394,7 +390,7 @@ document.addEventListener('DOMContentLoaded', function () {
      * @param {*}      valor  - Valor a mostrar
      * @returns {string}
      */
-    function fila(icono, label, valor) {
+    function _fila(icono, label, valor) {
         if (!valor && valor !== 0) return '';
         return `<span style="color:#95a5a6;font-size:12px;">${icono} ${label}</span>
                 <span style="font-weight:500;">${valor}</span>`;
@@ -406,7 +402,7 @@ document.addEventListener('DOMContentLoaded', function () {
      * @param {string} str - Cadena a transformar
      * @returns {string}
      */
-    function capitalizar(str) {
+    function _capitalizar(str) {
         if (!str) return '';
         return str.toLowerCase().replace(/(?:^|\s)\S/g, c => c.toUpperCase());
     }
@@ -417,7 +413,7 @@ document.addEventListener('DOMContentLoaded', function () {
      * @param {L.LatLng} latlng - Coordenadas del clic
      * @param {Object|null} datos - Datos del portal más cercano, o null
      */
-    function mostrarWidget(latlng, datos) {
+    function _mostrarWidget(latlng, datos) {
         const titulo = document.getElementById('ciw-titulo');
         const cuerpo = document.getElementById('ciw-cuerpo');
         const coords = document.getElementById('ciw-coords');
@@ -427,15 +423,15 @@ document.addEventListener('DOMContentLoaded', function () {
         let filas = '';
 
         if (datos) {
-            const tv  = capitalizar(datos.tipo_vial);
-            const nv  = capitalizar(datos.nombre_via);
+            const tv  = _capitalizar(datos.tipo_vial);
+            const nv  = _capitalizar(datos.nombre_via);
             nombreCalle = `${tv} ${nv}`.trim() || '—';
             filas = [
-                fila('🛣️', 'Calle',     nombreCalle),
-                fila('🔢', 'Número',    datos.numero    || '—'),
-                fila('📮', 'C. Postal', datos.cod_postal || '—'),
-                fila('🏙️', 'Municipio', capitalizar(datos.municipio) || '—'),
-                fila('🗺️', 'Provincia', capitalizar(datos.provincia) || '—'),
+                _fila('🛣️', 'Calle',     nombreCalle),
+                _fila('🔢', 'Número',    datos.numero    || '—'),
+                _fila('📮', 'C. Postal', datos.cod_postal || '—'),
+                _fila('🏙️', 'Municipio', _capitalizar(datos.municipio) || '—'),
+                _fila('🗺️', 'Provincia', _capitalizar(datos.provincia) || '—'),
             ].filter(Boolean).join('');
         } else {
             filas = `<span style="color:#aab0b7;grid-column:1/-1;font-size:12px;">Sin información de dirección en este punto</span>`;
@@ -452,23 +448,23 @@ document.addEventListener('DOMContentLoaded', function () {
     map.on('click', function (e) {
         // Si algún modo especial está activo, ceder el clic a su handler
         // Orden de prioridad: evento > obstáculo > ruta > chincheta
-        if (typeof window.eventoClickHandler === 'function' && window.modoEvento) {
-            window.eventoClickHandler(e);
+        if (typeof window._eventoClickHandler === 'function' && window._modoEvento) {
+            window._eventoClickHandler(e);
             return;
         }
         // En móvil, no crear chincheta si se está moviendo un obstáculo
-        if (window.isMobile && window.mobileMovingObstacle) return;
+        if (window.isMobile && window._mobileMovingObstacle) return;
         if (modoActual === 'ruta' || (typeof modoObstaculo !== 'undefined' && modoObstaculo)) return;
         // Si el clic viene de un control del mapa (home, capas...), ignorar
         if (e.originalEvent?.target?.closest?.('.map-controls, .leaflet-control')) return;
 
-        latlngActual = e.latlng;
+        _latlngActual = e.latlng;
 
         // Quitar chincheta anterior
-        if (chincheta) { map.removeLayer(chincheta); chincheta = null; }
+        if (_chincheta) { map.removeLayer(_chincheta); _chincheta = null; }
 
         // Crear chincheta pequeña en el punto clicado
-        chincheta = L.marcador(e.latlng, {
+        _chincheta = L.marker(e.latlng, {
             icon: L.divIcon({
                 className: '',
                 html: `<div style="font-size:22px;filter:drop-shadow(1px 2px 3px rgba(0,0,0,.5));">📍</div>`,
@@ -488,12 +484,12 @@ document.addEventListener('DOMContentLoaded', function () {
         fetch(`/api/portal-por-coordenadas?lat=${e.latlng.lat}&lon=${e.latlng.lng}&radio=120`)
             .then(r => r.json())
             .then(data => {
-                if (latlngActual !== e.latlng) return; // clic más nuevo en camino
-                mostrarWidget(e.latlng, data.resultado || null);
+                if (_latlngActual !== e.latlng) return; // clic más nuevo en camino
+                _mostrarWidget(e.latlng, data.resultado || null);
             })
             .catch(() => {
-                if (latlngActual !== e.latlng) return;
-                mostrarWidget(e.latlng, null);
+                if (_latlngActual !== e.latlng) return;
+                _mostrarWidget(e.latlng, null);
             });
     });
 
@@ -517,13 +513,13 @@ document.addEventListener('DOMContentLoaded', function () {
  * - Parchea activarModoObstaculo / desactivarModoObstaculo / activarModoEvento /
  *   desactivarModoEvento para interceptar las llamadas originales.
  */
-(function gestionarBotonesModo() {
+(function _gestionarBotonesModo() {
 
-    function btnObs() { return document.getElementById('msw-btn-obstaculo'); }
-    function btnEv()  { return document.getElementById('msw-btn-evento'); }
+    function _btnObs() { return document.getElementById('msw-btn-obstaculo'); }
+    function _btnEv()  { return document.getElementById('msw-btn-evento'); }
 
     /** Aplica estilos de activo/inactivo a un botón. */
-    function setActivo(btn, activo, tipo) {
+    function _setActivo(btn, activo, tipo) {
         if (!btn) return;
         btn.classList.toggle('obs-activo', activo && tipo === 'obs');
         btn.classList.toggle('ev-activo', activo && tipo === 'ev');
@@ -531,15 +527,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /** Desactiva obstáculo sin llamar al parche (evita recursión). */
-    function desactivarObs() {
-        if (typeof origDesactivarObs === 'function') origDesactivarObs();
-        setActivo(btnObs(), false);
+    function _desactivarObs() {
+        if (typeof _origDesactivarObs === 'function') _origDesactivarObs();
+        _setActivo(_btnObs(), false);
     }
 
     /** Desactiva evento sin llamar al parche (evita recursión). */
-    function desactivarEv() {
-        if (typeof origDesactivarEv === 'function') origDesactivarEv();
-        setActivo(btnEv(), false);
+    function _desactivarEv() {
+        if (typeof _origDesactivarEv === 'function') _origDesactivarEv();
+        _setActivo(_btnEv(), false);
     }
 
     function intentar() {
@@ -548,55 +544,55 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!tieneObs || !tieneEv) { setTimeout(intentar, 150); return; }
 
         // Guardar originales
-        window.origActivarObs     = activarModoObstaculo;
-        window.origDesactivarObs  = typeof desactivarModoObstaculo === 'function' ? desactivarModoObstaculo : () => {};
-        window.origActivarEv      = activarModoEvento;
-        window.origDesactivarEv   = typeof desactivarModoEvento    === 'function' ? desactivarModoEvento    : () => {};
+        window._origActivarObs     = activarModoObstaculo;
+        window._origDesactivarObs  = typeof desactivarModoObstaculo === 'function' ? desactivarModoObstaculo : () => {};
+        window._origActivarEv      = activarModoEvento;
+        window._origDesactivarEv   = typeof desactivarModoEvento    === 'function' ? desactivarModoEvento    : () => {};
 
         // Parchear activarModoObstaculo
         window.activarModoObstaculo = function () {
             // Si ya está activo, desactivar (toggle)
             if (typeof modoObstaculo !== 'undefined' && modoObstaculo) {
-                origDesactivarObs();
-                setActivo(btnObs(), false);
+                _origDesactivarObs();
+                _setActivo(_btnObs(), false);
                 return;
             }
             // Desactivar evento si estaba activo
-            if (window.modoEvento) {
-                origDesactivarEv();
-                setActivo(btnEv(), false);
+            if (window._modoEvento) {
+                _origDesactivarEv();
+                _setActivo(_btnEv(), false);
             }
-            origActivarObs();
-            setActivo(btnObs(), true, 'obs');
+            _origActivarObs();
+            _setActivo(_btnObs(), true, 'obs');
         };
 
         // Parchear desactivarModoObstaculo
         window.desactivarModoObstaculo = function () {
-            origDesactivarObs();
-            setActivo(btnObs(), false, 'obs');
+            _origDesactivarObs();
+            _setActivo(_btnObs(), false, 'obs');
         };
 
         // Parchear activarModoEvento
         window.activarModoEvento = function () {
             // Si ya está activo, desactivar (toggle)
-            if (window.modoEvento) {
-                origDesactivarEv();
-                setActivo(btnEv(), false);
+            if (window._modoEvento) {
+                _origDesactivarEv();
+                _setActivo(_btnEv(), false);
                 return;
             }
             // Desactivar obstáculo si estaba activo
             if (typeof modoObstaculo !== 'undefined' && modoObstaculo) {
-                origDesactivarObs();
-                setActivo(btnObs(), false);
+                _origDesactivarObs();
+                _setActivo(_btnObs(), false);
             }
-            origActivarEv();
-            setActivo(btnEv(), true, 'ev');
+            _origActivarEv();
+            _setActivo(_btnEv(), true, 'ev');
         };
 
         // Parchear desactivarModoEvento
         window.desactivarModoEvento = function () {
-            origDesactivarEv();
-            setActivo(btnEv(), false);
+            _origDesactivarEv();
+            _setActivo(_btnEv(), false);
         };
 
         console.log('[map-widgets] ✅ Botones Obstáculos/Evento con exclusión mutua y color activo.');

@@ -6,12 +6,12 @@
 let modoObstaculo  = false;
 let obstaculosLayer = null;
 let obstaculos      = [];
-let obstaculosExportHandle = null;
+let _obstaculosExportHandle = null;
 
 window.segmentosBloqueadosCapas = [];
 
 // Comprueba si un obsId ya está en uso en la sesión actual.
-function obsIdEnUso(id) {
+function _obsIdEnUso(id) {
     return obstaculos.filter(Boolean).some(o => o.obsId === id);
 }
 
@@ -33,22 +33,22 @@ function ocultarInstruccion() {
 
 // ==================== VEHÍCULO ====================
 
-window.vehiculoActual  = 'coche';
-window.modoEmergencia  = false;
+window._vehiculoActual  = 'coche';
+window._modoEmergencia  = false;
 
 // Opciones de modo emergencia:
-//   emergVelocidad: true  -> respetar velocidad máxima de la vía
-//                   false -> aplicar +20 km/h
-//   emergGiros:    true  -> respetar restricciones de giro normales
-//                   false -> puede girar libremente (ignora restricciones)
-//   emergSentido:  true  -> respetar sentidos de circulación
-//                   false -> puede circular en sentido contrario
-window.emergVelocidad = true;   // por defecto: respeta velocidad (check activado)
-window.emergGiros     = true;   // por defecto: respeta giros (check activado)
-window.emergSentido   = true;   // por defecto: respeta sentidos (check activado)
+//   _emergVelocidad: true  → respetar velocidad máxima de la vía
+//                   false → aplicar +20 km/h
+//   _emergGiros:    true  → respetar restricciones de giro normales
+//                   false → puede girar libremente (ignora restricciones)
+//   _emergSentido:  true  → respetar sentidos de circulación
+//                   false → puede circular en sentido contrario
+window._emergVelocidad = true;   // por defecto: respeta velocidad (check activado)
+window._emergGiros     = true;   // por defecto: respeta giros (check activado)
+window._emergSentido   = true;   // por defecto: respeta sentidos (check activado)
 
 function seleccionarVehiculo(tipo) {
-    window.vehiculoActual = tipo;
+    window._vehiculoActual = tipo;
     // Sincronizar todos los botones posibles
     document.getElementById('btn-vehiculo-coche')?.classList.toggle('active',  tipo === 'coche');
     document.getElementById('btn-vehiculo-camion')?.classList.toggle('active', tipo === 'camion');
@@ -64,8 +64,8 @@ function seleccionarVehiculo(tipo) {
 }
 
 function toggleEmergencia() {
-    window.modoEmergencia = !window.modoEmergencia;
-    const activo = window.modoEmergencia;
+    window._modoEmergencia = !window._modoEmergencia;
+    const activo = window._modoEmergencia;
     // Sincronizar todos los botones de emergencia
     ['msw-btn-emergencia', 'btn-emergencia'].forEach(id => {
         const btn = document.getElementById(id);
@@ -74,15 +74,15 @@ function toggleEmergencia() {
         btn.style.background = activo ? '#e74c3c' : '';
         btn.style.color      = activo ? '#fff'    : '';
     });
-    // Mostrar u ocultar la lista de opciones de emergencia
-    const lista = document.getElementById('emergencia-opciones-lista');
-    if (lista) lista.style.display = activo ? 'block' : 'none';
+    // Mostrar u ocultar el dropdown de opciones de emergencia
+    const dropdown = document.getElementById('emergencia-opciones-dropdown');
+    if (dropdown) dropdown.style.display = activo ? 'block' : 'none';
 
     if (activo) {
         const msgs = [];
-        if (!window.emergVelocidad) msgs.push('velocidad +20 km/h');
-        if (!window.emergGiros)     msgs.push('giros libres');
-        if (!window.emergSentido)   msgs.push('sentido contrario');
+        if (!window._emergVelocidad) msgs.push('velocidad +20 km/h');
+        if (!window._emergGiros)     msgs.push('giros libres');
+        if (!window._emergSentido)   msgs.push('sentido contrario');
         const detalle = msgs.length ? ' (' + msgs.join(', ') + ')' : ' — velocidad +20 km/h';
         showNotification('🚨 Modo Emergencia activo' + detalle, 'warning');
     } else {
@@ -91,23 +91,23 @@ function toggleEmergencia() {
 }
 
 function toggleEmergenciaOpcion(opcion) {
-    if (opcion === 'velocidad') window.emergVelocidad = !window.emergVelocidad;
-    if (opcion === 'giros')     window.emergGiros     = !window.emergGiros;
-    if (opcion === 'sentido')   window.emergSentido   = !window.emergSentido;
+    if (opcion === 'velocidad') window._emergVelocidad = !window._emergVelocidad;
+    if (opcion === 'giros')     window._emergGiros     = !window._emergGiros;
+    if (opcion === 'sentido')   window._emergSentido   = !window._emergSentido;
     // Sincronizar checkboxes
     const chkV = document.getElementById('emerg-chk-velocidad');
     const chkG = document.getElementById('emerg-chk-giros');
     const chkS = document.getElementById('emerg-chk-sentido');
-    if (chkV) chkV.checked = window.emergVelocidad;
-    if (chkG) chkG.checked = window.emergGiros;
-    if (chkS) chkS.checked = window.emergSentido;
+    if (chkV) chkV.checked = window._emergVelocidad;
+    if (chkG) chkG.checked = window._emergGiros;
+    if (chkS) chkS.checked = window._emergSentido;
 }
 
 function invertirPuntos() {
-    // Intercambiar objetos latlon
-    const tmpLatlon = puntoOrigen;
+    // Intercambiar objetos latlng
+    const tmpLatlng = puntoOrigen;
     puntoOrigen  = puntoDestino;
-    puntoDestino = tmpLatlon;
+    puntoDestino = tmpLatlng;
 
     // Intercambiar marcadores: retirar los actuales y redibujarlos
     if (marcadorOrigen)  map.removeLayer(marcadorOrigen);
@@ -120,59 +120,59 @@ function invertirPuntos() {
 
     // Limpiar la ruta dibujada — ya no es válida tras el intercambio
     if (rutaLayer) { map.removeLayer(rutaLayer); rutaLayer = null; }
-    if (window.rutaLayerBordeEmergencia) { map.removeLayer(window.rutaLayerBordeEmergencia); window.rutaLayerBordeEmergencia = null; }
+    if (window._rutaLayerBordeEmergencia) { map.removeLayer(window._rutaLayerBordeEmergencia); window._rutaLayerBordeEmergencia = null; }
     window.segmentosBloqueadosCapas?.forEach(c => map.removeLayer(c));
     window.segmentosBloqueadosCapas = [];
     document.getElementById('msw-resultados-ruta')?.style.setProperty('display', 'none');
 
-    actualizarLabels();
-    actualizarLabelsMsw();
+    _actualizarLabels();
+    _actualizarLabelsMsw();
     showNotification('↕️ Origen y destino invertidos', 'info');
 }
 // ==================== WIDGET TIEMPO (Salir ahora / Salir a las / Llegar antes de las) ====================
 
 // Estado del modo de tiempo seleccionado
-window.modoTiempo                    = 'ahora';   // 'ahora' | 'salir' | 'llegar'
-window.fechaSalida                   = null;      // Date con la fecha/hora seleccionada (null = ahora)
-window.rutaCalculadaDuracionMinutos  = null;      // Duración en minutos de la última ruta calculada
+window._modoTiempo                    = 'ahora';   // 'ahora' | 'salir' | 'llegar'
+window._fechaSalida                   = null;      // Date con la fecha/hora seleccionada (null = ahora)
+window._rutaCalculadaDuracionMinutos  = null;      // Duración en minutos de la última ruta calculada
 
-function toggleSalirAhoralista() {
-    const dd = document.getElementById('salir-ahora-lista');
+function toggleSalirAhoraDropdown() {
+    const dd = document.getElementById('salir-ahora-dropdown');
     if (!dd) return;
     const visible = dd.style.display !== 'none';
     dd.style.display = visible ? 'none' : 'block';
     if (!visible) {
         // Cerrar al hacer clic fuera
         setTimeout(() => {
-            document.addEventListener('click', cerrarlistaSalir, { once: true });
+            document.addEventListener('click', _cerrarDropdownSalir, { once: true });
         }, 0);
     }
 }
 
-function cerrarlistaSalir(e) {
-    const dd = document.getElementById('salir-ahora-lista');
+function _cerrarDropdownSalir(e) {
+    const dd = document.getElementById('salir-ahora-dropdown');
     if (dd && !dd.contains(e.target)) dd.style.display = 'none';
 }
 
 function seleccionarModoTiempo(modo) {
-    window.modoTiempo = modo;
-    const dd      = document.getElementById('salir-ahora-lista');
+    window._modoTiempo = modo;
+    const dd      = document.getElementById('salir-ahora-dropdown');
     const picker  = document.getElementById('salir-datetime-picker');
     const label   = document.getElementById('salir-ahora-label');
     const icon    = document.getElementById('salir-datetime-icon');
     if (dd) dd.style.display = 'none';
 
-    // Marcar item activo en lista
+    // Marcar item activo en dropdown
     ['ahora','salir','llegar'].forEach(m => {
         const el = document.getElementById('sdrop-' + m);
         if (el) el.style.fontWeight = (m === modo) ? '700' : '400';
     });
 
     if (modo === 'ahora') {
-        window.fechaSalida = null;
+        window._fechaSalida = null;
         if (label)  label.textContent  = '🕐 Salir ahora';
         if (picker) picker.style.display = 'none';
-        actualizarCoefInfo(new Date());
+        _actualizarCoefInfo(new Date());
     } else {
         // Inicializar inputs con fecha/hora actual si no tienen valor
         const horaInput  = document.getElementById('salir-hora-input');
@@ -197,8 +197,8 @@ function seleccionarModoTiempo(modo) {
         onSalirDatetimeChange();
     }
 
-    if (window.rutaCalculadaDuracionMinutos != null) {
-        mostrarInfoTemporal(window.rutaCalculadaDuracionMinutos);
+    if (window._rutaCalculadaDuracionMinutos != null) {
+        _mostrarInfoTemporal(window._rutaCalculadaDuracionMinutos);
     }
 }
 
@@ -212,15 +212,15 @@ function onSalirDatetimeChange() {
     const fecha    = new Date(`${fechaStr}T${horaStr}:00`);
     if (isNaN(fecha.getTime())) return;
 
-    window.fechaSalida = fecha;
-    actualizarCoefInfo(fecha);
+    window._fechaSalida = fecha;
+    _actualizarCoefInfo(fecha);
 
-    if (window.rutaCalculadaDuracionMinutos != null) {
-        mostrarInfoTemporal(window.rutaCalculadaDuracionMinutos);
+    if (window._rutaCalculadaDuracionMinutos != null) {
+        _mostrarInfoTemporal(window._rutaCalculadaDuracionMinutos);
     }
 }
 
-function actualizarCoefInfo(fecha) {
+function _actualizarCoefInfo(fecha) {
     const infoEl = document.getElementById('salir-coef-info');
     if (!infoEl) return;
     if (typeof obtenerCoeficiente !== 'function') return;
@@ -244,8 +244,8 @@ function actualizarCoefInfo(fecha) {
  * En modo 'ahora' devuelve new Date().
  */
 function obtenerFechaEfectiva() {
-    if (window.modoTiempo === 'ahora' || !window.fechaSalida) return new Date();
-    return window.fechaSalida;
+    if (window._modoTiempo === 'ahora' || !window._fechaSalida) return new Date();
+    return window._fechaSalida;
 }
 
 // ==================== FLUJO CÓMO LLEGAR ====================
@@ -266,7 +266,7 @@ function abrirComoLlegar() {
     }
     // Desactivar modos incompatibles con la selección de puntos
     if (modoObstaculo) desactivarModoObstaculo();
-    if (typeof desactivarModoEvento === 'function' && window.modoEvento) desactivarModoEvento();
+    if (typeof desactivarModoEvento === 'function' && window._modoEvento) desactivarModoEvento();
     mostrarInstruccionOrigen();
     showNotification('Haz clic en el mapa para elegir el origen', 'success');
 }
@@ -323,10 +323,10 @@ function pedirOrigen() {
     if (!puntoOrigen) {
         // Desactivar modos que interfieren con la selección de punto
         if (modoObstaculo) desactivarModoObstaculo();
-        if (typeof desactivarModoEvento === 'function' && window.modoEvento) desactivarModoEvento();
+        if (typeof desactivarModoEvento === 'function' && window._modoEvento) desactivarModoEvento();
         mostrarInstruccionOrigen();
-        window.esperandoOrigen = true;
-        window.esperandoDestino = false;
+        window._esperandoOrigen = true;
+        window._esperandoDestino = false;
         showNotification('Haz clic en el mapa para elegir el origen', 'info');
     }
 }
@@ -335,10 +335,10 @@ function pedirDestino() {
     if (puntoOrigen && !puntoDestino) {
         // Desactivar modos que interfieren con la selección de punto
         if (modoObstaculo) desactivarModoObstaculo();
-        if (typeof desactivarModoEvento === 'function' && window.modoEvento) desactivarModoEvento();
+        if (typeof desactivarModoEvento === 'function' && window._modoEvento) desactivarModoEvento();
         mostrarInstruccionDestino();
-        window.esperandoDestino = true;
-        window.esperandoOrigen = false;
+        window._esperandoDestino = true;
+        window._esperandoOrigen = false;
         showNotification('Haz clic en el mapa para elegir el destino', 'info');
     }
 }
@@ -346,10 +346,10 @@ function pedirDestino() {
 /** Llamada desde el label MSW de origen: desactiva modos incompatibles inmediatamente. */
 function iniciarSeleccionOrigen() {
     if (modoObstaculo) desactivarModoObstaculo();
-    if (typeof desactivarModoEvento === 'function' && window.modoEvento) desactivarModoEvento();
+    if (typeof desactivarModoEvento === 'function' && window._modoEvento) desactivarModoEvento();
     modoActual = 'ruta';
-    window.esperandoOrigen  = true;
-    window.esperandoDestino = false;
+    window._esperandoOrigen  = true;
+    window._esperandoDestino = false;
     mostrarInstruccionOrigen();
     showNotification('Haz clic en el mapa para colocar el ORIGEN', 'info');
 }
@@ -357,20 +357,20 @@ function iniciarSeleccionOrigen() {
 /** Llamada desde el label MSW de destino: desactiva modos incompatibles inmediatamente. */
 function iniciarSeleccionDestino() {
     if (modoObstaculo) desactivarModoObstaculo();
-    if (typeof desactivarModoEvento === 'function' && window.modoEvento) desactivarModoEvento();
+    if (typeof desactivarModoEvento === 'function' && window._modoEvento) desactivarModoEvento();
     modoActual = 'ruta';
-    window.esperandoDestino = true;
-    window.esperandoOrigen  = false;
+    window._esperandoDestino = true;
+    window._esperandoOrigen  = false;
     mostrarInstruccionDestino();
     showNotification('Haz clic en el mapa para colocar el DESTINO', 'info');
 }
 
-function actualizarLabels() {
+function _actualizarLabels() {
     const origenEl  = document.getElementById('rp-origen-label');
     const destinoEl = document.getElementById('rp-destino-label');
     if (origenEl) {
         if (puntoOrigen) {
-            origenEl.textContent = `📍 ${puntoOrigen.lat.toFixed(5)}, ${puntoOrigen.lon.toFixed(5)}`;
+            origenEl.textContent = `📍 ${puntoOrigen.lat.toFixed(5)}, ${puntoOrigen.lng.toFixed(5)}`;
             origenEl.classList.remove('placeholder');
         } else {
             origenEl.textContent = 'Elige un punto de origen…';
@@ -379,7 +379,7 @@ function actualizarLabels() {
     }
     if (destinoEl) {
         if (puntoDestino) {
-            destinoEl.textContent = `🎯 ${puntoDestino.lat.toFixed(5)}, ${puntoDestino.lon.toFixed(5)}`;
+            destinoEl.textContent = `🎯 ${puntoDestino.lat.toFixed(5)}, ${puntoDestino.lng.toFixed(5)}`;
             destinoEl.classList.remove('placeholder');
         } else {
             destinoEl.textContent = 'Elige un destino…';
@@ -392,12 +392,12 @@ function actualizarLabels() {
  * Sincroniza los labels del widget flotante (msw) con los puntos actuales.
  * Se llama siempre que cambia origen o destino desde el mapa.
  */
-function actualizarLabelsMsw() {
+function _actualizarLabelsMsw() {
     const ol = document.getElementById('msw-origen-label');
     const dl = document.getElementById('msw-destino-label');
     if (ol) {
         if (puntoOrigen) {
-            ol.textContent = `📍 ${puntoOrigen.lat.toFixed(5)}, ${puntoOrigen.lon.toFixed(5)}`;
+            ol.textContent = `📍 ${puntoOrigen.lat.toFixed(5)}, ${puntoOrigen.lng.toFixed(5)}`;
             ol.classList.remove('placeholder');
         } else {
             ol.textContent = 'Elige un punto de origen…';
@@ -406,7 +406,7 @@ function actualizarLabelsMsw() {
     }
     if (dl) {
         if (puntoDestino) {
-            dl.textContent = `🎯 ${puntoDestino.lat.toFixed(5)}, ${puntoDestino.lon.toFixed(5)}`;
+            dl.textContent = `🎯 ${puntoDestino.lat.toFixed(5)}, ${puntoDestino.lng.toFixed(5)}`;
             dl.classList.remove('placeholder');
         } else {
             dl.textContent = 'Elige un destino…';
@@ -420,10 +420,10 @@ function actualizarLabelsMsw() {
 /**
  * Tabla de 4 niveles de impacto para obstáculos.
  * Idéntica en escala a NIVELES_EVENTO (event-manager.js):
- *   Nivel 1 -> 25%  -> ×1.75  (impacto leve)
- *   Nivel 2 -> 50%  -> ×2.5   (impacto moderado)
- *   Nivel 3 -> 75%  -> ×3.25  (impacto alto)
- *   Nivel 4 -> 100% -> ×4.0   (impacto máximo)
+ *   Nivel 1 → 25%  → ×1.75  (impacto leve)
+ *   Nivel 2 → 50%  → ×2.5   (impacto moderado)
+ *   Nivel 3 → 75%  → ×3.25  (impacto alto)
+ *   Nivel 4 → 100% → ×4.0   (impacto máximo)
  */
 const NIVELES_OBS = {
     1: { pct: 25,  color: '#27ae60', label: 'Nivel 1', desc: 'Leve'     },
@@ -433,25 +433,25 @@ const NIVELES_OBS = {
 };
 
 /** Convierte obstruccion (0-1) al nivel 1-4 más cercano. */
-function nivelObs(obstruccion) {
+function _nivelObs(obstruccion) {
     const nivel = Math.round((obstruccion ?? 0.5) * 4);
     return Math.max(1, Math.min(4, nivel || 1));
 }
 
 /** Devuelve el color del nivel correspondiente a la obstruccion dada. */
-function colorObs(v) {
+function _colorObs(v) {
     return NIVELES_OBS[_nivelObs(v)].color;
 }
 
 // ==================== LISTA DE OBSTÁCULOS ====================
 
-function nombresViasAfectadas(obs) {
+function _nombresViasAfectadas(obs) {
     if (!window.currentViasGeoJSON?.features) return [];
     // 5 m en grados aprox (1° ≈ 111 km)
     const RADIO_DEG  = 5 / 111000;
     const RADIO_DEG2 = RADIO_DEG * RADIO_DEG;
-    const oLat = obs.latlon.lat;
-    const oLon = obs.latlon.lon;
+    const oLat = obs.latlng.lat;
+    const oLon = obs.latlng.lng;
     const nombres = new Set();
 
     for (const f of window.currentViasGeoJSON.features) {
@@ -479,7 +479,7 @@ function nombresViasAfectadas(obs) {
     return [...nombres];
 }
 
-function actualizarListaObstaculos() {
+function _actualizarListaObstaculos() {
     const lista    = document.getElementById('lista-obstaculos');
     const vacia    = document.getElementById('lista-obstaculos-vacia');
     const contador = document.getElementById('obstaculos-contador');
@@ -517,10 +517,10 @@ function actualizarListaObstaculos() {
 
     activos.forEach(obs => {
         const idx   = obstaculos.indexOf(obs);
-        const nivel = nivelObs(obs.obstruccion ?? 0.5);
+        const nivel = _nivelObs(obs.obstruccion ?? 0.5);
         const info  = NIVELES_OBS[nivel];
         const color = info.color;
-        const nombres = nombresViasAfectadas(obs);
+        const nombres = _nombresViasAfectadas(obs);
 
         const activosFiltrado = obstaculos.filter(Boolean);
         const numFila = activosFiltrado.indexOf(obs) + 1;
@@ -564,10 +564,10 @@ function actualizarListaObstaculos() {
 
 // ==================== POPUP DE OBSTÁCULO ====================
 
-function popupHTML(idx) {
+function _popupHTML(idx) {
     const obs   = obstaculos[idx];
     if (!obs) return '';
-    const nivel = nivelObs(obs.obstruccion ?? 0.5);
+    const nivel = _nivelObs(obs.obstruccion ?? 0.5);
     const info  = NIVELES_OBS[nivel];
     const activos = obstaculos.filter(Boolean);
     const numFila = activos.indexOf(obs) + 1;
@@ -605,7 +605,7 @@ function popupHTML(idx) {
         </div>`;
 }
 
-function aplicarPctPopup(idx) {
+function _aplicarPctPopup(idx) {
     const obs    = obstaculos[idx];
     if (!obs) return;
     const slider = document.getElementById(`obs-pct-slider-${idx}`);
@@ -613,22 +613,22 @@ function aplicarPctPopup(idx) {
     const nuevaObs = parseInt(slider.value, 10) / 100;
     if (nuevaObs === obs.obstruccion) return;
     obs.obstruccion = nuevaObs;
-    const color = colorObs(nuevaObs);
+    const color = _colorObs(nuevaObs);
     if (obs.circulo) obs.circulo.setStyle({ color, fillColor: color });
     obs.segmentosBloqueados?.forEach(s => s.setStyle({ color }));
-    obs.marker.bindPopup(popupHTML(idx), { maxWidth: 230 });
-    actualizarListaObstaculos();
-    showNotification(`Obstáculo ${obs.obsId !== null ? '#' + obs.obsId : '(sin ID)'} -> ${Math.round(nuevaObs*100)}%`, 'info');
+    obs.marker.bindPopup(_popupHTML(idx), { maxWidth: 230 });
+    _actualizarListaObstaculos();
+    showNotification(`Obstáculo ${obs.obsId !== null ? '#' + obs.obsId : '(sin ID)'} → ${Math.round(nuevaObs*100)}%`, 'info');
 }
 
 // ==================== MODAL % AL CREAR OBSTÁCULO ====================
 
-let latlonPendiente   = null;
-let moverObstaculoIdx = null;
+let _latlngPendiente   = null;
+let _moverObstaculoIdx = null;
 
 /** Resetea el modal a su estado inicial cada vez que se abre */
-function pedirPorcentajeObstaculo(latlon) {
-    latlonPendiente = latlon;
+function _pedirPorcentajeObstaculo(latlng) {
+    _latlngPendiente = latlng;
 
     const slider  = document.getElementById('obstaculo-pct');
     const display = document.getElementById('obstaculo-pct-display');
@@ -658,7 +658,7 @@ function pedirPorcentajeObstaculo(latlon) {
  * Activa la edición inline del título, estilo "renombrar carpeta en Windows":
  * selecciona todo el texto, fondo azul claro, cursor de texto.
  */
-function activarEdicionTitulo(el) {
+function _activarEdicionTitulo(el) {
     if (!el) return;
     const hint  = document.getElementById('obstaculo-id-hint');
     const errEl = document.getElementById('obstaculo-id-error');
@@ -703,21 +703,21 @@ function activarEdicionTitulo(el) {
 
         // Validar: solo letras, números, guiones y guiones bajos
         if (!/^[\w\-]+$/.test(raw)) {
-            if (errEl) { errEl.textContent = 'El ID solo puede contener letras, números, - y .'; errEl.style.display = 'block'; }
+            if (errEl) { errEl.textContent = 'El ID solo puede contener letras, números, - y _.'; errEl.style.display = 'block'; }
             el.textContent = '🚧 Nuevo obstáculo';
             if (hint) hint.style.display = '';
             return;
         }
 
         // Comprobar duplicado
-        if (obsIdEnUso(raw)) {
+        if (_obsIdEnUso(raw)) {
             if (errEl) { errEl.textContent = `El ID "\${raw}" ya está en uso. Elige otro.`; errEl.style.display = 'block'; }
             el.textContent = '🚧 Nuevo obstáculo';
             if (hint) hint.style.display = '';
             return;
         }
 
-        // ID válido -> actualizar título con confirmación visual
+        // ID válido → actualizar título con confirmación visual
         el.textContent  = `🚧 Obstáculo #${raw}`;
         if (hint)  hint.style.display  = 'none';
         if (errEl) errEl.style.display = 'none';
@@ -726,7 +726,7 @@ function activarEdicionTitulo(el) {
 
 function cerrarObstaculoModal() {
     document.getElementById('obstaculo-modal').style.display = 'none';
-    latlonPendiente = null;
+    _latlngPendiente = null;
 }
 
 function confirmarObstaculo() {
@@ -742,7 +742,7 @@ function confirmarObstaculo() {
     if (matchId) {
         const parsed = matchId[1];
         // Doble check por si se cambió algo entre blur y click
-        if (obsIdEnUso(parsed)) {
+        if (_obsIdEnUso(parsed)) {
             if (errEl) { errEl.textContent = `El ID "\${parsed}" ya está en uso. Cambia el título.`; errEl.style.display = 'block'; }
             return;
         }
@@ -750,12 +750,12 @@ function confirmarObstaculo() {
     }
 
     document.getElementById('obstaculo-modal').style.display = 'none';
-    if (latlonPendiente) crearObstaculo(latlonPendiente, pct / 100, obsId);
-    latlonPendiente = null;
+    if (_latlngPendiente) crearObstaculo(_latlngPendiente, pct / 100, obsId);
+    _latlngPendiente = null;
 }
 
 function iniciarMoverObstaculo(idx) {
-    moverObstaculoIdx = idx;
+    _moverObstaculoIdx = idx;
     map.closePopup();
     showNotification('Haz clic en el mapa para colocar el obstáculo en su nueva posición', 'info');
     document.getElementById('map').style.cursor = 'crosshair';
@@ -764,11 +764,11 @@ function iniciarMoverObstaculo(idx) {
 // ── Helper compartido: encuentra segmentos de vía dentro de un radio ─────────
 // Usa aritmética pura en grados evitando la creación de objetos L.LatLng en
 // el bucle interno. 5 muestras por segmento son suficientes para radios ≤ 10 m.
-function segmentosViasEnRadio(latlon, radioMetros) {
+function _segmentosViasEnRadio(latlng, radioMetros) {
     const segs   = [];
     if (!viasLayer) return segs;
-    const oLat   = latlon.lat;
-    const oLon   = latlon.lon;
+    const oLat   = latlng.lat;
+    const oLon   = latlng.lng;
     const rDeg   = radioMetros / 111000;
     const rDeg2  = rDeg * rDeg;
 
@@ -793,21 +793,21 @@ function segmentosViasEnRadio(latlon, radioMetros) {
     return segs;
 }
 
-function moverObstaculoA(idx, nuevaLatlon) {
+function _moverObstaculoA(idx, nuevaLatlng) {
     const obs = obstaculos[idx];
     if (!obs) return;
 
     // Reubicar marcador y círculo
-    obs.marker.setLatLng(nuevaLatlon);
-    if (obs.circulo) obs.circulo.setLatLng(nuevaLatlon);
-    obs.latlon = nuevaLatlon;
+    obs.marker.setLatLng(nuevaLatlng);
+    if (obs.circulo) obs.circulo.setLatLng(nuevaLatlng);
+    obs.latlng = nuevaLatlng;
 
     // Eliminar segmentos bloqueados anteriores y recalcular
     obs.segmentosBloqueados?.forEach(s => map.removeLayer(s));
     obs.segmentosBloqueados = [];
 
-    const color = colorObs(obs.obstruccion ?? 0.5);
-    segmentosViasEnRadio(nuevaLatlon, 5).forEach(({ p1, p2 }) => {
+    const color = _colorObs(obs.obstruccion ?? 0.5);
+    _segmentosViasEnRadio(nuevaLatlng, 5).forEach(({ p1, p2 }) => {
         obs.segmentosBloqueados.push(
             L.polyline([p1, p2], {
                 color, weight: 6, opacity: 1,
@@ -817,9 +817,9 @@ function moverObstaculoA(idx, nuevaLatlon) {
     });
 
     // Reasignar popup (el índice no cambia)
-    obs.marker.bindPopup(popupHTML(idx), { maxWidth: 230 });
+    obs.marker.bindPopup(_popupHTML(idx), { maxWidth: 230 });
 
-    actualizarListaObstaculos();
+    _actualizarListaObstaculos();
     if (typeof window.refrescarTablaObstaculosSiAbierta === 'function')
         window.refrescarTablaObstaculosSiAbierta();
 
@@ -831,46 +831,46 @@ function moverObstaculoA(idx, nuevaLatlon) {
 
 map.on('click', function (e) {
     // Si se está esperando origen/destino, tienen prioridad absoluta: cancelar modo evento
-    if ((window.esperandoOrigen || window.esperandoDestino) && window.modoEvento) {
+    if ((window._esperandoOrigen || window._esperandoDestino) && window._modoEvento) {
         if (typeof desactivarModoEvento === 'function') desactivarModoEvento();
         // no hacer return: continuar para procesar el punto de origen/destino
     }
 
     // Modo evento: gestionado exclusivamente por map-widgets.js — no procesar aquí
-    if (typeof window.eventoClickHandler === 'function' && window.modoEvento) return;
+    if (typeof window._eventoClickHandler === 'function' && window._modoEvento) return;
 
     // Modo mover: reposiciona conservando el objeto completo (ID incluido)
-    if (moverObstaculoIdx !== null) {
-        const idx = moverObstaculoIdx;
-        moverObstaculoIdx = null;
+    if (_moverObstaculoIdx !== null) {
+        const idx = _moverObstaculoIdx;
+        _moverObstaculoIdx = null;
         document.getElementById('map').style.cursor = '';
-        moverObstaculoA(idx, e.latlon);
+        _moverObstaculoA(idx, e.latlng);
         return;
     }
 
     // Si estamos esperando origen o destino, tienen prioridad absoluta sobre el modo obstáculo
-    if (window.esperandoOrigen || window.esperandoDestino) {
+    if (window._esperandoOrigen || window._esperandoDestino) {
         if (modoObstaculo) desactivarModoObstaculo();
         if (modoPoi)       desactivarModoPoi();
-        if (typeof desactivarModoEvento === 'function' && window.modoEvento) desactivarModoEvento();
+        if (typeof desactivarModoEvento === 'function' && window._modoEvento) desactivarModoEvento();
     }
 
     // Nuevo obstáculo: pedir porcentaje primero (solo si NO estamos esperando origen/destino)
-    if (modoObstaculo && !window.esperandoOrigen && !window.esperandoDestino) {
-        pedirPorcentajeObstaculo(e.latlon);
+    if (modoObstaculo && !window._esperandoOrigen && !window._esperandoDestino) {
+        _pedirPorcentajeObstaculo(e.latlng);
         return;
     }
 
     // Nuevo POI manual (solo si NO estamos esperando origen/destino)
-    if (modoPoi && !window.esperandoOrigen && !window.esperandoDestino) {
-        onMapClickPoi(e.latlon);
+    if (modoPoi && !window._esperandoOrigen && !window._esperandoDestino) {
+        _onMapClickPoi(e.latlng);
         return;
     }
 
     if (modoActual !== 'ruta') return;
 
-    if (window.esperandoOrigen) {
-        window.esperandoOrigen = false;
+    if (window._esperandoOrigen) {
+        window._esperandoOrigen = false;
         if (marcadorOrigen) map.removeLayer(marcadorOrigen);
         // Solo limpiar destino si no estaba previamente fijado (ej. desde "Cómo llegar")
         if (!puntoDestino) {
@@ -880,48 +880,48 @@ map.on('click', function (e) {
             window.segmentosBloqueadosCapas = [];
             marcadorDestino = null;
         }
-        puntoOrigen    = e.latlon;
+        puntoOrigen    = e.latlng;
         marcadorOrigen = L.marker(puntoOrigen, { icon: crearIconoMarcador('📍') }).addTo(map);
-        actualizarLabels();
-        actualizarLabelsMsw();
+        _actualizarLabels();
+        _actualizarLabelsMsw();
         ocultarInstruccion(); // Ocultar cursor especial después de seleccionar
         showNotification('✅ Origen fijado', 'success');
 
-    } else if (window.esperandoDestino) {
-        window.esperandoDestino = false;
+    } else if (window._esperandoDestino) {
+        window._esperandoDestino = false;
         if (marcadorDestino) map.removeLayer(marcadorDestino);
         if (rutaLayer) { map.removeLayer(rutaLayer); rutaLayer = null; }
         window.segmentosBloqueadosCapas?.forEach(c => map.removeLayer(c));
         window.segmentosBloqueadosCapas = [];
-        puntoDestino    = e.latlon;
+        puntoDestino    = e.latlng;
         marcadorDestino = L.marker(puntoDestino, { icon: crearIconoMarcador('🎯') }).addTo(map);
-        actualizarLabels();
+        _actualizarLabels();
         ocultarInstruccion(); // Ya estaba aquí, pero aseguramos consistencia
         document.getElementById('map').classList.remove('cursor-origen', 'cursor-destino');
-        actualizarLabelsMsw();
+        _actualizarLabelsMsw();
         showNotification('🎯 Destino fijado', 'success');
 
     } else if (!puntoOrigen) {
         // Desactivar modos incompatibles
         if (modoObstaculo) desactivarModoObstaculo();
-        if (typeof desactivarModoEvento === 'function' && window.modoEvento) desactivarModoEvento();
-        puntoOrigen    = e.latlon;
+        if (typeof desactivarModoEvento === 'function' && window._modoEvento) desactivarModoEvento();
+        puntoOrigen    = e.latlng;
         marcadorOrigen = L.marker(puntoOrigen, { icon: crearIconoMarcador('📍') }).addTo(map);
-        actualizarLabels();
-        actualizarLabelsMsw();
+        _actualizarLabels();
+        _actualizarLabelsMsw();
         mostrarInstruccionDestino();
         showNotification('✅ Origen seleccionado. Ahora selecciona el destino', 'success');
 
     } else if (!puntoDestino) {
         // Desactivar modos incompatibles
         if (modoObstaculo) desactivarModoObstaculo();
-        if (typeof desactivarModoEvento === 'function' && window.modoEvento) desactivarModoEvento();
-        puntoDestino    = e.latlon;
+        if (typeof desactivarModoEvento === 'function' && window._modoEvento) desactivarModoEvento();
+        puntoDestino    = e.latlng;
         marcadorDestino = L.marker(puntoDestino, { icon: crearIconoMarcador('🎯') }).addTo(map);
-        actualizarLabels();
+        _actualizarLabels();
         ocultarInstruccion();
         document.getElementById('map').classList.remove('cursor-origen', 'cursor-destino');
-        actualizarLabelsMsw();
+        _actualizarLabelsMsw();
         showNotification('🎯 Destino seleccionado. Pulsa "Calcular ruta" para continuar', 'info');
     }
 });
@@ -937,7 +937,7 @@ function calcularRuta(forzar = false) {
     }
 
     // Si sigue sin estar configurado y el usuario puede hacerlo, abrir modal
-    if (!window.camposRutaConfigurados && window.userRol !== 'invitado') {
+    if (!window.camposRutaConfigurados && window._userRol !== 'invitado') {
         showNotification('⚙️ Configura los atributos de ruta antes de calcular', 'warning');
         abrirConfigCamposRuta();
         return;
@@ -949,8 +949,8 @@ function calcularRuta(forzar = false) {
     obstaculos = obstaculos.filter(Boolean);
 
     const obstaculosActivos = obstaculos.filter(Boolean).map(obs => ({
-        lat:         obs.latlon.lat,
-        lon:         obs.latlon.lon,
+        lat:         obs.latlng.lat,
+        lon:         obs.latlng.lng,
         radio:       5,
         obstruccion: obs.obstruccion ?? 0.5
     }));
@@ -958,7 +958,7 @@ function calcularRuta(forzar = false) {
     // Calcular pesos — puede lanzar error si los campos configurados son inválidos
     let pesos;
     try {
-        pesos = calcularPesosAristas();
+        pesos = _calcularPesosAristas();
     } catch (err) {
         ocultarProgreso();
         showNotification('❌ ' + err.message, 'error');
@@ -976,8 +976,8 @@ function calcularRuta(forzar = false) {
     // Construir el array de pesos a enviar al backend.
     // OPTIMIZACIÓN: el backend ya tiene los pesos base del grafo calculados en Python.
     // Solo enviamos los segmentos que se desvían del valor base:
-    //   - Momento activo -> todos los segmentos con factor > 1.0
-    //   - Sin Momento    -> array vacío (el backend usa sus propios pesos base)
+    //   - Momento activo → todos los segmentos con factor > 1.0
+    //   - Sin Momento    → array vacío (el backend usa sus propios pesos base)
     // Los obstáculos se envían por separado y el backend los penaliza en su propio grafo.
     let pesosEnvio = [];
     if (window.estadoTemporal?.activo && Array.isArray(pesos)) {
@@ -994,20 +994,20 @@ function calcularRuta(forzar = false) {
     }
 
     const payload = {
-        origen:          { lat: puntoOrigen.lat,  lon: puntoOrigen.lon  },
-        destino:         { lat: puntoDestino.lat, lon: puntoDestino.lon },
+        origen:          { lat: puntoOrigen.lat,  lon: puntoOrigen.lng  },
+        destino:         { lat: puntoDestino.lat, lon: puntoDestino.lng },
         obstaculos:      forzar ? [] : obstaculosActivos,
         pesos:           pesosEnvio,
         coef_temporal:   coefTemporal,
         momento_activo:  window.estadoTemporal?.activo || false,
         momento_dia:     window.estadoTemporal?.dia     || 1,
         momento_hora:    window.estadoTemporal?.hora    || 12,
-        modo_tiempo:     window.modoTiempo || 'ahora',
-        tipo_vehiculo:   window.vehiculoActual || 'coche',
-        emergencia:      window.modoEmergencia || false,
-        emerg_velocidad: window.emergVelocidad !== false,   // true -> respetar veloc. máx
-        emerg_giros:     window.emergGiros     !== false,   // true -> respetar restricc. giro
-        emerg_sentido:   window.emergSentido   !== false,   // true -> respetar sentido circulación
+        modo_tiempo:     window._modoTiempo || 'ahora',
+        tipo_vehiculo:   window._vehiculoActual || 'coche',
+        emergencia:      window._modoEmergencia || false,
+        emerg_velocidad: window._emergVelocidad !== false,   // true → respetar veloc. máx
+        emerg_giros:     window._emergGiros     !== false,   // true → respetar restricc. giro
+        emerg_sentido:   window._emergSentido   !== false,   // true → respetar sentido circulación
     };
 
     setTimeout(() => mostrarProgreso('Buscando nodos cercanos...', 40), 200);
@@ -1028,7 +1028,7 @@ function calcularRuta(forzar = false) {
             return;
         }
 
-        // Si la ruta pasa por obstáculos -> avisar pero siempre dibujar
+        // Si la ruta pasa por obstáculos → avisar pero siempre dibujar
         if (data.usa_obstaculos && !forzar) {
             showNotification('⚠️ La ruta óptima atraviesa ' + data.segmentos_penalizados_usados + ' tramo(s) con obstáculos', 'warning');
         }
@@ -1036,16 +1036,16 @@ function calcularRuta(forzar = false) {
         // Dibujar ruta
         // Eliminar SIEMPRE las capas anteriores antes de crear las nuevas
         if (rutaLayer) { map.removeLayer(rutaLayer); rutaLayer = null; }
-        if (window.rutaLayerBordeEmergencia) { map.removeLayer(window.rutaLayerBordeEmergencia); window.rutaLayerBordeEmergencia = null; }
+        if (window._rutaLayerBordeEmergencia) { map.removeLayer(window._rutaLayerBordeEmergencia); window._rutaLayerBordeEmergencia = null; }
         // Eliminar capa del historial si estaba visible
         if (typeof historialLimpiarCapaMapa === 'function') historialLimpiarCapaMapa();
 
-        const esCamion     = (window.vehiculoActual === 'camion');
-        const esEmergencia = (window.modoEmergencia === true);
+        const esCamion     = (window._vehiculoActual === 'camion');
+        const esEmergencia = (window._modoEmergencia === true);
 
         // Colores de ruta:
-        //   Veh. Ligero  -> azul corporativo  #85c9f7
-        //   Veh. Pesado  -> azul oscuro       #2980b9
+        //   Veh. Ligero  → azul corporativo  #85c9f7
+        //   Veh. Pesado  → azul oscuro       #2980b9
         // En modo emergencia se añade borde rojo mediante doble capa
         const colorRuta = esCamion ? '#2980b9' : '#85c9f7';
         const pesoRuta  = esCamion ? 7 : 5;
@@ -1058,16 +1058,16 @@ function calcularRuta(forzar = false) {
                 }
             }).addTo(map);
             bordeEmergencia.eachLayer(function(l) {
-                if (l.path) {
-                    l.path.setAttribute('stroke', '#e74c3c');
-                    l.path.setAttribute('stroke-width', String(pesoRuta + 4));
-                    l.path.setAttribute('stroke-opacity', '0.9');
-                    l.path.style.stroke        = '#e74c3c';
-                    l.path.style.strokeWidth   = (pesoRuta + 4) + 'px';
-                    l.path.style.strokeOpacity = '0.9';
+                if (l._path) {
+                    l._path.setAttribute('stroke', '#e74c3c');
+                    l._path.setAttribute('stroke-width', String(pesoRuta + 4));
+                    l._path.setAttribute('stroke-opacity', '0.9');
+                    l._path.style.stroke        = '#e74c3c';
+                    l._path.style.strokeWidth   = (pesoRuta + 4) + 'px';
+                    l._path.style.strokeOpacity = '0.9';
                 }
             });
-            window.rutaLayerBordeEmergencia = bordeEmergencia;
+            window._rutaLayerBordeEmergencia = bordeEmergencia;
         }
 
         rutaLayer = L.geoJSON(data.ruta, {
@@ -1078,13 +1078,13 @@ function calcularRuta(forzar = false) {
 
         // Forzar el color directamente en el SVG por si algún CSS lo sobreescribe
         rutaLayer.eachLayer(function(l) {
-            if (l.path) {
-                l.path.setAttribute('stroke', colorRuta);
-                l.path.setAttribute('stroke-width', String(pesoRuta));
-                l.path.setAttribute('stroke-opacity', '0.85');
-                l.path.style.stroke        = colorRuta;
-                l.path.style.strokeWidth   = pesoRuta + 'px';
-                l.path.style.strokeOpacity = '0.85';
+            if (l._path) {
+                l._path.setAttribute('stroke', colorRuta);
+                l._path.setAttribute('stroke-width', String(pesoRuta));
+                l._path.setAttribute('stroke-opacity', '0.85');
+                l._path.style.stroke        = colorRuta;
+                l._path.style.strokeWidth   = pesoRuta + 'px';
+                l._path.style.strokeOpacity = '0.85';
             }
         });
 
@@ -1106,48 +1106,48 @@ function calcularRuta(forzar = false) {
 
         // Actualizar panel de estadísticas (IDs del panel derecho clásico)
         const props = data.ruta?.properties ?? {};
-        window.rutaCalculadaDuracionMinutos = props.tiempo_minutos ?? null;
-        setText('ruta-distancia',           props.distancia_km            ?? '-');
-        setText('ruta-nodos',               props.num_nodos               ?? '-');
-        setText('ruta-tiempo',              fmtTiempo(props.tiempo_minutos));
-        setText('ruta-horas',               fmtTiempo(props.tiempo_minutos));
-        setText('ruta-velocidad',           props.velocidad_promedio_km_h  ?? '-');
-        setText('ruta-velocidad-ponderada', props.velocidad_promedio_ponderada?.toFixed(1) ?? '-');
+        window._rutaCalculadaDuracionMinutos = props.tiempo_minutos ?? null;
+        _setText('ruta-distancia',           props.distancia_km            ?? '-');
+        _setText('ruta-nodos',               props.num_nodos               ?? '-');
+        _setText('ruta-tiempo',              _fmtTiempo(props.tiempo_minutos));
+        _setText('ruta-horas',               _fmtTiempo(props.tiempo_minutos));
+        _setText('ruta-velocidad',           props.velocidad_promedio_km_h  ?? '-');
+        _setText('ruta-velocidad-ponderada', props.velocidad_promedio_ponderada?.toFixed(1) ?? '-');
         // Tipo de vía dominante: calculado en frontend cruzando la ruta con el GeoJSON
-        const tipoViaDominante = calcularTipoViaDominante(data.ruta?.geometry?.coordinates);
-        setText('ruta-tipo-via', tipoViaDominante ?? '—');
+        const tipoViaDominante = _calcularTipoViaDominante(data.ruta?.geometry?.coordinates);
+        _setText('ruta-tipo-via', tipoViaDominante ?? '—');
         document.getElementById('ruta-info')?.style.setProperty('display', 'block');
 
         // ── Actualizar también los IDs del panel MSW inline ──
-        setText('msw-tiempo-minutos', fmtTiempo(props.tiempo_minutos));
-        setText('msw-distancia-km',   props.distancia_km?.toFixed(2)   ?? '—');
-        setText('msw-velocidad',      props.velocidad_promedio_km_h    ?? '—');
-        setText('msw-tipo-via',       tipoViaDominante                 ?? '—');
+        _setText('msw-tiempo-minutos', _fmtTiempo(props.tiempo_minutos));
+        _setText('msw-distancia-km',   props.distancia_km?.toFixed(2)   ?? '—');
+        _setText('msw-velocidad',      props.velocidad_promedio_km_h    ?? '—');
+        _setText('msw-tipo-via',       tipoViaDominante                 ?? '—');
         const msrEl = document.getElementById('msw-resultados-ruta');
         if (msrEl) msrEl.style.display = 'block';
 
         // ── Registrar ruta en el historial del usuario ──
         if (typeof historialRegistrarRuta === 'function') {
             historialRegistrarRuta({
-                origen_label:   `${puntoOrigen.lat.toFixed(5)}, ${puntoOrigen.lon.toFixed(5)}`,
-                destino_label:  `${puntoDestino.lat.toFixed(5)}, ${puntoDestino.lon.toFixed(5)}`,
+                origen_label:   `${puntoOrigen.lat.toFixed(5)}, ${puntoOrigen.lng.toFixed(5)}`,
+                destino_label:  `${puntoDestino.lat.toFixed(5)}, ${puntoDestino.lng.toFixed(5)}`,
                 tiempo_min:     props.tiempo_minutos ?? null,
                 distancia_km:   props.distancia_km   ?? null,
-                vehiculo:       window.modoEmergencia ? 'emergencia' : (window.vehiculoActual || 'coche'),
-                origen_coords:  [puntoOrigen.lat,  puntoOrigen.lon],
-                destino_coords: [puntoDestino.lat, puntoDestino.lon],
+                vehiculo:       window._modoEmergencia ? 'emergencia' : (window._vehiculoActual || 'coche'),
+                origen_coords:  [puntoOrigen.lat,  puntoOrigen.lng],
+                destino_coords: [puntoDestino.lat, puntoDestino.lng],
                 geojson_ruta:   data.ruta ?? null,
             });
         }
 
         // ── Info de eventos activos que afectan la ruta ──
-        mostrarInfoEventosEnRuta(data.ruta?.geometry?.coordinates, props);
+        _mostrarInfoEventosEnRuta(data.ruta?.geometry?.coordinates, props);
 
         // ── Info de obstáculos que afectan la ruta ──
-        mostrarInfoObstaculosEnRuta(data.ruta?.geometry?.coordinates, props);
+        _mostrarInfoObstaculosEnRuta(data.ruta?.geometry?.coordinates, props);
 
         // Mostrar info temporal según el modo seleccionado
-        mostrarInfoTemporal(props.tiempo_minutos ?? 0);
+        _mostrarInfoTemporal(props.tiempo_minutos ?? 0);
 
         const warningDiv = document.getElementById('ruta-warning');
         const btnForzar  = document.getElementById('btn-forzar-ruta');
@@ -1211,7 +1211,7 @@ function limpiarRuta() {
     if (marcadorOrigen)  map.removeLayer(marcadorOrigen);
     if (marcadorDestino) map.removeLayer(marcadorDestino);
     if (rutaLayer)       map.removeLayer(rutaLayer);
-    if (window.rutaLayerBordeEmergencia) { map.removeLayer(window.rutaLayerBordeEmergencia); window.rutaLayerBordeEmergencia = null; }
+    if (window._rutaLayerBordeEmergencia) { map.removeLayer(window._rutaLayerBordeEmergencia); window._rutaLayerBordeEmergencia = null; }
     // Eliminar también la capa pintada desde el historial
     if (typeof historialLimpiarCapaMapa === 'function') historialLimpiarCapaMapa();
 
@@ -1219,8 +1219,8 @@ function limpiarRuta() {
     window.segmentosBloqueadosCapas = [];
 
     puntoOrigen = puntoDestino = marcadorOrigen = marcadorDestino = rutaLayer = null;
-    window.rutaCalculadaDuracionMinutos = null;
-    actualizarLabels();
+    window._rutaCalculadaDuracionMinutos = null;
+    _actualizarLabels();
 
     document.getElementById('ruta-info')?.style.setProperty('display', 'none');
     document.getElementById('ruta-warning')?.style.setProperty('display', 'none');
@@ -1230,7 +1230,7 @@ function limpiarRuta() {
     // Limpiar también el panel MSW de resultados inline
     const msrEl = document.getElementById('msw-resultados-ruta');
     if (msrEl) msrEl.style.display = 'none';
-    ['msw-tiempo-minutos','msw-distancia-km','msw-velocidad','msw-tipo-via'].forEach(id => setText(id, '—'));
+    ['msw-tiempo-minutos','msw-distancia-km','msw-velocidad','msw-tipo-via'].forEach(id => _setText(id, '—'));
     const infoTempEl = document.getElementById('msw-info-temporal');
     if (infoTempEl) infoTempEl.innerHTML = '';
 
@@ -1246,14 +1246,14 @@ function activarModoObstaculo() {
     const mswBtn   = document.getElementById('msw-btn-obstaculo');
     if (modoObstaculo) {
         // Cancelar selección de origen/destino si estaba activa
-        const habiaCancelando = window.esperandoDestino || window.esperandoOrigen;
+        const habiaCancelando = window._esperandoDestino || window._esperandoOrigen;
         if (habiaCancelando) {
-            window.esperandoDestino = false;
-            window.esperandoOrigen  = false;
+            window._esperandoDestino = false;
+            window._esperandoOrigen  = false;
             ocultarInstruccion();
         }
         // Desactivar modo evento si estaba activo
-        const habiaEvento = typeof desactivarModoEvento === 'function' && window.modoEvento;
+        const habiaEvento = typeof desactivarModoEvento === 'function' && window._modoEvento;
         if (habiaEvento) desactivarModoEvento();
         // Desactivar modo POI si estaba activo
         if (modoPoi) desactivarModoPoi();
@@ -1290,22 +1290,22 @@ function desactivarModoObstaculo() {
 /**
  * Comprueba si un obsId ya está en uso en la sesión actual.
  */
-function obsIdEnUso(id) {
+function _obsIdEnUso(id) {
     return obstaculos.filter(Boolean).some(o => o.obsId === id);
 }
 
 /**
  * Crea un obstáculo en el mapa.
- * @param {L.LatLng} latlon
+ * @param {L.LatLng} latlng
  * @param {number}   obstruccion  0-1
  * @param {number|null} obsId     ID explícito, o null si el usuario no asignó uno.
  *                                Los obstáculos sin ID muestran su num de fila (dinámico).
  * @param {string}   portal       Dirección postal de referencia, ej. "Calle Mayor 5" (opcional).
  */
-function crearObstaculo(latlon, obstruccion = 0.5, obsId = null, portal = '') {
-    const color = colorObs(obstruccion);
+function crearObstaculo(latlng, obstruccion = 0.5, obsId = null, portal = '') {
+    const color = _colorObs(obstruccion);
 
-    const marker = L.marker(latlon, {
+    const marker = L.marker(latlng, {
         icon: L.divIcon({
             className: 'marker-obstaculo',
             html: '<div style="font-size:32px;text-shadow:2px 2px 4px rgba(0,0,0,.7);">🚧</div>',
@@ -1313,12 +1313,12 @@ function crearObstaculo(latlon, obstruccion = 0.5, obsId = null, portal = '') {
         })
     }).addTo(map);
 
-    const circulo = L.circle(latlon, {
+    const circulo = L.circle(latlng, {
         radius: 5, color, fillColor: color, fillOpacity: 0.25, weight: 2
     }).addTo(map);
 
     // Usar el helper optimizado (sin L.latLng en el bucle interno)
-    const segmentosBloqueados = segmentosViasEnRadio(latlon, 5).map(({ p1, p2 }) =>
+    const segmentosBloqueados = _segmentosViasEnRadio(latlng, 5).map(({ p1, p2 }) =>
         L.polyline([p1, p2], {
             color, weight: 6, opacity: 1,
             dashArray: '10, 10', className: 'via-bloqueada'
@@ -1326,13 +1326,13 @@ function crearObstaculo(latlon, obstruccion = 0.5, obsId = null, portal = '') {
     );
 
     const idx  = obstaculos.length;
-    const obs  = { obsId, marker, circulo, latlon, obstruccion, segmentosBloqueados, portal: portal || '' };
+    const obs  = { obsId, marker, circulo, latlng, obstruccion, segmentosBloqueados, portal: portal || '' };
     obstaculos.push(obs);
 
-    marker.bindPopup(popupHTML(idx), { maxWidth: 230 });
-    marker.on('popupclose', () => aplicarPctPopup(idx));
+    marker.bindPopup(_popupHTML(idx), { maxWidth: 230 });
+    marker.on('popupclose', () => _aplicarPctPopup(idx));
 
-    actualizarListaObstaculos();
+    _actualizarListaObstaculos();
     if (typeof window.refrescarTablaObstaculosSiAbierta === 'function')
         window.refrescarTablaObstaculosSiAbierta();
     const label = obsId !== null ? `#${obsId}` : `sin ID`;
@@ -1346,7 +1346,7 @@ function eliminarObstaculo(index) {
     if (obs.circulo) map.removeLayer(obs.circulo);
     obs.segmentosBloqueados?.forEach(s => map.removeLayer(s));
     obstaculos[index] = null;
-    actualizarListaObstaculos();
+    _actualizarListaObstaculos();
     if (typeof window.refrescarTablaObstaculosSiAbierta === 'function')
         window.refrescarTablaObstaculosSiAbierta();
     showNotification(`Obstáculo ${obs.obsId !== null ? '#' + obs.obsId : '(sin ID)'} eliminado`, 'info');
@@ -1360,24 +1360,24 @@ function limpiarObstaculos() {
         obs.segmentosBloqueados?.forEach(s => map.removeLayer(s));
     });
     obstaculos = [];
-    actualizarListaObstaculos();
+    _actualizarListaObstaculos();
     if (typeof window.refrescarTablaObstaculosSiAbierta === 'function')
         window.refrescarTablaObstaculosSiAbierta();
     showNotification('Todos los obstáculos eliminados', 'info');
 }
 
-// ==================== EXPORTAR / IMPORTAR (backend -> QGIS) ====================
+// ==================== EXPORTAR / IMPORTAR (backend → QGIS) ====================
 
 async function exportarObstaculos(options = {}) {
     const activos = obstaculos.filter(Boolean);
     if (!activos.length) { showNotification('No hay obstáculos que exportar', 'info'); return; }
 
     const payload = activos.map((obs, i) => ({
-        lat:            obs.latlon.lat,
-        lon:            obs.latlon.lon,
+        lat:            obs.latlng.lat,
+        lon:            obs.latlng.lng,
         id:             obs.obsId !== null ? obs.obsId : (i + 1),
         pct:            Math.round((obs.obstruccion ?? 0.5) * 100),
-        vias_afectadas: nombresViasAfectadas(obs).join(', '),
+        vias_afectadas: _nombresViasAfectadas(obs).join(', '),
         fecha_creacion: new Date().toISOString().slice(0, 19).replace('T', ' '),
     }));
 
@@ -1425,7 +1425,7 @@ function importarObstaculos(input) {
         .then(r => r.json())
         .then(data => {
             if (data.error) { showNotification('Error: ' + data.error, 'error'); return; }
-            resolverImportacion(data.obstaculos);
+            _resolverImportacion(data.obstaculos);
         })
         .catch(err => showNotification('Error al importar: ' + err.message, 'error'));
 }
@@ -1438,13 +1438,13 @@ async function exportarObstaculosCSV(options = {}) {
     if (!activos.length) { showNotification('No hay obstáculos que exportar', 'info'); return; }
 
     const payload = activos.map((obs, i) => {
-        const viasAfectadas = nombresViasAfectadas(obs);
+        const viasAfectadas = _nombresViasAfectadas(obs);
         const escruce = viasAfectadas.length > 1;
         return {
             id:           i + 1,
             Nombre:       obs.obsId !== null ? obs.obsId : `${i + 1}`,
-            coord_lat:    obs.latlon.lat,
-            coord_lon:    obs.latlon.lon,
+            coord_lat:    obs.latlng.lat,
+            coord_lon:    obs.latlng.lng,
             Porcentaje:   Math.round((obs.obstruccion ?? 0.5) * 100),
             Cruce:        escruce ? 'Sí' : 'No',
             Calles:       viasAfectadas.join('; '),
@@ -1505,7 +1505,7 @@ function abrirModalExportacionObstaculos() {
     const fecha = new Date().toISOString().slice(0,10);
     formatoSelect.value = 'gpkg';
     filepathInput.value = `obstaculos_${fecha}.gpkg`;
-    obstaculosExportHandle = null;
+    _obstaculosExportHandle = null;
     modal.style.display = 'flex';
     setTimeout(() => formatoSelect.focus(), 80);
 }
@@ -1523,7 +1523,7 @@ function cambiarFormatoExportacionObstaculos() {
     if (!valor) valor = `obstaculos_${new Date().toISOString().slice(0,10)}.${formatoSelect.value === 'shp' ? 'zip' : formatoSelect.value}`;
     valor = valor.replace(/\.(gpkg|csv|zip)$/i, '');
     filepathInput.value = `${valor}.${formatoSelect.value === 'shp' ? 'zip' : formatoSelect.value}`;
-    obstaculosExportHandle = null;
+    _obstaculosExportHandle = null;
 }
 
 async function explorarRutaExportacionObstaculos() {
@@ -1546,7 +1546,7 @@ async function explorarRutaExportacionObstaculos() {
                 types,
                 excludeAcceptAllOption: true,
             });
-            obstaculosExportHandle = handle;
+            _obstaculosExportHandle = handle;
             filepathInput.value = handle.name || sugerido;
         } catch (err) {
             if (err.name !== 'AbortError') console.error(err);
@@ -1571,7 +1571,7 @@ function obtenerNombreArchivoExportacion() {
 async function confirmarExportacionObstaculos() {
     const formato = document.getElementById('export-formato-select')?.value || 'gpkg';
     const filename = obtenerNombreArchivoExportacion();
-    const handle = obstaculosExportHandle;
+    const handle = _obstaculosExportHandle;
     if (!handle) {
         showNotification('Debes seleccionar ubicación con 📁 antes de exportar.', 'warning');
         return;
@@ -1640,16 +1640,16 @@ function importarObstaculosCSV(input) {
             if (data.avisos?.length) {
                 data.avisos.forEach(av => showNotification('⚠️ ' + av, 'warning'));
             }
-            resolverImportacion(data.obstaculos);
+            _resolverImportacion(data.obstaculos);
         })
         .catch(err => showNotification('Error al importar: ' + err.message, 'error'));
 }
 
 /**
  * Recibe el array crudo del backend y gestiona los conflictos de ID uno a uno.
- * Cuando todos están resueltos, llama a aplicarImportacion.
+ * Cuando todos están resueltos, llama a _aplicarImportacion.
  */
-function resolverImportacion(obsArray) {
+function _resolverImportacion(obsArray) {
     // Normalizar: cada elemento tendrá { lat, lon, pct, id, nombre }
     const pendientes = obsArray.map(o => ({
         lat: o.lat,
@@ -1665,38 +1665,38 @@ function resolverImportacion(obsArray) {
     }));
 
     // Resolver conflictos iterativamente
-    resolverSiguienteConflicto(pendientes, 0, []);
+    _resolverSiguienteConflicto(pendientes, 0, []);
 }
 
-function resolverSiguienteConflicto(pendientes, idx, resueltos) {
-    // Fin: todos procesados -> aplicar
+function _resolverSiguienteConflicto(pendientes, idx, resueltos) {
+    // Fin: todos procesados → aplicar
     if (idx >= pendientes.length) {
-        aplicarImportacion(resueltos);
+        _aplicarImportacion(resueltos);
         return;
     }
 
     const obs = pendientes[idx];
     const idAUsar = obs.nombre || obs.id;
 
-    // Sin ID en el gpkg -> importar sin ID fijo
+    // Sin ID en el gpkg → importar sin ID fijo
     if (idAUsar === null) {
         resueltos.push({ ...obs, id: null });
-        resolverSiguienteConflicto(pendientes, idx + 1, resueltos);
+        _resolverSiguienteConflicto(pendientes, idx + 1, resueltos);
         return;
     }
 
-    // Sin conflicto -> mantener el ID / Nombre
-    if (!obsIdEnUso(idAUsar) && !resueltos.some(r => (r.nombre || r.id) === idAUsar)) {
+    // Sin conflicto → mantener el ID / Nombre
+    if (!_obsIdEnUso(idAUsar) && !resueltos.some(r => (r.nombre || r.id) === idAUsar)) {
         resueltos.push(obs);
-        resolverSiguienteConflicto(pendientes, idx + 1, resueltos);
+        _resolverSiguienteConflicto(pendientes, idx + 1, resueltos);
         return;
     }
 
     // CONFLICTO: pedir nuevo Nombre/ID al usuario
-    mostrarModalConflictoId(obs, pendientes, idx, resueltos);
+    _mostrarModalConflictoId(obs, pendientes, idx, resueltos);
 }
 
-function mostrarModalConflictoId(obs, pendientes, idx, resueltos) {
+function _mostrarModalConflictoId(obs, pendientes, idx, resueltos) {
     // Sugerir un nombre libre basado en el Nombre/ID en conflicto
     const usados = new Set(obstaculos.filter(Boolean).map(o => o.obsId).filter(id => id !== null));
     const actual = obs.nombre || obs.id;
@@ -1728,7 +1728,7 @@ function mostrarModalConflictoId(obs, pendientes, idx, resueltos) {
         </div>
     `;
 
-    // Botón confirmar -> validar y continuar
+    // Botón confirmar → validar y continuar
     confirmEl.textContent = '✅ Aplicar Nombre';
     confirmEl.onclick = () => {
         const input = document.getElementById('conflict-id-input');
@@ -1736,20 +1736,20 @@ function mostrarModalConflictoId(obs, pendientes, idx, resueltos) {
         const errorEl = document.getElementById('conflict-id-error');
 
         if (!nuevoNombre || !/^[\w\-]+$/.test(nuevoNombre)) {
-            if (errorEl) { errorEl.textContent = 'Introduce un Nombre válido (letras, números, - o ).'; errorEl.style.display = 'block'; }
+            if (errorEl) { errorEl.textContent = 'Introduce un Nombre válido (letras, números, - o _).'; errorEl.style.display = 'block'; }
             return;
         }
-        if (obsIdEnUso(nuevoNombre) || resueltos.some(r => (r.nombre || r.id) === nuevoNombre)) {
+        if (_obsIdEnUso(nuevoNombre) || resueltos.some(r => (r.nombre || r.id) === nuevoNombre)) {
             if (errorEl) { errorEl.textContent = `El Nombre "${nuevoNombre}" ya está en uso. Elige otro.`; errorEl.style.display = 'block'; }
             return;
         }
 
         modalEl.style.display = 'none';
         resueltos.push({ ...obs, nombre: nuevoNombre });
-        resolverSiguienteConflicto(pendientes, idx + 1, resueltos);
+        _resolverSiguienteConflicto(pendientes, idx + 1, resueltos);
     };
 
-    // Botón cancelar -> saltar este obstáculo
+    // Botón cancelar → saltar este obstáculo
     if (cancelEl) {
         cancelEl.textContent = '🗑️ Omitir este obstáculo';
         cancelEl.onclick = () => {
@@ -1757,14 +1757,14 @@ function mostrarModalConflictoId(obs, pendientes, idx, resueltos) {
             // Restaurar texto original del botón cancelar para uso posterior
             cancelEl.textContent = 'Cancelar';
             cancelEl.onclick     = () => cerrarModal();
-            resolverSiguienteConflicto(pendientes, idx + 1, resueltos);
+            _resolverSiguienteConflicto(pendientes, idx + 1, resueltos);
         };
     }
 
     modalEl.style.display = 'flex';
 }
 
-function aplicarImportacion(resueltos) {
+function _aplicarImportacion(resueltos) {
     if (!resueltos.length) {
         showNotification('No se importó ningún obstáculo', 'info');
         return;
@@ -1804,7 +1804,7 @@ function autodetectarCamposRuta(geojson) {
     const candidatosCarr = ['lanes', 'carriles', 'num_lanes', 'lane_count'];
     const candidatosTipo = ['highway', 'tipo', 'road_type', 'fclass', 'type'];
 
-    // Buscar en las propiedades reales (case-insensitive -> recuperar nombre original)
+    // Buscar en las propiedades reales (case-insensitive → recuperar nombre original)
     const propsSample = geojson.features[0]?.properties || {};
     const keysOrig    = Object.keys(propsSample);
 
@@ -1829,7 +1829,7 @@ function autodetectarCamposRuta(geojson) {
 
 
 function abrirConfigCamposRuta() {
-    if (window.userRol === 'invitado') {
+    if (window._userRol === 'invitado') {
         showNotification('Regístrate para configurar los campos de ruta', 'warning');
         return;
     }
@@ -1891,9 +1891,9 @@ function guardarConfigCamposRuta() {
     const geo = window.currentViasGeoJSON;
     const muestra = geo?.features?.slice(0, 20) ?? [];   // muestra de 20 features
 
-    const errorVel  = validarCampoNumerico(muestra, colVelocidad);
-    const errorCarr = validarCampoNumerico(muestra, colCarriles);
-    const errorTipo = colTipo ? validarCampoTexto(muestra, colTipo) : null;
+    const errorVel  = _validarCampoNumerico(muestra, colVelocidad);
+    const errorCarr = _validarCampoNumerico(muestra, colCarriles);
+    const errorTipo = colTipo ? _validarCampoTexto(muestra, colTipo) : null;
 
     if (errorVel) {
         showNotification(`❌ Velocidad máxima — ${errorVel}`, 'error');
@@ -1913,12 +1913,12 @@ function guardarConfigCamposRuta() {
     document.getElementById('campos-ruta-modal').style.display = 'none';
 
     const partes = [];
-    if (window.camposRuta.velocidad) partes.push(`velocidad->${window.camposRuta.velocidad}`);
-    if (window.camposRuta.carriles)  partes.push(`carriles->${window.camposRuta.carriles}`);
-    if (window.camposRuta.tipo)      partes.push(`tipo->${window.camposRuta.tipo}`);
+    if (window.camposRuta.velocidad) partes.push(`velocidad→${window.camposRuta.velocidad}`);
+    if (window.camposRuta.carriles)  partes.push(`carriles→${window.camposRuta.carriles}`);
+    if (window.camposRuta.tipo)      partes.push(`tipo→${window.camposRuta.tipo}`);
     const resumen = partes.length ? partes.join(', ') : 'valores por defecto';
     // Invalidar caché de pesos: la configuración de campos ha cambiado
-    invalidarPesosCache();
+    _invalidarPesosCache();
     showNotification('✅ Configuración guardada: ' + resumen, 'success');
     mostrarInstruccionOrigen();
 }
@@ -1930,7 +1930,7 @@ function guardarConfigCamposRuta() {
  * Comprueba que el campo 'col' en la muestra de features sea numérico.
  * Devuelve un mensaje de error si falla, o null si es válido.
  */
-function validarCampoNumerico(muestra, col) {
+function _validarCampoNumerico(muestra, col) {
     const valores = muestra
         .map(f => f?.properties?.[col])
         .filter(v => v !== null && v !== undefined && v !== '');
@@ -1950,7 +1950,7 @@ function validarCampoNumerico(muestra, col) {
  * Comprueba que el campo 'col' sea de tipo texto (no puramente numérico).
  * Devuelve un mensaje de error si falla, o null si es válido.
  */
-function validarCampoTexto(muestra, col) {
+function _validarCampoTexto(muestra, col) {
     const valores = muestra
         .map(f => f?.properties?.[col])
         .filter(v => v !== null && v !== undefined && v !== '');
@@ -1968,7 +1968,7 @@ function validarCampoTexto(muestra, col) {
 
 // ==================== HELPERS PRIVADOS ====================
 
-function setText(id, value) {
+function _setText(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
 }
@@ -1976,15 +1976,15 @@ function setText(id, value) {
 /**
  * Formatea una duración en minutos a una cadena legible con segundos.
  * Ejemplos:
- *   0.083 min -> "5 s"
- *   1.5   min -> "1 min 30 s"
- *   75    min -> "1 h 15 min"
- *   90.5  min -> "1 h 30 min 30 s"
+ *   0.083 min → "5 s"
+ *   1.5   min → "1 min 30 s"
+ *   75    min → "1 h 15 min"
+ *   90.5  min → "1 h 30 min 30 s"
  *
  * @param {number} minutos - Duración en minutos (puede ser decimal)
  * @returns {string}
  */
-function fmtTiempo(minutos) {
+function _fmtTiempo(minutos) {
     if (minutos == null || isNaN(minutos)) return '—';
     const totalSeg = Math.round(minutos * 60);
     const h   = Math.floor(totalSeg / 3600);
@@ -2016,18 +2016,18 @@ function fmtTiempo(minutos) {
 // Los pesos base (haversine + velocidad + carriles + tipo) son estáticos:
 // solo cambian cuando se carga una nueva capa de vías o se modifica la
 // configuración de campos. Se invalidan explícitamente en esos momentos.
-let pesosBaseCache      = null;   // Array de { s, e, pesoBase, tiempoMin }
-let pesosBaseCacheKey   = null;   // Fingerprint para detectar cambios
+let _pesosBaseCache      = null;   // Array de { s, e, pesoBase, tiempoMin }
+let _pesosBaseCacheKey   = null;   // Fingerprint para detectar cambios
 
-function invalidarPesosCache() {
-    pesosBaseCache    = null;
-    pesosBaseCacheKey = null;
+function _invalidarPesosCache() {
+    _pesosBaseCache    = null;
+    _pesosBaseCacheKey = null;
 }
 
 // Exponer para que layer-manager.js y guardarConfigCamposRuta puedan invalidar
-window.invalidarPesosCache = invalidarPesosCache;
+window.invalidarPesosCache = _invalidarPesosCache;
 
-function calcularPesosAristas() {
+function _calcularPesosAristas() {
     const geo = window.currentViasGeoJSON;
     if (!geo?.features?.length) throw new Error('No hay capa de vías cargada.');
 
@@ -2037,12 +2037,12 @@ function calcularPesosAristas() {
     // ── Clave de caché: número de features + configuración de campos ──────
     const cacheKey = `${geo.features.length}|${campos.velocidad}|${campos.carriles}|${campos.tipo}`;
 
-    if (pesosBaseCache && pesosBaseCacheKey === cacheKey) {
+    if (_pesosBaseCache && _pesosBaseCacheKey === cacheKey) {
         // Caché válida: solo aplicar factores de Momento si están activos
-        if (!window.estadoTemporal?.activo) return pesosBaseCache;
+        if (!window.estadoTemporal?.activo) return _pesosBaseCache;
 
         // Aplicar factor Momento sobre los pesos base cacheados
-        return pesosBaseCache.map(p => {
+        return _pesosBaseCache.map(p => {
             const fm = (typeof window.obtenerFactorMomentoParaSegmento === 'function')
                 ? window.obtenerFactorMomentoParaSegmento(p.s, p.e)
                 : 1.0;
@@ -2063,8 +2063,8 @@ function calcularPesosAristas() {
         const rawLanes = campos.carriles  ? props[campos.carriles]  : (props.lanes    ?? props.num_lanes ?? 1);
         const rawTipo  = campos.tipo      ? props[campos.tipo]      : (props.highway  ?? null);
 
-        const velocidad = parsearVelocidad(rawSpeed) ?? 50;
-        const carriles  = parsearCarriles(rawLanes)  ?? 1;
+        const velocidad = _parsearVelocidad(rawSpeed) ?? 50;
+        const carriles  = _parsearCarriles(rawLanes)  ?? 1;
 
         const fLanes = carriles >= 3 ? 0.8 : (carriles === 2 ? 0.9 : 1.0);
         const fTipo  = (rawTipo && factores[String(rawTipo)]) ? factores[String(rawTipo)] : 1.0;
@@ -2074,7 +2074,7 @@ function calcularPesosAristas() {
             for (let i = 0; i < line.length - 1; i++) {
                 const s         = line[i];
                 const e         = line[i + 1];
-                const distKm    = haversineKm(s[1], s[0], e[1], e[0]);
+                const distKm    = _haversineKm(s[1], s[0], e[1], e[0]);
                 const tiempoMin = distKm / velocidad * 60;
                 const pesoBase  = tiempoMin * fTipo * fLanes;
                 base.push({ s, e, pesoBase, tiempoMin,
@@ -2084,8 +2084,8 @@ function calcularPesosAristas() {
     }
 
     // Guardar en caché
-    pesosBaseCache    = base;
-    pesosBaseCacheKey = cacheKey;
+    _pesosBaseCache    = base;
+    _pesosBaseCacheKey = cacheKey;
 
     // Aplicar factor Momento si está activo
     if (!window.estadoTemporal?.activo) return base;
@@ -2099,19 +2099,19 @@ function calcularPesosAristas() {
     });
 }
 
-function parsearVelocidad(val) {
+function _parsearVelocidad(val) {
     if (val === null || val === undefined || val === '') return null;
     const n = parseFloat(String(val).replace(/[^\d.]/g, ''));
     return isNaN(n) || n <= 0 ? null : Math.min(Math.max(n, 5), 200);
 }
 
-function parsearCarriles(val) {
+function _parsearCarriles(val) {
     if (val === null || val === undefined || val === '') return null;
     const n = parseInt(String(val), 10);
     return isNaN(n) || n <= 0 ? null : n;
 }
 
-function haversineKm(lat1, lon1, lat2, lon2) {
+function _haversineKm(lat1, lon1, lat2, lon2) {
     const R  = 6371;
     const d1 = (lat2 - lat1) * Math.PI / 180;
     const d2 = (lon2 - lon1) * Math.PI / 180;
@@ -2170,16 +2170,16 @@ function previsualizarCampo(tipo) {
     }
 }
 
-// ── Caché del índice de tipo de vía (se invalida junto con pesosBaseCache) ──
-let tipoViaSegmentosCache    = null;
-let tipoViaCacheKey          = null;
+// ── Caché del índice de tipo de vía (se invalida junto con _pesosBaseCache) ──
+let _tipoViaSegmentosCache    = null;
+let _tipoViaCacheKey          = null;
 
 // Extender la invalidación global para incluir este índice
-const invalidarPesosCacheOrig = window.invalidarPesosCache || function(){};
+const _invalidarPesosCacheOrig = window.invalidarPesosCache || function(){};
 window.invalidarPesosCache = function () {
-    invalidarPesosCacheOrig();
-    tipoViaSegmentosCache = null;
-    tipoViaCacheKey       = null;
+    _invalidarPesosCacheOrig();
+    _tipoViaSegmentosCache = null;
+    _tipoViaCacheKey       = null;
 };
 
 // ==================== TIPO DE VÍA DOMINANTE ====================
@@ -2190,7 +2190,7 @@ window.invalidarPesosCache = function () {
  * segmento y acumula el valor de su campo "tipo". Devuelve el más frecuente.
  * El índice de segmentos se cachea entre llamadas.
  */
-function calcularTipoViaDominante(coordsRuta) {
+function _calcularTipoViaDominante(coordsRuta) {
     const campTipo = window.camposRuta?.tipo;
     if (!campTipo) return null;
 
@@ -2199,7 +2199,7 @@ function calcularTipoViaDominante(coordsRuta) {
 
     // ── Caché del índice de segmentos ──────────────────────────────────────
     const cacheKey = `${geo.features.length}|${campTipo}`;
-    if (!_tipoViaSegmentosCache || tipoViaCacheKey !== cacheKey) {
+    if (!_tipoViaSegmentosCache || _tipoViaCacheKey !== cacheKey) {
         const idx = [];
         for (const feature of geo.features) {
             const tipo = feature?.properties?.[campTipo];
@@ -2215,11 +2215,11 @@ function calcularTipoViaDominante(coordsRuta) {
                 }
             }
         }
-        tipoViaSegmentosCache = idx;
-        tipoViaCacheKey       = cacheKey;
+        _tipoViaSegmentosCache = idx;
+        _tipoViaCacheKey       = cacheKey;
     }
 
-    const segmentos = tipoViaSegmentosCache;
+    const segmentos = _tipoViaSegmentosCache;
     if (!segmentos.length) return null;
 
     // ── Contar tipo dominante en la ruta ───────────────────────────────────
@@ -2246,7 +2246,7 @@ function calcularTipoViaDominante(coordsRuta) {
 
 // ==================== INFO TEMPORAL EN RESULTADO ====================
 
-function mostrarInfoTemporal(tiempoMinutos) {
+function _mostrarInfoTemporal(tiempoMinutos) {
     // Buscar o crear el div de info temporal dentro de ruta-info
     let infoDiv = document.getElementById('ruta-temporal-info');
     if (!infoDiv) {
@@ -2258,7 +2258,7 @@ function mostrarInfoTemporal(tiempoMinutos) {
         rutaInfo.appendChild(infoDiv);
     }
 
-    const modo   = window.modoTiempo || 'ahora';
+    const modo   = window._modoTiempo || 'ahora';
     const fecha  = obtenerFechaEfectiva();
     const coef   = (typeof obtenerCoeficiente === 'function') ? obtenerCoeficiente(fecha) : 1.0;
     const info   = (typeof infoCoeficiente === 'function') ? infoCoeficiente(fecha) : null;
@@ -2268,12 +2268,12 @@ function mostrarInfoTemporal(tiempoMinutos) {
     // calcular la hora de salida/llegada.
     const tiempoAjustado = tiempoMinutos;
 
-    const fmt = d => {
+    const _fmt = d => {
         const h = String(d.getHours()).padStart(2,'0');
         const m = String(d.getMinutes()).padStart(2,'0');
         return `${h}:${m}`;
     };
-    const fmtFecha = d => {
+    const _fmtFecha = d => {
         const dias  = ['dom','lun','mar','mié','jue','vie','sáb'];
         return `${dias[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`;
     };
@@ -2290,9 +2290,9 @@ function mostrarInfoTemporal(tiempoMinutos) {
                 <span style="color:#555;">${info.franjaLabel} · ×${coef.toFixed(2)}</span>
             </div>
             <div style="margin-top:5px;color:#2c3e50;">
-                🚀 Salida: <strong>${fmt(fecha)}</strong> &nbsp;
-                🏁 Llegada estimada: <strong>${fmt(llegada)}</strong>
-                <span style="color:#7f8c8d;"> (${fmtFecha(llegada)})</span>
+                🚀 Salida: <strong>${_fmt(fecha)}</strong> &nbsp;
+                🏁 Llegada estimada: <strong>${_fmt(llegada)}</strong>
+                <span style="color:#7f8c8d;"> (${_fmtFecha(llegada)})</span>
             </div>
         ` : '';
 
@@ -2308,9 +2308,9 @@ function mostrarInfoTemporal(tiempoMinutos) {
                 <span style="color:#555;">${info.franjaLabel} · ×${coef.toFixed(2)}</span>
             </div>
             <div style="margin-top:5px;color:#2c3e50;">
-                📅 Salida: <strong>${fmt(fecha)} ${fmtFecha(fecha)}</strong><br>
-                🏁 Llegada estimada: <strong>${fmt(llegada)}</strong>
-                <span style="color:#7f8c8d;"> (${fmtFecha(llegada)})</span>
+                📅 Salida: <strong>${_fmt(fecha)} ${_fmtFecha(fecha)}</strong><br>
+                🏁 Llegada estimada: <strong>${_fmt(llegada)}</strong>
+                <span style="color:#7f8c8d;"> (${_fmtFecha(llegada)})</span>
             </div>
         ` : '';
 
@@ -2328,9 +2328,9 @@ function mostrarInfoTemporal(tiempoMinutos) {
                 <span style="color:#555;">${info.franjaLabel} · ×${coef.toFixed(2)}</span>
             </div>
             <div style="margin-top:5px;color:#2c3e50;">
-                🏁 Quieres llegar: <strong>${fmt(fecha)} ${fmtFecha(fecha)}</strong><br>
-                🚀 Debes salir como tarde: <strong style="color:#e67e22;font-size:14px;">${fmt(horaSalida)}</strong>
-                <span style="color:#7f8c8d;"> (${fmtFecha(horaSalida)})</span>
+                🏁 Quieres llegar: <strong>${_fmt(fecha)} ${_fmtFecha(fecha)}</strong><br>
+                🚀 Debes salir como tarde: <strong style="color:#e67e22;font-size:14px;">${_fmt(horaSalida)}</strong>
+                <span style="color:#7f8c8d;"> (${_fmtFecha(horaSalida)})</span>
             </div>
         ` : '';
     }
@@ -2344,7 +2344,7 @@ function mostrarInfoTemporal(tiempoMinutos) {
  * @param {number[][]} coordsRuta  - Array [[lon,lat], ...] de la ruta
  * @param {number}     tiempoBase  - Tiempo base en minutos (sin penalización de eventos)
  */
-function mostrarInfoEventosEnRuta(coordsRuta, props) {
+function _mostrarInfoEventosEnRuta(coordsRuta, props) {
     const infoEl = document.getElementById('msw-info-temporal');
     if (!infoEl) return;
     if (typeof window.obtenerPenalizacionEventos !== 'function') return;
@@ -2373,8 +2373,8 @@ function mostrarInfoEventosEnRuta(coordsRuta, props) {
         : props?.tiempo_minutos ?? 0;
     const tiempoReal = props?.tiempo_minutos ?? 0;
     const tiempoExtra = (typeof props?.tiempo_extra_eventos === 'number')
-        ? fmtTiempo(props.tiempo_extra_eventos)
-        : fmtTiempo(Math.max(0, tiempoReal - tiempoBase) / 60);
+        ? _fmtTiempo(props.tiempo_extra_eventos)
+        : _fmtTiempo(Math.max(0, tiempoReal - tiempoBase) / 60);
     const pct = tiempoBase > 0
         ? Math.round((tiempoReal / tiempoBase - 1) * 100)
         : Math.round((factorMax - 1) * 100);
@@ -2395,10 +2395,10 @@ function mostrarInfoEventosEnRuta(coordsRuta, props) {
             ${eventosAfectantes} tramo(s) de la ruta atraviesan una zona de evento.<br>
             Factor máximo: ×${factorMax.toFixed(2)} · +${tiempoExtra}
         </div>`;
-    infoEl.anadirElemento('afterend', evDiv); 
+    infoEl.insertAdjacentElement('afterend', evDiv);
 }
 
-function mostrarInfoObstaculosEnRuta(coordsRuta, props) {
+function _mostrarInfoObstaculosEnRuta(coordsRuta, props) {
     const infoEl = document.getElementById('msw-info-temporal');
     if (!infoEl) return;
     if (!coordsRuta?.length) return;
@@ -2412,10 +2412,10 @@ function mostrarInfoObstaculosEnRuta(coordsRuta, props) {
     const activos = obstaculos.filter(Boolean);
     if (!activos.length) return;
 
-    // Pre-calcular radio² en grados para cada obstáculo (evita haversineKm en el bucle)
+    // Pre-calcular radio² en grados para cada obstáculo (evita _haversineKm en el bucle)
     const obsPrep = activos.map(obs => ({
-        lat:         obs.latlon.lat,
-        lon:         obs.latlon.lon,
+        lat:         obs.latlng.lat,
+        lon:         obs.latlng.lng,
         rDeg2:       Math.pow((obs.radio || 5) / 111000, 2),
         obstruccion: Math.min(obs.obstruccion || 1.0, 0.99),
     }));
@@ -2440,8 +2440,8 @@ function mostrarInfoObstaculosEnRuta(coordsRuta, props) {
 
     const tiempoBase = props?.tiempo_minutos ?? 0;
     const tiempoExtra = (typeof props?.tiempo_extra_obstaculos === 'number')
-        ? fmtTiempo(props.tiempo_extra_obstaculos)
-        : fmtTiempo(tiempoBase * (factorMax - 1) / factorMax / 60);
+        ? _fmtTiempo(props.tiempo_extra_obstaculos)
+        : _fmtTiempo(tiempoBase * (factorMax - 1) / factorMax / 60);
     const pct   = Math.round((factorMax - 1) * 100);
     const color = factorMax >= 5 ? '#e74c3c' : factorMax >= 2 ? '#f39c12' : '#8e44ad';
 
@@ -2460,7 +2460,7 @@ function mostrarInfoObstaculosEnRuta(coordsRuta, props) {
             ${obstaculosAfectantes} tramo(s) de la ruta atraviesan una zona de obstáculo.<br>
             Factor máximo: ×${factorMax.toFixed(2)}
         </div>`;
-    infoEl.anadirElemento('afterend', obsDiv);
+    infoEl.insertAdjacentElement('afterend', obsDiv);
 }
 
 // ==================== POI MANAGER ====================
@@ -2469,12 +2469,12 @@ function mostrarInfoObstaculosEnRuta(coordsRuta, props) {
 // importar/exportar capa y limpieza.
 
 let modoPoi          = false;
-let poisManuales     = [];       // { latlon, nombre, tipo, poiId, marker, idx }
-let poiExportHandle = null;
-let poiLatlonPendiente = null;
+let poisManuales     = [];       // { latlng, nombre, tipo, poiId, marker, idx }
+let _poiExportHandle = null;
+let _poiLatlngPendiente = null;
 
 // ── Colores por tipo de POI ───────────────────────────────────────────
-const POI_TIPO_CONFIG = {
+const _POI_TIPO_CONFIG = {
     colegio:  { color: '#e67e22', emoji: '🏫' },
     iglesia:  { color: '#8e44ad', emoji: '⛪' },
     oficina:  { color: '#2980b9', emoji: '🏢' },
@@ -2482,12 +2482,12 @@ const POI_TIPO_CONFIG = {
     otro:     { color: '#27ae60', emoji: '📍' },
 };
 
-function poiConfig(tipo) {
+function _poiConfig(tipo) {
     const t = (tipo || '').toLowerCase();
-    for (const [key, cfg] of Object.entries(POI_TIPO_CONFIG)) {
+    for (const [key, cfg] of Object.entries(_POI_TIPO_CONFIG)) {
         if (t.includes(key)) return cfg;
     }
-    return POI_TIPO_CONFIG.otro;
+    return _POI_TIPO_CONFIG.otro;
 }
 
 // ── Activar / desactivar modo POI ─────────────────────────────────────
@@ -2497,10 +2497,10 @@ function activarModoPoi() {
     if (modoPoi) {
         // Desactivar otros modos conflictivos
         if (modoObstaculo)                                     desactivarModoObstaculo();
-        if (typeof desactivarModoEvento === 'function' && window.modoEvento) desactivarModoEvento();
-        if (window.esperandoOrigen || window.esperandoDestino) {
-            window.esperandoOrigen  = false;
-            window.esperandoDestino = false;
+        if (typeof desactivarModoEvento === 'function' && window._modoEvento) desactivarModoEvento();
+        if (window._esperandoOrigen || window._esperandoDestino) {
+            window._esperandoOrigen  = false;
+            window._esperandoDestino = false;
             ocultarInstruccion();
         }
         if (btn) { btn.classList.add('obstaculo-activo'); btn.textContent = '🪧 Modo POI ACTIVO'; }
@@ -2522,20 +2522,20 @@ function desactivarModoPoi() {
 
 // ── Click en el mapa cuando modo POI activo ──────────────────────────
 // Se engancha en el map-click handler global (en map-config.js).
-// Exportamos window.modoPoiActivo para que map-config pueda comprobarlo.
+// Exportamos window._modoPoiActivo para que map-config pueda comprobarlo.
 Object.defineProperty(window, '_modoPoiActivo', { get: () => modoPoi });
 
-function onMapClickPoi(latlon) {
+function _onMapClickPoi(latlng) {
     if (!modoPoi) return false;
-    poiLatlonPendiente = latlon;
-    abrirModalPoi();
+    _poiLatlngPendiente = latlng;
+    _abrirModalPoi();
     return true;   // consumido
 }
 // Registro: añadir al dispatcher global si existe, o exponer globalmente
-window.onMapClickPoi = onMapClickPoi;
+window._onMapClickPoi = _onMapClickPoi;
 
 // ── Modal de creación de POI ──────────────────────────────────────────
-function abrirModalPoi() {
+function _abrirModalPoi() {
     const modal  = document.getElementById('poi-modal');
     if (!modal) return;
     // Reset campos
@@ -2553,12 +2553,12 @@ function abrirModalPoi() {
 
 function cerrarPoiModal() {
     document.getElementById('poi-modal').style.display = 'none';
-    poiLatlonPendiente = null;
+    _poiLatlngPendiente = null;
 }
 
 function confirmarPoi() {
-    const latlon  = poiLatlonPendiente;
-    if (!latlon) return;
+    const latlng  = _poiLatlngPendiente;
+    if (!latlng) return;
 
     const nombre  = (document.getElementById('poi-nombre-input')?.value || '').trim() || 'POI sin nombre';
     const tipo    = document.getElementById('poi-tipo-select')?.value || 'otro';
@@ -2569,30 +2569,30 @@ function confirmarPoi() {
     let poiId = poiIdRaw || null;
     if (poiId) {
         if (!/^[\w\-]+$/.test(poiId)) {
-            if (errEl) { errEl.textContent = 'El ID solo puede contener letras, números, - y .'; errEl.style.display = 'block'; }
+            if (errEl) { errEl.textContent = 'El ID solo puede contener letras, números, - y _.'; errEl.style.display = 'block'; }
             return;
         }
-        if (poiIdEnUso(poiId)) {
+        if (_poiIdEnUso(poiId)) {
             if (errEl) { errEl.textContent = `El ID "${poiId}" ya está en uso.`; errEl.style.display = 'block'; }
             return;
         }
     }
 
     document.getElementById('poi-modal').style.display = 'none';
-    poiLatlonPendiente = null;
-    crearPoiEnMapa(latlon, nombre, tipo, poiId);
+    _poiLatlngPendiente = null;
+    _crearPoiEnMapa(latlng, nombre, tipo, poiId);
 }
 
-function poiIdEnUso(id) {
+function _poiIdEnUso(id) {
     return poisManuales.filter(Boolean).some(p => p.poiId === id);
 }
 
 // ── Crear POI en mapa + sincronizar con backend ───────────────────────
-function crearPoiEnMapa(latlon, nombre, tipo, poiId) {
-    const cfg   = poiConfig(tipo);
+function _crearPoiEnMapa(latlng, nombre, tipo, poiId) {
+    const cfg   = _poiConfig(tipo);
     const idx   = poisManuales.length;
 
-    const marker = L.marker(latlon, {
+    const marker = L.marker(latlng, {
         icon: L.divIcon({
             className: '',
             html: `<div style="
@@ -2607,17 +2607,17 @@ function crearPoiEnMapa(latlon, nombre, tipo, poiId) {
         zIndexOffset: 600,
     });
 
-    const poi = { latlon, nombre, tipo, poiId, marker, idx };
+    const poi = { latlng, nombre, tipo, poiId, marker, idx };
     poisManuales.push(poi);
 
-    marker.bindPopup(poiPopupHTML(idx), { maxWidth: 220 });
+    marker.bindPopup(_poiPopupHTML(idx), { maxWidth: 220 });
     marker.addTo(map);
 
     // Sincronizar con backend (fire-and-forget; si falla, el POI permanece en cliente)
     fetch('/api/añadir-poi', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lat: latlon.lat, lon: latlon.lon, nombre, tipo, poi_id: poiId }),
+        body: JSON.stringify({ lat: latlng.lat, lon: latlng.lng, nombre, tipo, poi_id: poiId }),
     })
     .then(r => r.json())
     .then(data => {
@@ -2625,14 +2625,14 @@ function crearPoiEnMapa(latlon, nombre, tipo, poiId) {
     })
     .catch(() => {});
 
-    actualizarListaPois();
+    _actualizarListaPois();
     showNotification(`POI "${nombre}" colocado`, 'success');
 }
 
-function poiPopupHTML(idx) {
+function _poiPopupHTML(idx) {
     const poi = poisManuales[idx];
     if (!poi) return '';
-    const cfg   = poiConfig(poi.tipo);
+    const cfg   = _poiConfig(poi.tipo);
     const label = poi.poiId ? `#${poi.poiId}` : `#${idx + 1}`;
     return `
         <div style="font-family:sans-serif;min-width:180px;text-align:center;">
@@ -2667,7 +2667,7 @@ function eliminarPoiManual(idx) {
     }).catch(() => {});
 
     map.closePopup();
-    actualizarListaPois();
+    _actualizarListaPois();
     showNotification('POI eliminado', 'info');
 }
 
@@ -2676,12 +2676,12 @@ function limpiarPoisManuales() {
     poisManuales.filter(Boolean).forEach(p => { if (p.marker) map.removeLayer(p.marker); });
     poisManuales = [];
     fetch('/api/limpiar-pois-manuales', { method: 'POST' }).catch(() => {});
-    actualizarListaPois();
+    _actualizarListaPois();
     showNotification('POIs manuales eliminados', 'info');
 }
 
 // ── Actualizar panel flotante y descriptor de capa ───────────────────
-function actualizarListaPois() {
+function _actualizarListaPois() {
     const activos = poisManuales.filter(Boolean);
 
     // Descriptor en panel de capas
@@ -2705,7 +2705,7 @@ function actualizarListaPois() {
 
     activos.forEach(poi => {
         const idx = poisManuales.indexOf(poi);
-        const cfg = poiConfig(poi.tipo);
+        const cfg = _poiConfig(poi.tipo);
         const label = poi.poiId ? `#${poi.poiId}` : `#${idx + 1}`;
 
         const item = document.createElement('div');
@@ -2763,12 +2763,12 @@ function exportarPoisConFormato() {
     const modal = document.getElementById('export-pois-modal');
     if (!modal) {
         // Fallback: exportar directo como gpkg con descarga automática
-        exportarPoisDirecto('gpkg');
+        _exportarPoisDirecto('gpkg');
         return;
     }
     const activos = poisManuales.filter(Boolean);
     if (!activos.length) { showNotification('No hay POIs manuales que exportar', 'info'); return; }
-    poiExportHandle = null;
+    _poiExportHandle = null;
     const fiInput  = document.getElementById('export-pois-filepath');
     const fmtSel   = document.getElementById('export-pois-formato');
     if (fmtSel)  fmtSel.value  = 'gpkg';
@@ -2779,7 +2779,7 @@ function exportarPoisConFormato() {
 function cerrarModalExportPois() {
     const modal = document.getElementById('export-pois-modal');
     if (modal) modal.style.display = 'none';
-    poiExportHandle = null;
+    _poiExportHandle = null;
 }
 
 function cambiarFormatoExportPois() {
@@ -2788,7 +2788,7 @@ function cambiarFormatoExportPois() {
     if (!fi) return;
     let val = fi.value.replace(/\.(gpkg|csv|zip)$/i, '');
     fi.value = `${val}.${fmt === 'shp' ? 'zip' : fmt}`;
-    poiExportHandle = null;
+    _poiExportHandle = null;
 }
 
 async function explorarRutaExportPois() {
@@ -2803,7 +2803,7 @@ async function explorarRutaExportPois() {
                     ? [{ description: 'Shapefile ZIP', accept: { 'application/zip': ['.zip'] } }]
                     : [{ description: 'GeoPackage', accept: { 'application/geopackage+sqlite3': ['.gpkg'] } }];
             const handle = await window.showSaveFilePicker({ suggestedName: sugerido, types, excludeAcceptAllOption: true });
-            poiExportHandle = handle;
+            _poiExportHandle = handle;
             if (fi) fi.value = handle.name || sugerido;
         } catch (err) {
             if (err.name !== 'AbortError') console.error(err);
@@ -2815,13 +2815,13 @@ async function explorarRutaExportPois() {
 
 async function confirmarExportacionPois() {
     const fmt    = document.getElementById('export-pois-formato')?.value || 'gpkg';
-    const handle = poiExportHandle;
+    const handle = _poiExportHandle;
     if (!handle) { showNotification('Debes seleccionar ubicación con 📁 antes de exportar.', 'warning'); return; }
     cerrarModalExportPois();
-    await exportarPoisConHandle(handle, fmt);
+    await _exportarPoisConHandle(handle, fmt);
 }
 
-async function exportarPoisConHandle(fileHandle, formato) {
+async function _exportarPoisConHandle(fileHandle, formato) {
     showNotification(`⏳ Exportando POIs como ${formato}...`, 'info');
     try {
         const resp = await fetch('/api/exportar-pois', {
@@ -2852,7 +2852,7 @@ async function exportarPoisConHandle(fileHandle, formato) {
     }
 }
 
-async function exportarPoisDirecto(formato) {
+async function _exportarPoisDirecto(formato) {
     showNotification(`⏳ Exportando POIs...`, 'info');
     try {
         const resp = await fetch('/api/exportar-pois', {
@@ -2876,5 +2876,5 @@ async function exportarPoisDirecto(formato) {
 
 // ── Integración con el click global del mapa ─────────────────────────
 // El click del mapa es gestionado por el handler principal (línea ~802)
-// que ya incluye: if (modoPoi) { onMapClickPoi(e.latlon); return; }
+// que ya incluye: if (modoPoi) { _onMapClickPoi(e.latlng); return; }
 // No se necesita un listener adicional aquí.
