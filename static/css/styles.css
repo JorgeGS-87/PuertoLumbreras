@@ -107,8 +107,9 @@ body {
     align-items: center;
     justify-content: space-between;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    z-index: 1800;
-    position: relative;
+    position: sticky;
+    top: 0;
+    z-index: 10000;
 }
 
 .header-left {
@@ -124,12 +125,19 @@ body {
 
 .status-badge {
     background: #27ae60;
-    padding: 4px 12px;
+    padding: 5px 14px;
     border-radius: 12px;
-    font-size: 12px;
+    font-size: 13px;
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+/* El badge WS mantiene sus colores propios pero hereda el tamaño */
+#ws-badge,
+.ws-badge {
+    background: #2c3e50;
+    border: 1px solid rgba(255,255,255,0.15);
 }
 
 .status-dot {
@@ -192,7 +200,7 @@ body.tabla-abierta .main-container {
     box-shadow: 2px 0 5px rgba(0,0,0,0.1);
     transition: width 0.3s ease, transform 0.3s ease;
     position: fixed;
-    top: 48px;
+    top: 50px;
     left: 56px;
     bottom: 0;
     overflow: hidden;
@@ -362,7 +370,7 @@ body.tabla-abierta .main-container {
 /* ============================================
    CONTROLES DEL MAPA — misma altura que el zoom,
    a su derecha, en fila horizontal.
-   Zoom Leaflet: 26px ancho. Separación: 6px → left base = 66+26+6 = 98px.
+   Zoom Leaflet: 26px ancho. Separación: 6px -> left base = 66+26+6 = 98px.
    JS sobreescribe el left cuando el panel izquierdo se abre.
    ============================================ */
 .map-controls {
@@ -470,7 +478,7 @@ body.tabla-abierta .leaflet-bottom.leaflet-left {
 .column {
     position: fixed;
     left: 0;
-    top: 48px;
+    top: 50px;
     bottom: 0;
     width: 56px;
     background: #111;
@@ -1625,7 +1633,7 @@ body.tabla-abierta .leaflet-bottom.leaflet-left {
     position: fixed;
     top: 62px;
     /* left se gestiona dinámicamente en JS (msw_actualizarPosicion).
-       Valor inicial: panel colapsado → 56px (ancho de la barra lateral de tabs) + 10px margen */
+       Valor inicial: panel colapsado -> 56px (ancho de la barra lateral de tabs) + 10px margen */
     left: calc(56px + 10px);
     transform: none;
     z-index: 1600;

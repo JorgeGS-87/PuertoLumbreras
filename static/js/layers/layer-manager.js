@@ -14,24 +14,26 @@ function cargarArchivo(tipo, input) {
     const file = input?.files?.[0];
     if (!file) return;
 
-    // Los POIs ya no se cargan con ZIP: se gestionan desde el módulo poi-manager
+    // POIs se añaden vía API o "Añadir POI"
     if (tipo === 'puntos') {
         showNotification('Usa "Añadir POI" o "Importar" en el panel de capas', 'info');
         input.value = '';
         return;
     }
 
+    // Cargar Vías.geojson mediante el endpoint específico
     const endpoints = { vias: '/api/cargar-vias' };
     const endpoint  = endpoints[tipo];
-    if (!endpoint) { showNotification('Tipo de capa desconocido', 'error'); return; }
+    if (!endpoint) { showNotification('Tipo de capa desconocido', 'error'); return; } 
 
-    const formData = new FormData();
+    const formData = new FormData(); 
     formData.append('file', file);
 
-    // El botón que disparó la carga es el siguiente hermano del <input type="file">
+    // Cambiar botón a estado "Cargando..."
     const btn = input.nextElementSibling;
     if (btn) { btn.textContent = '⏳ Cargando...'; btn.disabled = true; }
 
+    // Enviar archivo al servidor
     fetch(endpoint, { method: 'POST', body: formData })
         .then(r => {
             if (!r.ok) return r.text().then(t => Promise.reject(new Error('HTTP ' + r.status + ': ' + t)));
@@ -40,7 +42,7 @@ function cargarArchivo(tipo, input) {
         .then(data => {
             if (data.error) {
                 showNotification('❌ ' + data.error, 'error');
-                if (btn) { btn.textContent = _labelCargar(tipo); btn.disabled = false; }
+                if (btn) { btn.textContent = '📂 Cargar Vías'; btn.disabled = false; }
                 return;
             }
 
@@ -76,7 +78,7 @@ function cargarArchivo(tipo, input) {
         })
         .catch(err => {
             showNotification('Error al cargar: ' + err.message, 'error');
-            if (btn) { btn.textContent = _labelCargar(tipo); btn.disabled = false; }
+            if (btn) { btn.textContent = '📂 Cargar Vías'; btn.disabled = false; }
             console.error('cargarArchivo error:', err);
         });
 }
@@ -89,6 +91,7 @@ function eliminarCapa(tipo, btn) {
 
     if (!confirm(`¿Eliminar la capa "${labels[tipo]}"?`)) return;
 
+    // Enviar petición de eliminación al servidor
     fetch(endpoints[tipo], { method: 'POST' })
         .then(r => r.json())
         .then(() => {
@@ -96,12 +99,12 @@ function eliminarCapa(tipo, btn) {
                 if (viasLayer && map.hasLayer(viasLayer)) map.removeLayer(viasLayer);
                 viasLayer = null;
                 window.currentViasGeoJSON = null;
-                const ul  = document.getElementById('legend-list'); if (ul)  ul.innerHTML  = '';
-                const chk = document.getElementById('check-vias');  if (chk) chk.checked   = false;
-                const sv  = document.getElementById('stat-vias');   if (sv)  sv.textContent = '0';
+                const ul  = document.getElementById('legend-list'); if (ul)  ul.innerHTML  = ''; 
+                const chk = document.getElementById('check-vias');  if (chk) chk.checked   = false; 
+                const sv  = document.getElementById('stat-vias');   if (sv)  sv.textContent = '0'; 
                 const sn  = document.getElementById('stat-nodos');  if (sn)  sn.textContent = '0';
                 const fi  = document.getElementById('file-vias');   if (fi)  fi.value       = '';
-                _resetLayerItem('layer-vias', 'Sin cargar');
+                resetLayerItem('layer-vias', 'Sin cargar');
                 if (btn) { btn.textContent = '📂 Cargar Vías'; btn.classList.remove('danger'); btn.onclick = () => document.getElementById('file-vias').click(); }
             } else if (tipo === 'puntos') {
                 if (puntosInteresLayerGroup && map.hasLayer(puntosInteresLayerGroup)) map.removeLayer(puntosInteresLayerGroup);
@@ -110,11 +113,11 @@ function eliminarCapa(tipo, btn) {
                 const chk = document.getElementById('check-puntos'); if (chk) chk.checked   = false;
                 const sp  = document.getElementById('stat-puntos');  if (sp)  sp.textContent = '0';
                 // Descriptor: reflejar POIs manuales si los hay
-                const _nManuales = (typeof poisManuales !== 'undefined') ? poisManuales.filter(Boolean).length : 0;
-                _resetLayerItem('layer-puntos', _nManuales > 0 ? `${_nManuales} POI(s) manual(es)` : 'Sin añadir');
+                const nManuales = (typeof poisManuales !== 'undefined') ? poisManuales.filter(Boolean).length : 0;
+                resetLayerItem('layer-puntos', nManuales > 0 ? `${nManuales} POI(s) manual(es)` : 'Sin añadir');
             }
 
-            populateTableLayerSelect();
+            atributosTabla();
             showNotification('Capa eliminada', 'info');
         })
         .catch(err => {
@@ -130,6 +133,7 @@ function cargarEnMapa(tipo) {
     const endpoint  = endpoints[tipo];
     if (!endpoint) return;
 
+    // Obtener GeoJSON desde el servidor
     fetch(endpoint)
         .then(r => {
             if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -140,7 +144,7 @@ function cargarEnMapa(tipo) {
 
             // Reproyectar en cliente si el servidor devuelve coordenadas UTM
             try {
-                if (_isLikelyProjected(geojson)) geojson = _reprojectGeoJSONFrom25830To4326(geojson);
+                if (puedeUTM(geojson)) geojson = reprojectGeoJSONFrom25830To4326(geojson);
             } catch (e) { console.error('Error reproyectando:', e); }
 
             if (tipo === 'vias') {
@@ -148,7 +152,8 @@ function cargarEnMapa(tipo) {
                 // Invalidar caché de pesos: nueva capa cargada
                 if (typeof window.invalidarPesosCache === 'function') window.invalidarPesosCache();
                 if (typeof procesarVias === 'function') procesarVias(geojson);
-
+                
+                // Eliminar capa anterior si existe
                 if (viasLayer) map.removeLayer(viasLayer);
                 viasLayer = L.geoJSON(geojson, {
                     style: obtenerEstiloVia,
@@ -156,7 +161,7 @@ function cargarEnMapa(tipo) {
                         const p = feature.properties || {};
                         layer.on('click', function(e) {
                             const tablaAbierta = document.getElementById('table-panel')?.classList.contains('open');
-                            if (window._userRol === 'admin' && tablaAbierta) {
+                            if (window.userRol === 'admin' && tablaAbierta) {
                                 L.DomEvent.stopPropagation(e);
                                 layer.bindPopup(`
                                     <div style="font-family:sans-serif;min-width:160px;">
@@ -172,9 +177,10 @@ function cargarEnMapa(tipo) {
                     }
                 }).addTo(map);
 
+                // Actualizar leyenda, checkbox y tabla
                 const chk = document.getElementById('check-vias'); if (chk) chk.checked = true;
-                populateAttributeDropdownVias(geojson);
-                populateTableLayerSelect();
+                cargarListaVias(geojson);
+                atributosTabla();
                 const btnTablaVias = document.getElementById('btn-tabla-vias'); if (btnTablaVias) btnTablaVias.disabled = false;
 
             } else if (tipo === 'puntos') {
@@ -188,7 +194,7 @@ function cargarEnMapa(tipo) {
 
                 puntosInteresLayerGroup = L.layerGroup();
                 geojson.features.forEach(feature => {
-                    const capa  = feature.properties._capa || 'desconocido';
+                    const capa  = feature.properties.capa || 'desconocido';
                     const color = colorPorCapa[capa] || '#95a5a6';
                     const marker = L.circleMarker(
                         [feature.geometry.coordinates[1], feature.geometry.coordinates[0]],
@@ -197,7 +203,7 @@ function cargarEnMapa(tipo) {
                     marker.feature = feature;
                     marker.on('click', function(e) {
                         const tablaAbierta = document.getElementById('table-panel')?.classList.contains('open');
-                        if (window._userRol === 'admin' && tablaAbierta) {
+                        if (window.userRol === 'admin' && tablaAbierta) {
                             L.DomEvent.stopPropagation(e);
                             marker.bindPopup(crearPopupPunto(feature.properties)).openPopup();
                         }
@@ -209,10 +215,10 @@ function cargarEnMapa(tipo) {
                 window.puntosLayer = puntosInteresLayerGroup;
 
                 const chk = document.getElementById('check-puntos'); if (chk) chk.checked = true;
-                populateAttributeDropdownPuntos(geojson);
-                populateTableLayerSelect();
+                atributosPOI(geojson);
+                atributosTabla();
                 const btnTablaPuntos = document.getElementById('btn-tabla-puntos'); if (btnTablaPuntos) btnTablaPuntos.disabled = false;
-                _actualizarDescriptorPuntos(geojson);
+                actualizarDescriptorPuntos(geojson);
             }
         })
         .catch(err => {
@@ -281,11 +287,8 @@ function recortarCapa(tipo, input) {
 
 // ==================== HELPERS PRIVADOS ====================
 
-function _labelCargar(tipo) {
-    return tipo === 'vias' ? '📂 Cargar Vías' : '📂 Cargar Puntos';
-}
-
-function _resetLayerItem(id, texto) {
+// Resetea el estado visual de la capa en el panel izquierdo (clase, descripción, botón)
+function resetLayerItem(id, texto) {
     const item = document.getElementById(id);
     if (!item) return;
     item.classList.remove('loaded');
@@ -306,14 +309,15 @@ function recargarPuntosInteres() {
 
 // Alias usado desde poi-manager.js (importarPoisDesdeArchivo)
 window.recargarPuntosInteres = recargarPuntosInteres;
-window.cargarCapaPuntos      = recargarPuntosInteres;
+window.cargarCapaPuntos = recargarPuntosInteres;
 
 /**
  * Actualiza el descriptor de la capa puntos en el panel izquierdo
  * combinando las capas base del ZIP con los POIs manuales.
  * Se llama desde cargarEnMapa('puntos') al terminar de pintar.
  */
-function _actualizarDescriptorPuntos(geojson) {
+// Refleja en el descriptor la cantidad de POIs cargados desde el archivo y los manuales añadidos
+function actualizarDescriptorPuntos(geojson) {
     const desc = document.getElementById('pois-manuales-desc');
     if (!desc) return;
 

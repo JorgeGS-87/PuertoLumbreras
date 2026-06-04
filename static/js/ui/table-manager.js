@@ -5,15 +5,15 @@
  */
 
 // Estado del módulo
-let _tablaCapa       = null;
-let _modoEliminar    = false;
-let _backupGeoJSON   = null;   // copia antes de entrar en modo eliminar
-let _seleccion       = new Set();  // índices de features seleccionadas
-let _capaSeleccion   = null;       // layerGroup Leaflet con los resaltados
+let tablaCapa       = null;
+let modoEliminar    = false;
+let backupGeoJSON   = null;   // copia antes de entrar en modo eliminar
+let seleccion       = new Set();  // índices de features seleccionadas
+let capaSeleccion   = null;       // layerGroup Leaflet con los resaltados
 
 // ==================== POSICIONAMIENTO (sigue al #map) ====================
 
-function _actualizarPosicionPanel() {
+function actualizarPosicionPanel() {
     const panel = document.getElementById('table-panel');
     const mapEl = document.getElementById('map');
     if (!panel || !mapEl) return;
@@ -26,32 +26,32 @@ function _actualizarPosicionPanel() {
     panel.style.right = 'auto';
 }
 
-function _iniciarObservadorMapa() {
+function iniciarObservadorMapa() {
     const mapEl = document.getElementById('map');
     if (!mapEl) return;
 
     // Observar solo el #map (para cuando la tabla abre/cierra y el mapa cambia alto)
     if (window.ResizeObserver) {
-        new ResizeObserver(() => requestAnimationFrame(_actualizarPosicionPanel)).observe(mapEl);
+        new ResizeObserver(() => requestAnimationFrame(actualizarPosicionPanel)).observe(mapEl);
     }
 
     // Suscribirse al hub central de layout para reaccionar al panel izquierdo y resize
     // El hub (ui-controls.js) ya observa #left-panel, body.class y window resize.
     if (typeof window.layoutHubSubscribe === 'function') {
-        window.layoutHubSubscribe(_actualizarPosicionPanel);
+        window.layoutHubSubscribe(actualizarPosicionPanel);
     } else {
         // Hub aún no inicializado (carga tardía): registrar callback pendiente
-        window._layoutHubCallbacks = window._layoutHubCallbacks || [];
-        window._layoutHubCallbacks.push(_actualizarPosicionPanel);
+        window.layoutHubCallbacks = window.layoutHubCallbacks || [];
+        window.layoutHubCallbacks.push(actualizarPosicionPanel);
     }
 
-    _actualizarPosicionPanel();
+    actualizarPosicionPanel();
 }
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _iniciarObservadorMapa);
+    document.addEventListener('DOMContentLoaded', iniciarObservadorMapa);
 } else {
-    setTimeout(_iniciarObservadorMapa, 0);
+    setTimeout(iniciarObservadorMapa, 0);
 }
 
 // ==================== ABRIR / CERRAR PANEL ====================
@@ -66,14 +66,14 @@ function abrirTabla(layerId) {
     const panel = document.getElementById('table-panel');
     const title = document.getElementById('table-panel-title');
 
-    if (panel.classList.contains('open') && _tablaCapa === layerId) {
+    if (panel.classList.contains('open') && tablaCapa === layerId) {
         cerrarTabla();
         return;
     }
 
-    _tablaCapa    = layerId;
-    _modoEliminar = false;
-    _actualizarBtnEditar();
+    tablaCapa    = layerId;
+    modoEliminar = false;
+    actualizarBtnEditar();
 
     const nombres = { vias: '🛣️ Red de Vías OSM', puntos: '🪧 Puntos de Interés' };
     if (title) title.textContent = '📋 ' + (nombres[layerId] || layerId);
@@ -82,10 +82,10 @@ function abrirTabla(layerId) {
     const btnActivo = document.getElementById('btn-tabla-' + layerId);
     if (btnActivo) btnActivo.classList.add('active');
 
-    _actualizarPosicionPanel();
+    actualizarPosicionPanel();
     panel.classList.add('open');
     document.body.classList.add('tabla-abierta');
-    if (window._userRol === 'admin') document.body.classList.add('admin-tabla-abierta');
+    if (window.userRol === 'admin') document.body.classList.add('admin-tabla-abierta');
     document.getElementById('table-cmd').value = '';
     updateAttributeTable();
 }
@@ -95,16 +95,16 @@ function cerrarTabla() {
     document.querySelectorAll('.btn-ver-tabla').forEach(b => b.classList.remove('active'));
     document.body.classList.remove('tabla-abierta');
     document.body.classList.remove('admin-tabla-abierta');
-    _tablaCapa    = null;
-    _modoEliminar = false;
-    _actualizarBtnEditar();
+    tablaCapa    = null;
+    modoEliminar = false;
+    actualizarBtnEditar();
     limpiarSeleccion();
     setTimeout(() => { if (typeof map !== 'undefined') map.invalidateSize(); }, 350);
 }
 
 // ==================== MENÚ EDITAR ====================
 
-let _modalAccion = null;
+let modalAccion = null;
 
 function toggleMenuEditar(e) {
     const menu = document.getElementById('edit-menu');
@@ -116,46 +116,46 @@ function toggleMenuEditar(e) {
     menu.style.left  = 'auto';
     menu.style.right = (window.innerWidth - rect.right) + 'px';
     menu.style.display = 'block';
-    setTimeout(() => document.addEventListener('click', _cerrarMenuEditar, { once: true }), 0);
+    setTimeout(() => document.addEventListener('click', cerrarMenuEditar, { once: true }), 0);
 }
 
-function _cerrarMenuEditar() {
+function cerrarMenuEditar() {
     const menu = document.getElementById('edit-menu');
     if (menu) menu.style.display = 'none';
 }
 
 function activarModoEliminarDesdeMenu() {
-    _cerrarMenuEditar();
-    if (_modoEliminar) return;
-    const geo = _tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
-    _backupGeoJSON = geo ? JSON.parse(JSON.stringify(geo)) : null;
-    _modoEliminar  = true;
-    _actualizarBtnEditar();
+    cerrarMenuEditar();
+    if (modoEliminar) return;
+    const geo = tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
+    backupGeoJSON = geo ? JSON.parse(JSON.stringify(geo)) : null;
+    modoEliminar  = true;
+    actualizarBtnEditar();
     updateAttributeTable();
 }
 
-function _salirModoEliminar() {
-    const guardar = confirm('¿Deseas guardar los cambios en las columnas?\n\n• Aceptar → se aplican\n• Cancelar → se restauran las columnas originales');
+function salirModoEliminar() {
+    const guardar = confirm('¿Deseas guardar los cambios en las columnas?\n\n• Aceptar -> se aplican\n• Cancelar -> se restauran las columnas originales');
     if (guardar) {
-        if (_tablaCapa === 'vias') _sincronizarViasConServidor();
+        if (tablaCapa === 'vias') sincronizarViasConServidor();
         showNotification('✅ Cambios guardados', 'success');
     } else {
-        _restaurarBackup();
+        restaurarBackup();
         showNotification('↩️ Cambios descartados', 'info');
     }
-    _backupGeoJSON = null;
-    _modoEliminar  = false;
-    _actualizarBtnEditar();
+    backupGeoJSON = null;
+    modoEliminar  = false;
+    actualizarBtnEditar();
     updateAttributeTable();
 }
 
-function _actualizarBtnEditar() {
+function actualizarBtnEditar() {
     const btn = document.getElementById('btn-editar');
     if (!btn) return;
-    if (_modoEliminar) {
+    if (modoEliminar) {
         btn.classList.add('active');
         btn.textContent = '✕ Cancelar';
-        btn.onclick     = () => _salirModoEliminar();
+        btn.onclick     = () => salirModoEliminar();
     } else {
         btn.classList.remove('active');
         btn.textContent = '✏️ Editar';
@@ -163,34 +163,34 @@ function _actualizarBtnEditar() {
     }
 }
 
-function _restaurarBackup() {
-    if (!_backupGeoJSON) return;
-    if (_tablaCapa === 'puntos') {
-        window.currentPuntosGeoJSON = _backupGeoJSON;
+function restaurarBackup() {
+    if (!backupGeoJSON) return;
+    if (tablaCapa === 'puntos') {
+        window.currentPuntosGeoJSON = backupGeoJSON;
     } else {
-        window.currentViasGeoJSON = _backupGeoJSON;
+        window.currentViasGeoJSON = backupGeoJSON;
         if (typeof viasData !== 'undefined') {
             viasData.atributos.clear();
-            _backupGeoJSON.features.forEach(f => {
+            backupGeoJSON.features.forEach(f => {
                 if (f?.properties) Object.keys(f.properties).forEach(k => viasData.atributos.add(k));
             });
         }
-        if (typeof populateAttributeDropdownVias === 'function')
-            populateAttributeDropdownVias(window.currentViasGeoJSON);
+        if (typeof cargarListaVias === 'function')
+            cargarListaVias(window.currentViasGeoJSON);
     }
 }
 
-function _guardarBackupSiNecesario() {
-    if (_backupGeoJSON) return;
-    const geo = _tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
-    _backupGeoJSON = geo ? JSON.parse(JSON.stringify(geo)) : null;
+function guardarBackupSiNecesario() {
+    if (backupGeoJSON) return;
+    const geo = tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
+    backupGeoJSON = geo ? JSON.parse(JSON.stringify(geo)) : null;
 }
 
 // ==================== MODAL AÑADIR COLUMNA ====================
 
 function abrirModalAnadir() {
-    _cerrarMenuEditar();
-    _guardarBackupSiNecesario();
+    cerrarMenuEditar();
+    guardarBackupSiNecesario();
     document.getElementById('modal-title').textContent = '➕ Añadir columna';
     document.getElementById('modal-body').innerHTML = `
         <div class="mbox-row">
@@ -211,18 +211,18 @@ function abrirModalAnadir() {
             <span class="mbox-hint">Se aplicará a todos los elementos de la capa.</span>
         </div>
     `;
-    _modalAccion = _confirmarAnadir;
+    modalAccion = confirmarAnadir;
     document.getElementById('table-edit-modal').style.display = 'flex';
     setTimeout(() => document.getElementById('m-col-nombre')?.focus(), 50);
 }
 
-function _confirmarAnadir() {
+function confirmarAnadir() {
     const nombre = document.getElementById('m-col-nombre').value.trim();
     const tipo   = document.getElementById('m-col-tipo').value;
     const defRaw = document.getElementById('m-col-default').value.trim();
     if (!nombre) { showNotification('Escribe un nombre para la columna', 'warning'); return; }
 
-    const geo = _tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
+    const geo = tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
     if (!geo?.features) return;
 
     let defVal = null;
@@ -233,9 +233,9 @@ function _confirmarAnadir() {
     }
 
     geo.features.forEach(f => { if (f.properties) f.properties[nombre] = defVal; });
-    if (_tablaCapa === 'vias' && typeof viasData !== 'undefined') viasData.atributos.add(nombre);
-    if (_tablaCapa === 'vias' && typeof populateAttributeDropdownVias === 'function')
-        populateAttributeDropdownVias(window.currentViasGeoJSON);
+    if (tablaCapa === 'vias' && typeof viasData !== 'undefined') viasData.atributos.add(nombre);
+    if (tablaCapa === 'vias' && typeof cargarListaVias === 'function')
+        cargarListaVias(window.currentViasGeoJSON);
 
     cerrarModal();
     updateAttributeTable();
@@ -245,15 +245,15 @@ function _confirmarAnadir() {
 // ==================== MODAL EDITAR VALORES ====================
 
 function abrirModalEditarValores() {
-    _cerrarMenuEditar();
-    _guardarBackupSiNecesario();
+    cerrarMenuEditar();
+    guardarBackupSiNecesario();
 
     let geo, colsArr;
-    if (_tablaCapa === 'obstaculos') {
-        geo = window._currentObstaculosGeoJSON;
+    if (tablaCapa === 'obstaculos') {
+        geo = window.currentObstaculosGeoJSON;
         colsArr = ['Nombre', 'Porcentaje'];
     } else {
-        geo = _tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
+        geo = tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
         const cols = new Set();
         geo?.features?.forEach(f => { if (f?.properties) Object.keys(f.properties).forEach(k => cols.add(k)); });
         colsArr = Array.from(cols);
@@ -262,9 +262,9 @@ function abrirModalEditarValores() {
 
     const optsCols = colsArr.map(c => `<option value="${c}">${c}</option>`).join('');
 
-    const haySeleccion = _seleccion.size > 0;
+    const haySeleccion = seleccion.size > 0;
     const scopeHint = haySeleccion
-        ? `<span class="mbox-hint">Se aplicará solo a los <strong>${_seleccion.size} elementos seleccionados</strong>.</span>`
+        ? `<span class="mbox-hint">Se aplicará solo a los <strong>${seleccion.size} elementos seleccionados</strong>.</span>`
         : `<span class="mbox-hint">Se aplicará a <strong>todos</strong> los elementos. Selecciona filas en la tabla para limitar el alcance.</span>`;
 
     document.getElementById('modal-title').textContent = '✏️ Editar valores';
@@ -284,7 +284,7 @@ function abrirModalEditarValores() {
         </div>
         ${scopeHint}
     `;
-    _modalAccion = _confirmarEditarValores;
+    modalAccion = confirmarEditarValores;
     document.getElementById('table-edit-modal').style.display = 'flex';
     actualizarCampoOriginal();
 }
@@ -295,9 +295,9 @@ function actualizarCampoOriginal() {
     const rowEl  = document.getElementById('m-edit-original-row');
     if (!col || !hintEl || !rowEl) return;
 
-    const geo = _tablaCapa === 'obstaculos'
-        ? window._currentObstaculosGeoJSON
-        : (_tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON);
+    const geo = tablaCapa === 'obstaculos'
+        ? window.currentObstaculosGeoJSON
+        : (tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON);
     if (!geo?.features) return;
 
     const valores = geo.features.map(f => f?.properties?.[col]).filter(v => v !== null && v !== undefined && v !== '');
@@ -310,19 +310,19 @@ function actualizarCampoOriginal() {
     hintEl.textContent  = 'Valores existentes: ' + unicos.join(', ') + (valores.length > 6 ? '…' : '');
 }
 
-function _confirmarEditarValores() {
+function confirmarEditarValores() {
     const col      = document.getElementById('m-edit-col')?.value;
     const original = document.getElementById('m-edit-original')?.value ?? '';
     const nuevo    = document.getElementById('m-edit-nuevo')?.value ?? '';
     if (!col) return;
 
-    if (_tablaCapa === 'obstaculos') {
-        const geo = window._currentObstaculosGeoJSON;
+    if (tablaCapa === 'obstaculos') {
+        const geo = window.currentObstaculosGeoJSON;
         if (!geo?.features) return;
         const colOculta     = document.getElementById('m-edit-original-row')?.style.display === 'none';
         const aplicarATodos = colOculta || original.trim() === '';
-        const targets = _seleccion.size > 0
-            ? geo.features.filter((_, i) => _seleccion.has(i))
+        const targets = seleccion.size > 0
+            ? geo.features.filter((_, i) => seleccion.has(i))
             : geo.features;
         let count = 0;
         targets.forEach(f => {
@@ -335,39 +335,39 @@ function _confirmarEditarValores() {
                     return;
                 }
                 p.Porcentaje = num;
-                const obsRef = f._obsRef;
+                const obsRef = f.obsRef;
                 if (obsRef) {
                     obsRef.obstruccion = num / 100;
-                    const color = (typeof _colorObs === 'function') ? _colorObs(obsRef.obstruccion) : '#e67e22';
+                    const color = (typeof colorObs === 'function') ? colorObs(obsRef.obstruccion) : '#e67e22';
                     if (obsRef.circulo) obsRef.circulo.setStyle({ color, fillColor: color });
                     obsRef.segmentosBloqueados?.forEach(s => s.setStyle({ color }));
-                    if (typeof _actualizarListaObstaculos === 'function') _actualizarListaObstaculos();
+                    if (typeof actualizarListaObstaculos === 'function') actualizarListaObstaculos();
                 }
             } else if (col === 'Nombre') {
                 const nuevoId = nuevo.trim() === '' ? null : nuevo.trim();
                 p.Nombre = nuevoId ?? p.id;
-                p._NombreEsExplicito = nuevoId !== null;
-                const obsRef = f._obsRef;
+                p.NombreEsExplicito = nuevoId !== null;
+                const obsRef = f.obsRef;
                 if (obsRef) {
                     obsRef.obsId = nuevoId;
-                    if (typeof _actualizarListaObstaculos === 'function') _actualizarListaObstaculos();
+                    if (typeof actualizarListaObstaculos === 'function') actualizarListaObstaculos();
                 }
             }
             count++;
         });
         cerrarModal();
-        _renderTablaObstaculos();
+        renderTablaObstaculos();
         showNotification(`${count} valor(es) actualizado(s) en "${col}"`, 'success');
         return;
     }
 
-    const geo = _tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
+    const geo = tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
     if (!geo?.features) return;
 
     const colOculta    = document.getElementById('m-edit-original-row')?.style.display === 'none';
     const aplicarATodos = colOculta || original.trim() === '';
-    const targets      = _seleccion.size > 0
-        ? geo.features.filter((_, i) => _seleccion.has(i))
+    const targets      = seleccion.size > 0
+        ? geo.features.filter((_, i) => seleccion.has(i))
         : geo.features;
 
     let count = 0;
@@ -383,7 +383,7 @@ function _confirmarEditarValores() {
 
     cerrarModal();
     updateAttributeTable();
-    if (_tablaCapa === 'vias') _sincronizarViasConServidor();
+    if (tablaCapa === 'vias') sincronizarViasConServidor();
     showNotification(`${count} valor(es) actualizado(s) en "${col}"`, 'success');
 }
 
@@ -391,11 +391,11 @@ function _confirmarEditarValores() {
 
 function cerrarModal() {
     document.getElementById('table-edit-modal').style.display = 'none';
-    _modalAccion = null;
+    modalAccion = null;
 }
 
 function confirmarModal() {
-    if (typeof _modalAccion === 'function') _modalAccion();
+    if (typeof modalAccion === 'function') modalAccion();
 }
 
 
@@ -408,15 +408,15 @@ function dropColumnFromLayer(layerId, col) {
     geo.features.forEach(f => { if (f?.properties) delete f.properties[col]; });
 
     if (layerId === 'vias' && typeof viasData !== 'undefined') viasData.atributos.delete(col);
-    if (layerId === 'vias' && typeof populateAttributeDropdownVias === 'function')
-        populateAttributeDropdownVias(window.currentViasGeoJSON);
+    if (layerId === 'vias' && typeof cargarListaVias === 'function')
+        cargarListaVias(window.currentViasGeoJSON);
 
     updateAttributeTable();
     showNotification(`Columna "${col}" eliminada`, 'info');
-    if (layerId === 'vias') _sincronizarViasConServidor();
+    if (layerId === 'vias') sincronizarViasConServidor();
 }
 
-function _sincronizarViasConServidor() {
+function sincronizarViasConServidor() {
     const geo = window.currentViasGeoJSON;
     if (!geo) return;
     fetch('/api/actualizar-vias', {
@@ -432,13 +432,13 @@ function _sincronizarViasConServidor() {
 
 // ==================== HABILITACIÓN BOTONES 📋 ====================
 
-function populateTableLayerSelect() {
+function atributosTabla() {
     const btnVias   = document.getElementById('btn-tabla-vias');
     const btnPuntos = document.getElementById('btn-tabla-puntos');
     if (btnVias)   btnVias.disabled   = !(window.currentViasGeoJSON?.features?.length   > 0);
     if (btnPuntos) btnPuntos.disabled = !(window.currentPuntosGeoJSON?.features?.length > 0);
-    if (_tablaCapa) {
-        const geo = _tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
+    if (tablaCapa) {
+        const geo = tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
         if (!geo?.features?.length) cerrarTabla();
     }
 }
@@ -447,7 +447,7 @@ function populateTableLayerSelect() {
 /**
  * SQL soportado:
  *   SELECT * FROM capa [WHERE <condición>] [LIMIT n] [OFFSET n]
- *   SELECT * FROM capa   (sin WHERE → todos, con LIMIT por defecto 100)
+ *   SELECT * FROM capa   (sin WHERE -> todos, con LIMIT por defecto 100)
  *   <condición> ::= <expr> { AND|OR <expr> }
  *   <expr>      ::= campo = 'valor'
  *                 | campo != 'valor'
@@ -480,7 +480,7 @@ function parsearSQL(sql, features) {
     // Si empieza por WHERE o LIMIT, anteponer SELECT ficticio para el parser
     let normalized = sql;
     if (upperSql.startsWith('WHERE') || upperSql.startsWith('LIMIT')) {
-        normalized = 'SELECT * FROM _ ' + sql;
+        normalized = 'SELECT * FROM  ' + sql;
     }
 
     // ── Extraer LIMIT y OFFSET ──
@@ -497,7 +497,7 @@ function parsearSQL(sql, features) {
     const whereStr   = whereMatch ? whereMatch[1].trim() : null;
 
     // ── Filtrar ──
-    let rows = whereStr ? features.filter(f => _evaluarWhere(f?.properties || {}, whereStr)) : features.slice();
+    let rows = whereStr ? features.filter(f => evaluarWhere(f?.properties || {}, whereStr)) : features.slice();
 
     // ── Aplicar OFFSET y LIMIT ──
     if (offset > 0) rows = rows.slice(offset);
@@ -511,10 +511,10 @@ function parsearSQL(sql, features) {
  * Evalúa una cláusula WHERE completa (soporta AND / OR con precedencia estándar).
  * No usa eval() — es un parser recursivo de tokens.
  */
-function _evaluarWhere(props, whereStr) {
+function evaluarWhere(props, whereStr) {
     try {
-        const tokens = _tokenizar(whereStr);
-        const result = _parseOr(props, tokens, { pos: 0 });
+        const tokens = tokenizar(whereStr);
+        const result = parseOr(props, tokens, { pos: 0 });
         return result;
     } catch (e) {
         return true; // Si hay error de sintaxis, dejar pasar la fila
@@ -522,7 +522,7 @@ function _evaluarWhere(props, whereStr) {
 }
 
 // ── Tokenizador ──
-function _tokenizar(str) {
+function tokenizar(str) {
     const tokens = [];
     let i = 0;
     while (i < str.length) {
@@ -578,31 +578,31 @@ function _tokenizar(str) {
 
 // ── Parser de expresiones (OR menor precedencia, AND mayor) ──
 
-function _parseOr(props, tokens, state) {
-    let left = _parseAnd(props, tokens, state);
+function parseOr(props, tokens, state) {
+    let left = parseAnd(props, tokens, state);
     while (state.pos < tokens.length && tokens[state.pos].type === 'OR') {
         state.pos++;
-        const right = _parseAnd(props, tokens, state);
+        const right = parseAnd(props, tokens, state);
         left = left || right;
     }
     return left;
 }
 
-function _parseAnd(props, tokens, state) {
-    let left = _parseExpr(props, tokens, state);
+function parseAnd(props, tokens, state) {
+    let left = parseExpr(props, tokens, state);
     while (state.pos < tokens.length && tokens[state.pos].type === 'AND') {
         state.pos++;
-        const right = _parseExpr(props, tokens, state);
+        const right = parseExpr(props, tokens, state);
         left = left && right;
     }
     return left;
 }
 
-function _parseExpr(props, tokens, state) {
+function parseExpr(props, tokens, state) {
     // Paréntesis
     if (state.pos < tokens.length && tokens[state.pos].value === '(') {
         state.pos++;
-        const result = _parseOr(props, tokens, state);
+        const result = parseOr(props, tokens, state);
         if (state.pos < tokens.length && tokens[state.pos].value === ')') state.pos++;
         return result;
     }
@@ -678,61 +678,61 @@ function _parseExpr(props, tokens, state) {
 /**
  * Aplica un Set de índices como selección activa y los resalta en el mapa.
  */
-function _aplicarSeleccion(indices) {
-    _seleccion = indices;
-    _dibujarResaltados();
-    _actualizarInfoSeleccion();
+function aplicarSeleccion(indices) {
+    seleccion = indices;
+    dibujarResaltados();
+    actualizarInfoSeleccion();
 }
 
 function limpiarSeleccion() {
-    _seleccion = new Set();
-    if (_capaSeleccion && typeof map !== 'undefined') {
-        map.removeLayer(_capaSeleccion);
+    seleccion = new Set();
+    if (capaSeleccion && typeof map !== 'undefined') {
+        map.removeLayer(capaSeleccion);
     }
-    _capaSeleccion = null;
-    _actualizarInfoSeleccion();
+    capaSeleccion = null;
+    actualizarInfoSeleccion();
 }
 
-function _actualizarInfoSeleccion() {
+function actualizarInfoSeleccion() {
     const infoEl = document.getElementById('table-panel-info');
     if (!infoEl) return;
-    const geo = _tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
+    const geo = tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
     const total = geo?.features?.length ?? 0;
     const shown = document.getElementById('table-body')?.querySelectorAll('tr').length ?? 0;
-    const sel   = _seleccion.size;
+    const sel   = seleccion.size;
     infoEl.textContent = sel > 0
         ? `${shown} / ${total} elementos  ·  ${sel} seleccionados`
         : `${shown} / ${total} elementos`;
 }
 
-function _dibujarResaltados() {
+function dibujarResaltados() {
     if (typeof map === 'undefined' || typeof L === 'undefined') return;
 
-    if (_capaSeleccion) map.removeLayer(_capaSeleccion);
-    _capaSeleccion = L.layerGroup().addTo(map);
+    if (capaSeleccion) map.removeLayer(capaSeleccion);
+    capaSeleccion = L.layerGroup().addTo(map);
 
-    const geo = _tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
+    const geo = tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
     if (!geo?.features) return;
 
     const estiloLinea  = { color: '#00b4d8', weight: 5, opacity: 1 };
     const estiloPunto  = { radius: 10, fillColor: '#00b4d8', color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.9 };
 
-    _seleccion.forEach(idx => {
+    seleccion.forEach(idx => {
         const feature = geo.features[idx];
         if (!feature?.geometry) return;
         const geom = feature.geometry;
 
         try {
             if (geom.type === 'LineString' || geom.type === 'MultiLineString') {
-                L.geoJSON(feature, { style: () => estiloLinea }).addTo(_capaSeleccion);
+                L.geoJSON(feature, { style: () => estiloLinea }).addTo(capaSeleccion);
             } else if (geom.type === 'Point') {
                 const [lon, lat] = geom.coordinates;
-                L.circleMarker([lat, lon], estiloPunto).addTo(_capaSeleccion);
+                L.circleMarker([lat, lon], estiloPunto).addTo(capaSeleccion);
             } else {
                 L.geoJSON(feature, {
                     style:       () => ({ ...estiloLinea, fillColor: '#00b4d8', fillOpacity: 0.35 }),
-                    pointToLayer: (_, latlng) => L.circleMarker(latlng, estiloPunto),
-                }).addTo(_capaSeleccion);
+                    pointToLayer: (_, latlon) => L.circleMarker(latlon, estiloPunto),
+                }).addTo(capaSeleccion);
             }
         } catch (e) { /* feature con geometría inválida */ }
     });
@@ -741,20 +741,20 @@ function _dibujarResaltados() {
 /**
  * Alterna la selección de una fila (con Shift para multi-selección).
  */
-function _toggleSeleccionFila(idx, shiftKey) {
+function toggleSeleccionFila(idx, shiftKey) {
     if (!shiftKey) {
         // Click simple: si ya estaba sola seleccionada, deseleccionar; si no, seleccionar solo esta
-        if (_seleccion.size === 1 && _seleccion.has(idx)) {
-            _aplicarSeleccion(new Set());
+        if (seleccion.size === 1 && seleccion.has(idx)) {
+            aplicarSeleccion(new Set());
         } else {
-            _aplicarSeleccion(new Set([idx]));
+            aplicarSeleccion(new Set([idx]));
         }
     } else {
         // Shift+Click: añadir/quitar de la selección múltiple
-        const nueva = new Set(_seleccion);
+        const nueva = new Set(seleccion);
         if (nueva.has(idx)) nueva.delete(idx);
         else                 nueva.add(idx);
-        _aplicarSeleccion(nueva);
+        aplicarSeleccion(nueva);
     }
 }
 
@@ -769,7 +769,7 @@ function renderAttributeTable(geo, colsArr, featuresToRender) {
     header.innerHTML = '';
     body.innerHTML   = '';
 
-    const layerId = _tablaCapa || '';
+    const layerId = tablaCapa || '';
 
     if (!colsArr || colsArr.length === 0) {
         header.innerHTML = '<tr><th>Sin atributos</th></tr>';
@@ -778,7 +778,7 @@ function renderAttributeTable(geo, colsArr, featuresToRender) {
         return;
     }
 
-    // Cabecera con botones ✕ solo en modo eliminar
+    // Cabecera con botones x solo en modo eliminar
     const trh = document.createElement('tr');
     colsArr.forEach(c => {
         const th    = document.createElement('th');
@@ -786,7 +786,7 @@ function renderAttributeTable(geo, colsArr, featuresToRender) {
         label.textContent = c;
         th.appendChild(label);
 
-        if (_modoEliminar) {
+        if (modoEliminar) {
             const btnDel = document.createElement('button');
             btnDel.textContent = '✕';
             btnDel.title = `Eliminar columna "${c}"`;
@@ -810,17 +810,17 @@ function renderAttributeTable(geo, colsArr, featuresToRender) {
         tr.style.cursor = 'pointer';
         tr.title = 'Click · Shift+Click para selección múltiple';
 
-        if (_seleccion.has(idx)) {
+        if (seleccion.has(idx)) {
             tr.style.background    = '#caf0f8';
             tr.style.outline       = '2px solid #00b4d8';
             tr.style.outlineOffset = '-2px';
         }
 
         tr.onclick = e => {
-            _toggleSeleccionFila(idx, e.shiftKey);
+            toggleSeleccionFila(idx, e.shiftKey);
             document.querySelectorAll('#table-body tr').forEach((row, i) => {
                 const fIdx = allFeatures.indexOf(featuresToRender[i]);
-                if (_seleccion.has(fIdx)) {
+                if (seleccion.has(fIdx)) {
                     row.style.background    = '#caf0f8';
                     row.style.outline       = '2px solid #00b4d8';
                     row.style.outlineOffset = '-2px';
@@ -830,7 +830,7 @@ function renderAttributeTable(geo, colsArr, featuresToRender) {
                     row.style.outlineOffset = '';
                 }
             });
-            _actualizarInfoSeleccion();
+            actualizarInfoSeleccion();
         };
 
         colsArr.forEach(col => {
@@ -841,7 +841,7 @@ function renderAttributeTable(geo, colsArr, featuresToRender) {
         body.appendChild(tr);
     });
 
-    _actualizarInfoSeleccion();
+    actualizarInfoSeleccion();
 }
 
 // ==================== ACTUALIZAR TABLA ====================
@@ -849,15 +849,15 @@ function renderAttributeTable(geo, colsArr, featuresToRender) {
 // ── Caché de columnas de la tabla ─────────────────────────────────────────
 // Reconstruir el Set de columnas iterando todos los features es caro con
 // capas grandes. Solo lo rehacemos cuando cambia la capa activa o su tamaño.
-let _colsCacheKey  = null;
-let _colsCacheArr  = null;
+let colsCacheKey  = null;
+let colsCacheArr  = null;
 
-function _invalidarColsCache() { _colsCacheKey = null; _colsCacheArr = null; }
+function invalidarColsCache() { colsCacheKey = null; colsCacheArr = null; }
 
 function updateAttributeTable() {
-    if (!_tablaCapa) return;
+    if (!tablaCapa) return;
 
-    const geo = _tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
+    const geo = tablaCapa === 'puntos' ? window.currentPuntosGeoJSON : window.currentViasGeoJSON;
     if (!geo || !Array.isArray(geo.features) || geo.features.length === 0) {
         document.getElementById('table-header').innerHTML = '<tr><th>Sin datos</th></tr>';
         document.getElementById('table-body').innerHTML   = '<tr><td style="text-align:center;color:#7f8c8d;padding:16px;">Capa sin datos</td></tr>';
@@ -865,14 +865,14 @@ function updateAttributeTable() {
     }
 
     // Caché de columnas: solo reconstruir si cambia capa o nº de features
-    const cacheKey = `${_tablaCapa}|${geo.features.length}`;
-    if (_colsCacheKey !== cacheKey) {
+    const cacheKey = `${tablaCapa}|${geo.features.length}`;
+    if (colsCacheKey !== cacheKey) {
         const cols = new Set();
         for (const f of geo.features) {
             if (f?.properties) Object.keys(f.properties).forEach(k => cols.add(k));
         }
-        _colsCacheArr = Array.from(cols);
-        _colsCacheKey = cacheKey;
+        colsCacheArr = Array.from(cols);
+        colsCacheKey = cacheKey;
     }
 
     const sql    = document.getElementById('table-cmd')?.value || '';
@@ -886,10 +886,10 @@ function updateAttributeTable() {
     // Si hay consulta activa, resaltar automáticamente los resultados en el mapa
     if (sql.trim()) {
         const indices = new Set(result.rows.map(f => geo.features.indexOf(f)).filter(i => i >= 0));
-        _aplicarSeleccion(indices);
+        aplicarSeleccion(indices);
     }
 
-    renderAttributeTable(geo, _colsCacheArr, result.rows);
+    renderAttributeTable(geo, colsCacheArr, result.rows);
 }
 
 
@@ -906,40 +906,40 @@ function resetTableFilter() {
  * Construye un GeoJSON temporal desde el array global `obstaculos`
  * con las mismas columnas que el CSV: id, Nombre, coord_lat, coord_lon, Porcentaje, Cruce, Calles, Portal
  */
-function _obstaculosAGeoJSON() {
+function obstaculosAGeoJSON() {
     if (typeof obstaculos === 'undefined') return null;
     const activos = obstaculos.filter(Boolean);
     if (!activos.length) return null;
 
     const features = activos.map((obs, rowIdx) => {
-        const nombres  = (typeof _nombresViasAfectadas === 'function') ? _nombresViasAfectadas(obs) : [];
+        const nombres  = (typeof nombresViasAfectadas === 'function') ? nombresViasAfectadas(obs) : [];
         const esCruce  = nombres.length > 1;
         const id       = rowIdx + 1;  // enumeración
         return {
             type: 'Feature',
-            geometry: { type: 'Point', coordinates: [obs.latlng.lng, obs.latlng.lat] },
+            geometry: { type: 'Point', coordinates: [obs.latlon.lng, obs.latlon.lat] },
             properties: {
                 id,
                 Nombre:           obs.obsId !== null ? obs.obsId : id,  // id como valor alternativo visual
-                _NombreEsExplicito: obs.obsId !== null,                  // indicador interno para la tabla
-                coord_lat:        obs.latlng.lat,
-                coord_lon:        obs.latlng.lng,
+                NombreEsExplicito: obs.obsId !== null,                  // indicador interno para la tabla
+                coord_lat:        obs.latlon.lat,
+                coord_lon:        obs.latlon.lng,
                 Porcentaje:       Math.round((obs.obstruccion ?? 0.5) * 100),
                 Cruce:            esCruce ? 'Sí' : 'No',
                 Calles:           nombres.join(';') || '—',
                 Portal:           obs.portal || '',
             },
-            _obsRef: obs,
+            obsRef: obs,
         };
     });
     return { type: 'FeatureCollection', features };
 }
 
 /** Columnas fijas de la tabla de obstáculos — mismo orden que el CSV de exportación */
-const _OBS_COLS = ['id', 'Nombre', 'coord_lat', 'coord_lon', 'Porcentaje', 'Cruce', 'Calles', 'Portal'];
+const OBS_COLS = ['id', 'Nombre', 'coord_lat', 'coord_lon', 'Porcentaje', 'Cruce', 'Calles', 'Portal'];
 
 function abrirTablaObstaculos() {
-    const geo = _obstaculosAGeoJSON();
+    const geo = obstaculosAGeoJSON();
     if (!geo || !geo.features.length) {
         showNotification('No hay obstáculos para mostrar', 'warning');
         return;
@@ -949,16 +949,16 @@ function abrirTablaObstaculos() {
     const title = document.getElementById('table-panel-title');
 
     // Toggle: si ya está abierta con obstáculos, cerrar
-    if (panel.classList.contains('open') && _tablaCapa === 'obstaculos') {
+    if (panel.classList.contains('open') && tablaCapa === 'obstaculos') {
         cerrarTabla();
         return;
     }
 
-    _tablaCapa    = 'obstaculos';
-    _modoEliminar = false;
+    tablaCapa    = 'obstaculos';
+    modoEliminar = false;
 
     // El botón "Editar" solo se muestra si puede editar
-    const puedeEditar = (window._userRol === 'registrado' || window._userRol === 'admin');
+    const puedeEditar = (window.userRol === 'registrado' || window.userRol === 'admin');
     const btnEditar   = document.getElementById('btn-editar');
     if (btnEditar) btnEditar.style.display = puedeEditar ? '' : 'none';
 
@@ -969,18 +969,18 @@ function abrirTablaObstaculos() {
     if (btnActivo) btnActivo.classList.add('active');
 
     // Guardar GeoJSON temporal en una variable accesible por updateAttributeTable
-    window._currentObstaculosGeoJSON = geo;
+    window.currentObstaculosGeoJSON = geo;
 
-    _actualizarPosicionPanel();
+    actualizarPosicionPanel();
     panel.classList.add('open');
     document.body.classList.add('tabla-abierta');
     document.getElementById('table-cmd').value = '';
-    _renderTablaObstaculos();
+    renderTablaObstaculos();
 }
 
-function _renderTablaObstaculos() {
-    const geo = _obstaculosAGeoJSON();
-    window._currentObstaculosGeoJSON = geo;
+function renderTablaObstaculos() {
+    const geo = obstaculosAGeoJSON();
+    window.currentObstaculosGeoJSON = geo;
 
     const header = document.getElementById('table-header');
     const body   = document.getElementById('table-body');
@@ -990,7 +990,7 @@ function _renderTablaObstaculos() {
     header.innerHTML = '';
     body.innerHTML   = '';
 
-    const puedeEditar = (window._userRol === 'registrado' || window._userRol === 'admin');
+    const puedeEditar = (window.userRol === 'registrado' || window.userRol === 'admin');
 
     if (!geo || !geo.features.length) {
         header.innerHTML = '<tr><th>Sin obstáculos</th></tr>';
@@ -1001,7 +1001,7 @@ function _renderTablaObstaculos() {
 
     // Cabecera
     const trh = document.createElement('tr');
-    _OBS_COLS.forEach(c => {
+    OBS_COLS.forEach(c => {
         const th = document.createElement('th');
         th.textContent = c;
         trh.appendChild(th);
@@ -1020,7 +1020,7 @@ function _renderTablaObstaculos() {
             if (typeof map !== 'undefined') map.setView([lat, lon], 17, { animate: true });
         };
 
-        _OBS_COLS.forEach(col => {
+        OBS_COLS.forEach(col => {
             const td = document.createElement('td');
             const val = p[col];
 
@@ -1032,21 +1032,21 @@ function _renderTablaObstaculos() {
                 td.style.fontWeight = '500';
 
             } else if (col === 'Nombre') {
-                // Solo lectura — editable únicamente desde Editar → Editar valores
-                const esExplicito = p._NombreEsExplicito;
+                // Solo lectura — editable únicamente desde Editar -> Editar valores
+                const esExplicito = p.NombreEsExplicito;
                 td.textContent      = String(val);
                 td.style.fontWeight = '600';
                 td.style.color      = esExplicito ? '#2c3e50' : '#95a5a6';
                 td.style.background = esExplicito ? '#fffde7' : '#f4f4f4';
-                td.title = 'Usa Editar → Editar valores para modificar el Nombre';
+                td.title = 'Usa Editar -> Editar valores para modificar el Nombre';
 
             } else if (col === 'Porcentaje') {
-                // Solo lectura — editable únicamente desde Editar → Editar valores
-                const color = (typeof _colorObs === 'function') ? _colorObs((val ?? 50) / 100) : '#e67e22';
+                // Solo lectura — editable únicamente desde Editar -> Editar valores
+                const color = (typeof colorObs === 'function') ? colorObs((val ?? 50) / 100) : '#e67e22';
                 td.textContent      = val !== null && val !== undefined ? String(val) + '%' : '';
                 td.style.fontWeight = '700';
                 td.style.color      = color;
-                td.title = 'Usa Editar → Editar valores para modificar el porcentaje';
+                td.title = 'Usa Editar -> Editar valores para modificar el porcentaje';
 
             } else if (col === 'coord_lat' || col === 'coord_lon') {
                 // Coordenadas: 6 decimales, alineadas a la derecha, fuente monoespaciada
@@ -1068,25 +1068,25 @@ function _renderTablaObstaculos() {
 }
 
 // Sobrescribir cerrarTabla para limpiar también el estado de obstáculos
-const _cerrarTablaOriginal = cerrarTabla;
+const cerrarTablaOriginal = cerrarTabla;
 cerrarTabla = function() {
-    _cerrarTablaOriginal();
-    window._currentObstaculosGeoJSON = null;
+    cerrarTablaOriginal();
+    window.currentObstaculosGeoJSON = null;
     const btnActivo = document.getElementById('btn-tabla-obstaculos');
     if (btnActivo) btnActivo.classList.remove('active');
 };
 
 // Parchear updateAttributeTable para que también refresque obstáculos
-const _updateAttributeTableOriginal = updateAttributeTable;
+const updateAttributeTableOriginal = updateAttributeTable;
 updateAttributeTable = function() {
-    if (_tablaCapa === 'obstaculos') {
-        _renderTablaObstaculos();
+    if (tablaCapa === 'obstaculos') {
+        renderTablaObstaculos();
         return;
     }
-    _updateAttributeTableOriginal();
+    updateAttributeTableOriginal();
 };
 
-// Exponer función para que _actualizarListaObstaculos pueda refrescar la tabla
+// Exponer función para que actualizarListaObstaculos pueda refrescar la tabla
 window.refrescarTablaObstaculosSiAbierta = function() {
-    if (_tablaCapa === 'obstaculos') _renderTablaObstaculos();
+    if (tablaCapa === 'obstaculos') renderTablaObstaculos();
 };

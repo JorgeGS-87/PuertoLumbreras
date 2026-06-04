@@ -8,14 +8,14 @@
  *  - Al iniciar sesión y cargar el mapa (init en auth.js) se comprueba si hay
  *    un guardado recuperado y se ofrece restaurarlo.
  *
- * Dependencias: auth.js (window._userRol, cerrarSesion),
- *               route-manager.js (obstaculos, crearObstaculo / _reconstruirObstaculoDesdeData),
+ * Dependencias: auth.js (window.userRol, cerrarSesion),
+ *               route-manager.js (obstaculos, crearObstaculo / reconstruirObstaculoDesdeData),
  *               ui-controls.js (showNotification), map-config.js (map)
  *
  * API endpoints añadidos en app.py:
- *   POST /api/sesion/guardar-obstaculos    → guarda la sesión actual
- *   GET  /api/sesion/recuperar-obstaculos  → devuelve la última sesión guardada
- *   POST /api/sesion/confirmar-recuperado  → marca la sesión como confirmada (borra el flag)
+ *   POST /api/sesion/guardar-obstaculos    -> guarda la sesión actual
+ *   GET  /api/sesion/recuperar-obstaculos  -> devuelve la última sesión guardada
+ *   POST /api/sesion/confirmar-recuperado  -> marca la sesión como confirmada (borra el flag)
  */
 
 // ==================== GUARDAR ====================
@@ -26,14 +26,14 @@
  * @returns {Promise<boolean>}  true si se guardó con éxito.
  */
 async function sesionGuardarObstaculos(silencioso = false) {
-    if (!['registrado', 'admin'].includes(window._userRol)) return false;
+    if (!['registrado', 'admin'].includes(window.userRol)) return false;
 
     // obstaculos está definido en route-manager.js como array global
     const lista = (typeof obstaculos !== 'undefined' ? obstaculos : []).filter(Boolean);
 
     const payload = lista.map(obs => ({
-        lat:          obs.lat,
-        lng:          obs.lng,
+        lat:          obs.lat ?? obs.latlon?.lat ?? obs.latlng?.lat,
+        lon:          obs.lon ?? obs.lng ?? obs.latlon?.lon ?? obs.latlng?.lng,
         porcentaje:   obs.porcentaje ?? 50,
         id_etiqueta:  obs.id_etiqueta ?? null,
         radio:        obs.radio ?? 15,
@@ -65,7 +65,7 @@ async function sesionGuardarObstaculos(silencioso = false) {
  * Se llama desde auth.js tras aplicar permisos.
  */
 async function sesionComprobarRecuperacion() {
-    if (!['registrado', 'admin'].includes(window._userRol)) return;
+    if (!['registrado', 'admin'].includes(window.userRol)) return;
 
     try {
         const r    = await fetch('/api/sesion/recuperar-obstaculos');
@@ -73,8 +73,8 @@ async function sesionComprobarRecuperacion() {
         const data = await r.json();
         if (!data.pendiente || !data.obstaculos?.length) return;
 
-        // Hay sesión guardada sin confirmar → mostrar diálogo
-        _mostrarDialogoRecuperacion(data.obstaculos, data.guardado_en);
+        // Hay sesión guardada sin confirmar -> mostrar diálogo
+        mostrarDialogoRecuperacion(data.obstaculos, data.guardado_en);
     } catch (e) {
         console.warn('sesionComprobarRecuperacion error:', e);
     }
@@ -85,7 +85,7 @@ async function sesionComprobarRecuperacion() {
  * @param {Array}  obstaculosGuardados
  * @param {string} fechaGuardado  - ISO string
  */
-function _mostrarDialogoRecuperacion(obstaculosGuardados, fechaGuardado) {
+function mostrarDialogoRecuperacion(obstaculosGuardados, fechaGuardado) {
     // Crear modal si no existe
     let modal = document.getElementById('sesion-recovery-modal');
     if (!modal) {
@@ -109,7 +109,7 @@ function _mostrarDialogoRecuperacion(obstaculosGuardados, fechaGuardado) {
             </div>
         `;
         document.body.appendChild(modal);
-        _injectSesionCSS();
+        injectSesionCSS();
     }
 
     // Texto descriptivo
@@ -124,7 +124,7 @@ function _mostrarDialogoRecuperacion(obstaculosGuardados, fechaGuardado) {
     // Botón restaurar
     document.getElementById('srm-btn-restaurar').onclick = async () => {
         modal.style.display = 'none';
-        await _restaurarObstaculos(obstaculosGuardados);
+        await restaurarObstaculos(obstaculosGuardados);
         await fetch('/api/sesion/confirmar-recuperado', { method: 'POST' });
         showNotification(`✅ ${obstaculosGuardados.length} obstáculos restaurados`, 'success');
     };
@@ -141,11 +141,11 @@ function _mostrarDialogoRecuperacion(obstaculosGuardados, fechaGuardado) {
  * Restaura los obstáculos en el mapa llamando a la función de route-manager.js.
  * @param {Array} lista
  */
-async function _restaurarObstaculos(lista) {
+async function restaurarObstaculos(lista) {
     for (const obs of lista) {
-        // crearObstaculo(lat, lng, porcentaje, idEtiqueta) — función de route-manager.js
+        // crearObstaculo(lat, lon, porcentaje, idEtiqueta) — función de route-manager.js
         if (typeof crearObstaculo === 'function') {
-            crearObstaculo(obs.lat, obs.lng, obs.porcentaje ?? 50, obs.id_etiqueta ?? null);
+            crearObstaculo(obs.lat, obs.lon ?? obs.lng, obs.porcentaje ?? 50, obs.id_etiqueta ?? null);
         }
         // Pequeña pausa para no saturar el DOM con muchos obstáculos de golpe
         await new Promise(res => setTimeout(res, 20));
@@ -158,25 +158,25 @@ async function _restaurarObstaculos(lista) {
  * Envuelve la función cerrarSesion original de auth.js para interceptarla.
  * Esto se llama UNA VEZ al cargar el módulo.
  */
-function _parchearCerrarSesion() {
+function parchearCerrarSesion() {
     if (typeof cerrarSesion !== 'function') return;
 
-    const _cerrarSesionOriginal = cerrarSesion;
+    const cerrarSesionOriginal = cerrarSesion;
 
     window.cerrarSesion = async function () {
         // Solo preguntar si hay obstáculos activos y el usuario puede guardar
         const lista = (typeof obstaculos !== 'undefined' ? obstaculos : []).filter(Boolean);
-        const puedeGuardar = ['registrado', 'admin'].includes(window._userRol);
+        const puedeGuardar = ['registrado', 'admin'].includes(window.userRol);
 
         if (!puedeGuardar || lista.length === 0) {
-            // Sin obstáculos o sin permisos → cerrar directamente
-            return _cerrarSesionOriginal();
+            // Sin obstáculos o sin permisos -> cerrar directamente
+            return cerrarSesionOriginal();
         }
 
         // Mostrar diálogo de confirmación
-        _mostrarDialogoGuardarAlSalir(async (guardar) => {
+        mostrarDialogoGuardarAlSalir(async (guardar) => {
             if (guardar) await sesionGuardarObstaculos(true);
-            _cerrarSesionOriginal();
+            cerrarSesionOriginal();
         });
     };
 }
@@ -185,7 +185,7 @@ function _parchearCerrarSesion() {
  * Muestra un modal preguntando si guardar antes de salir.
  * @param {function(boolean)} callback  - recibe true si el usuario quiere guardar
  */
-function _mostrarDialogoGuardarAlSalir(callback) {
+function mostrarDialogoGuardarAlSalir(callback) {
     let modal = document.getElementById('sesion-save-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -205,7 +205,7 @@ function _mostrarDialogoGuardarAlSalir(callback) {
             </div>
         `;
         document.body.appendChild(modal);
-        _injectSesionCSS();
+        injectSesionCSS();
     }
 
     modal.style.display = 'flex';
@@ -230,16 +230,16 @@ function _mostrarDialogoGuardarAlSalir(callback) {
  * Intenta guardar la sesión usando sendBeacon (no bloquea el cierre del navegador).
  * sendBeacon garantiza el envío aunque la página esté cerrándose.
  */
-function _guardarEmergencia() {
-    if (!['registrado', 'admin'].includes(window._userRol)) return;
+function guardarEmergencia() {
+    if (!['registrado', 'admin'].includes(window.userRol)) return;
 
     const lista = (typeof obstaculos !== 'undefined' ? obstaculos : []).filter(Boolean);
     if (!lista.length) return;
 
     const payload = JSON.stringify({
         obstaculos: lista.map(obs => ({
-            lat:         obs.lat,
-            lng:         obs.lng,
+            lat:         obs.lat ?? obs.latlon?.lat ?? obs.latlng?.lat,
+            lon:         obs.lon ?? obs.lng ?? obs.latlon?.lon ?? obs.latlng?.lng,
             porcentaje:  obs.porcentaje ?? 50,
             id_etiqueta: obs.id_etiqueta ?? null,
             radio:       obs.radio ?? 15,
@@ -253,16 +253,16 @@ function _guardarEmergencia() {
     }
 }
 
-window.addEventListener('beforeunload', _guardarEmergencia);
+window.addEventListener('beforeunload', guardarEmergencia);
 
 // ==================== INIT ====================
 
 /**
  * Punto de entrada del módulo.
- * Se llama desde auth.js justo después de _aplicarPermisos().
+ * Se llama desde auth.js justo después de aplicarPermisos().
  */
 function initSesionPersistencia() {
-    _parchearCerrarSesion();
+    parchearCerrarSesion();
     // La comprobación de recuperación se dispara con un pequeño delay
     // para asegurarse de que el mapa y los layers ya están inicializados.
     setTimeout(sesionComprobarRecuperacion, 1500);
@@ -270,7 +270,7 @@ function initSesionPersistencia() {
 
 // ==================== CSS INYECTADO ====================
 
-function _injectSesionCSS() {
+function injectSesionCSS() {
     if (document.getElementById('sesion-persist-style')) return;
     const st = document.createElement('style');
     st.id = 'sesion-persist-style';

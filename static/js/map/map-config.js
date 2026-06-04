@@ -54,44 +54,48 @@ const capaOffline = L.tileLayer(
 // ── Modo offline ─────────────────────────────────────────────────────────────
 
 /**
- * Activa el modo offline visual (ejecuta solo una vez gracias al flag _offlineActivado).
+ * Activa el modo offline visual (ejecuta solo una vez gracias al flag offlineActivado).
  *
  * Problema 1 — Fondo verde del mapa:
  *   Leaflet 1.9.4 añade mix-blend-mode:plus-lighter a las teselas (.leaflet-tile).
  *   Cuando la tesela es el PNG transparente 1x1 (cuyo pixel es negro #000),
  *   ese blend-mode interactúa con el canvas interno y produce verde eléctrico.
  *   Solución: inyectar un <style> con ID#map para máxima especificidad
- *   + setProperty('background','#000000','important') en el contenedor.
+ *   + setProperty('background','#ffffff','important') en el contenedor.
  *
- * Problema 2 — Badge OFFLINE verde:
- *   El color verde estaba hardcodeado en .status-badge { background:#27ae60 }
+ * Problema 2 — indicadorEstado OFFLINE verde:
+ *   El color verde estaba hardcodeado en .status-indicadorEstado { background:#27ae60 }
  *   dentro de styles.css. Ahora styles.css arranca en gris neutro (#7f8c8d)
  *   y esta función lo cambia a naranja cuando no hay red.
  */
-function _activarModoOffline() {
-    if (window._offlineActivado) return;
-    window._offlineActivado = true;
+function activarModoOffline() {
+    if (window.offlineActivado) return;
+    window.offlineActivado = true;
 
-    // Fondo negro del mapa — máxima especificidad, vence a cualquier CSS
-    const st = document.createElement('style');
-    st.id = 'offline-map-style';
-    st.textContent =
-        '#map { background: #000000 !important; }\n' +
-        '#map .leaflet-container { background: #000000 !important; }\n' +
-        '#map .leaflet-tile-pane { background: #000000 !important; }';
-    document.head.appendChild(st);
+    // La tesela offline es transparente 1x1; Leaflet la renderiza con
+    // mix-blend-mode:plus-lighter causando verde. Solución definitiva:
+    // ocultar el tile-pane completo y dejar fondo blanco limpio.
+    const estilosOffline = document.createElement('style');
+    estilosOffline.id = 'offline-map-style';
+    estilosOffline.textContent =
+        '#map .leaflet-container { background: #ffffff !important; }\n' +
+        '#map .leaflet-tile-pane { display: none !important; }';
+    document.head.appendChild(estilosOffline);
 
-    // Forzar también inline por si el orden de carga CSS lo anulara
+    // Forzar fondo blanco también inline
     const contenedor = map.getContainer();
-    if (contenedor) contenedor.style.setProperty('background', '#000000', 'important');
+    if (contenedor) contenedor.style.setProperty('background', '#ffffff', 'important');
 
-    // Badge → naranja
-    const badge = document.querySelector('.status-badge');
-    const el    = document.getElementById('serverStatus');
-    const dot   = document.getElementById('network-dot');
-    if (badge) badge.style.background = '#666666';
-    if (el)    el.textContent          = 'OFFLINE';
-    if (dot)   dot.style.background    = 'rgba(255,255,255,0.8)';
+    // indicadorEstado -> naranja
+    const indicadorEstado = document.querySelector('.status-badge');
+    const textoEstado    = document.getElementById('serverStatus');
+    const puntoEstado   = document.getElementById('network-dot');
+    if (indicadorEstado) indicadorEstado.style.background = '#64748b';
+    if (textoEstado)    textoEstado.textContent          = 'OFFLINE';
+    if (puntoEstado)   puntoEstado.style.background    = 'rgba(255,255,255,0.8)';
+
+    // Sin red -> WS tampoco puede estar conectado
+    if (typeof actualizarBadgeWS === 'function') actualizarBadgeWS('offline');
 }
 
 // Arrancar siempre con OSM (aprovecha caché del navegador si existe).
@@ -102,19 +106,19 @@ capaOSM.on('tileerror', function () {
     if (map.hasLayer(capaOSM)) {
         map.removeLayer(capaOSM);
         capaOffline.addTo(map);
-        _activarModoOffline();
+        activarModoOffline();
     }
 });
 
 // ── Control de capas base ────────────────────────────────────────────────────
 // Posición 'topleft' para que Leaflet lo añada con los controles de zoom;
 // map-widgets.js lo mueve después a #map-controls.
-const baseLayers = {
+const capasBase = {
     '🗺️ OpenStreetMap': capaOSM,
     '🛰️ PNOA (IGN)':    capaPNOA,
 };
-const layerControl = L.control.layers(baseLayers, null, { position: 'topleft', collapsed: false });
-layerControl.addTo(map);
+const controlCapas = L.control.layers(capasBase, null, { position: 'topleft', collapsed: false });
+controlCapas.addTo(map);
 
 map.zoomControl.setPosition('bottomleft');
 
@@ -144,8 +148,8 @@ map.on('zoomend', function () {
 });
 
 // ── Estado del servidor ──────────────────────────────────────────────────────
-// Flask siempre es local → si responde OK el servidor está levantado.
-// El badge arranca en gris (styles.css) y aquí se colorea según el resultado.
+// Flask siempre es local -> si responde OK el servidor está levantado.
+// El indicadorEstado arranca en gris (styles.css) y aquí se colorea según el resultado.
 
 fetch('/api/status')
     .then(function (r) {
@@ -154,23 +158,23 @@ fetch('/api/status')
     })
     .then(function () {
         // Solo ONLINE si el modo offline no se ha activado ya por falta de teselas
-        if (!window._offlineActivado) {
-            var badge = document.querySelector('.status-badge');
-            var el    = document.getElementById('serverStatus');
-            var dot   = document.getElementById('network-dot');
-            if (badge) badge.style.background = '#27ae60';          // verde: todo OK
-            if (el)    el.textContent          = 'ONLINE';
-            if (dot)   dot.style.background    = 'rgba(255,255,255,0.8)';
+        if (!window.offlineActivado) {
+            var indicadorEstado = document.querySelector('.status-badge');
+            var textoEstado    = document.getElementById('serverStatus');
+            var puntoEstado   = document.getElementById('network-dot');
+            if (indicadorEstado) indicadorEstado.style.background = '#27ae60';
+            if (textoEstado)    textoEstado.textContent          = 'ONLINE';
+            if (puntoEstado)   puntoEstado.style.background    = 'rgba(255,255,255,0.8)';
         }
         showNotification('Servidor conectado correctamente', 'success');
     })
-    .catch(function (err) {
-        var badge = document.querySelector('.status-badge');
-        var el    = document.getElementById('serverStatus');
-        var dot   = document.getElementById('network-dot');
-        if (badge) badge.style.background = '#e74c3c';              // rojo: Flask no responde
-        if (el)    el.textContent          = 'ERROR';
-        if (dot)   dot.style.background    = 'rgba(255,255,255,0.8)';
+    .catch(function (error) {
+        var indicadorEstado = document.querySelector('.status-badge');
+        var textoEstado    = document.getElementById('serverStatus');
+        var puntoEstado   = document.getElementById('network-dot');
+        if (indicadorEstado) indicadorEstado.style.background = '#e74c3c';
+        if (textoEstado)    textoEstado.textContent          = 'ERROR';
+        if (puntoEstado)   puntoEstado.style.background    = 'rgba(255,255,255,0.8)';
         showNotification('Error al conectar con el servidor', 'error');
-        console.error('Error al comprobar /api/status:', err);
+        console.error('Error al comprobar /api/status:', error);
     });

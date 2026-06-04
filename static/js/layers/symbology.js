@@ -5,9 +5,9 @@
 
 // ==================== ESTADO DE COLOR DINÁMICO ====================
 
-let _viasAttrIndex   = 0;
+let viasAttrIndex   = 0;
 let viasAttrColors   = {};
-let _puntosAttrIndex = 0;
+let puntosAttrIndex = 0;
 let puntosAttrColors = {};
 
 // ==================== SIMBOLOGÍA DE VÍAS ====================
@@ -52,7 +52,7 @@ const puntosAttrPalette = [
 
 // ==================== ASIGNACIÓN DE COLORES ====================
 
-function assignColorForVia(val) {
+function colorVia(val) {
     if (val === null || val === undefined) return simbologiaVias['default'].color;
     const norm = String(val).trim().toLowerCase();
     if (!norm) return simbologiaVias['default'].color;
@@ -66,20 +66,20 @@ function assignColorForVia(val) {
         if (norm.includes(k)) return simbologiaVias[k].color;
     }
 
-    // Valor desconocido → color dinámico de la paleta
+    // Valor desconocido -> color dinámico de la paleta
     if (viasAttrColors[norm]) return viasAttrColors[norm];
     const color = viasAttrPalette[_viasAttrIndex % viasAttrPalette.length];
     viasAttrColors[norm] = color;
-    _viasAttrIndex++;
+    viasAttrIndex++;
     return color;
 }
 
-function assignColorForPunto(value) {
+function colorPunto(value) {
     const key = value ? String(value) : 'Desconocido';
     if (puntosAttrColors[key]) return puntosAttrColors[key];
     const color = puntosAttrPalette[_puntosAttrIndex % puntosAttrPalette.length];
     puntosAttrColors[key] = color;
-    _puntosAttrIndex++;
+    puntosAttrIndex++;
     return color;
 }
 

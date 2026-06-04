@@ -9,17 +9,17 @@
  *  - El panel flotante se reposiciona cuando el panel izquierdo se
  *    abre/cierra para estar siempre a la derecha del widget msw.
  *  - Al repintar una ruta del historial se guarda la referencia en
- *    window._historialRutaLayer; esa capa se elimina cuando se hace
+ *    window.historialRutaLayer; esa capa se elimina cuando se hace
  *    un nuevo cálculo o cuando se borra la entrada del historial.
  */
 
 // ==================== ESTADO ====================
 
-let _historialPanel   = null;
-let _historialVisible = false;
+let historialPanel   = null;
+let historialVisible = false;
 
 /** Todas las rutas cargadas en memoria (usadas por la pestaña "Ver más") */
-let _todasLasRutas = [];
+let todasLasRutas = [];
 
 // ==================== CAPA DE MAPA DEL HISTORIAL ====================
 
@@ -29,22 +29,22 @@ let _todasLasRutas = [];
  * y desde historialEliminarYRefrescar si la ruta activa se borra.
  */
 function historialLimpiarCapaMapa() {
-    if (window._historialRutaLayer) {
-        try { map.removeLayer(window._historialRutaLayer); } catch (_) {}
-        window._historialRutaLayer = null;
+    if (window.historialRutaLayer) {
+        try { map.removeLayer(window.historialRutaLayer); } catch () {}
+        window.historialRutaLayer = null;
     }
     // Limpiar también el borde rojo de emergencia si lo hubiera
-    if (window._historialRutaBorde) {
-        try { map.removeLayer(window._historialRutaBorde); } catch (_) {}
-        window._historialRutaBorde = null;
+    if (window.historialRutaBorde) {
+        try { map.removeLayer(window.historialRutaBorde); } catch () {}
+        window.historialRutaBorde = null;
     }
-    window._historialRutaLayerId = null;
+    window.historialRutaLayerId = null;
 }
 
 // ==================== API CALLS ====================
 
 async function historialRegistrarRuta(datos) {
-    if (!['registrado', 'admin'].includes(window._userRol)) return;
+    if (!['registrado', 'admin'].includes(window.userRol)) return;
     // Limpiar capa del historial anterior al calcular una ruta nueva
     historialLimpiarCapaMapa();
     try {
@@ -59,10 +59,10 @@ async function historialRegistrarRuta(datos) {
     }
 
     // Refrescar ambos paneles automáticamente tras guardar
-    _todasLasRutas = await historialObtener();
-    if (_historialVisible) _renderizarHistorial(_todasLasRutas);
+    todasLasRutas = await historialObtener();
+    if (historialVisible) renderizarHistorial(todasLasRutas);
     const seccion = document.getElementById('historial-section');
-    if (seccion && seccion.style.display !== 'none') _renderizarPestana(seccion, _todasLasRutas);
+    if (seccion && seccion.style.display !== 'none') renderizarPestana(seccion, todasLasRutas);
 }
 
 async function historialObtener() {
@@ -91,7 +91,7 @@ async function historialEliminar(id) {
  * izquierdo está abierto o cerrado.
  * Se conecta a toggleLeftPanel() mediante un MutationObserver al init.
  */
-function _reposicionarPanelHistorial() {
+function reposicionarPanelHistorial() {
     if (!_historialPanel) return;
     const leftPanel = document.getElementById('left-panel');
     const msw       = document.getElementById('map-search-widget');
@@ -100,32 +100,32 @@ function _reposicionarPanelHistorial() {
     // Obtener la posición real del widget msw en pantalla
     const mswRect = msw.getBoundingClientRect();
     // El panel aparece pegado a la derecha del widget + 8px de gap
-    _historialPanel.style.left = (mswRect.right + 8) + 'px';
-    _historialPanel.style.top  = mswRect.top + 'px';
+    historialPanel.style.left = (mswRect.right + 8) + 'px';
+    historialPanel.style.top  = mswRect.top + 'px';
 }
 
 /**
  * Observa cambios de clase en left-panel para reposicionar
  * el historial cuando el panel se abre o cierra.
  */
-function _observarPanelIzquierdo() {
+function observarPanelIzquierdo() {
     const leftPanel = document.getElementById('left-panel');
     if (!leftPanel) return;
 
     const obs = new MutationObserver(() => {
         // Pequeño delay para que la transición CSS haya terminado
-        setTimeout(_reposicionarPanelHistorial, 320);
+        setTimeout(reposicionarPanelHistorial, 320);
     });
     obs.observe(leftPanel, { attributes: true, attributeFilter: ['class', 'style'] });
 
     // También al redimensionar ventana
-    window.addEventListener('resize', _reposicionarPanelHistorial);
+    window.addEventListener('resize', reposicionarPanelHistorial);
 }
 
 // ==================== UI — PANEL FLOTANTE (últimas 3) ====================
 
-function _crearPanelHistorial() {
-    if (_historialPanel) return;
+function crearPanelHistorial() {
+    if (historialPanel) return;
 
     const panel = document.createElement('div');
     panel.id = 'historial-panel';
@@ -143,18 +143,18 @@ function _crearPanelHistorial() {
     `;
 
     document.body.appendChild(panel);
-    _historialPanel = panel;
+    historialPanel = panel;
 
     // Posicionar y conectar observer
-    _reposicionarPanelHistorial();
-    _observarPanelIzquierdo();
+    reposicionarPanelHistorial();
+    observarPanelIzquierdo();
 }
 
 /**
  * Renderiza hasta 3 rutas en el panel flotante.
  * Si hay más, muestra el botón "Ver más".
  */
-function _renderizarHistorial(rutas) {
+function renderizarHistorial(rutas) {
     const body = document.getElementById('hist-body');
     if (!body) return;
 
@@ -166,26 +166,26 @@ function _renderizarHistorial(rutas) {
     const visibles = rutas.slice(0, 3);
     const hayMas   = rutas.length > 3;
 
-    body.innerHTML = visibles.map(r => _htmlItem(r)).join('') +
+    body.innerHTML = visibles.map(r => htmlItem(r)).join('') +
         (hayMas ? `
         <button class="hist-ver-mas-btn" onclick="abrirPestanaHistorial()">
             📋 Ver todas las rutas (${rutas.length})
         </button>` : '');
 }
 
-function _iconoVehiculo(vehiculo) {
+function iconoVehiculo(vehiculo) {
     if (vehiculo === 'emergencia') return '🚗🚨';
     if (vehiculo === 'camion')     return '🚛';
     return '🚗';
 }
 
-function _htmlItem(r) {
+function htmlItem(r) {
     const fecha  = r.fecha
         ? new Date(r.fecha).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })
         : '—';
     const tiempo = r.tiempo_min  != null ? `${Math.round(r.tiempo_min)} min` : '—';
     const dist   = r.distancia_km != null ? `${parseFloat(r.distancia_km).toFixed(1)} km` : '—';
-    const icono  = _iconoVehiculo(r.vehiculo);
+    const icono  = iconoVehiculo(r.vehiculo);
 
     return `
         <div class="hist-item" data-id="${r.id}">
@@ -251,16 +251,16 @@ function abrirPestanaHistorial() {
     }
 
     // 3. Rellenar contenido con todas las rutas
-    _renderizarPestana(seccion, _todasLasRutas);
+    renderizarPestana(seccion, todasLasRutas);
 
     // 4. Activar la pestaña
     selectLeftTab('historial');
 
     // 5. Cerrar el panel flotante
-    if (_historialVisible) toggleHistorial();
+    if (historialVisible) toggleHistorial();
 }
 
-function _renderizarPestana(seccion, rutas) {
+function renderizarPestana(seccion, rutas) {
     if (!rutas.length) {
         seccion.innerHTML = '<h3>🕐 Historial completo</h3><p style="font-size:13px;color:#9ca3af;padding:12px 0;">Sin rutas registradas.</p>';
         return;
@@ -281,7 +281,7 @@ function _renderizarPestana(seccion, rutas) {
         ${rutas.map(r => `
         <div class="hist-item hist-item-panel" data-id="${r.id}">
             <div class="hist-item-header">
-                <span class="hist-vehiculo">${_iconoVehiculo(r.vehiculo)}</span>
+                <span class="hist-vehiculo">${iconoVehiculo(r.vehiculo)}</span>
                 <span class="hist-fecha">${r.fecha ? new Date(r.fecha).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</span>
                 <button class="hist-delete-btn" onclick="historialEliminarYRefrescar(${r.id}, true)" title="Eliminar">🗑️</button>
             </div>
@@ -303,7 +303,7 @@ function _renderizarPestana(seccion, rutas) {
 }
 
 // Hook para que selectLeftTab conozca la sección de historial
-const _selectLeftTabOriginal = window.selectLeftTab;
+const selectLeftTabOriginal = window.selectLeftTab;
 window.selectLeftTab = function(tab) {
     const seccionHistorial = document.getElementById('historial-section');
 
@@ -334,28 +334,28 @@ window.selectLeftTab = function(tab) {
     // Al cambiar a otra pestaña, ocultar el historial y dejar que el original gestione el resto
     if (seccionHistorial) seccionHistorial.style.display = 'none';
 
-    if (typeof _selectLeftTabOriginal === 'function') {
-        _selectLeftTabOriginal(tab);
+    if (typeof selectLeftTabOriginal === 'function') {
+        selectLeftTabOriginal(tab);
     }
 };
 
 // ==================== ACCIONES PÚBLICAS ====================
 
 async function toggleHistorial() {
-    if (!['registrado', 'admin'].includes(window._userRol)) {
+    if (!['registrado', 'admin'].includes(window.userRol)) {
         showNotification('El historial está disponible solo para usuarios registrados.', 'info');
         return;
     }
 
-    _crearPanelHistorial();
-    _historialVisible = !_historialVisible;
-    _historialPanel.classList.toggle('visible', _historialVisible);
+    crearPanelHistorial();
+    historialVisible = !_historialVisible;
+    historialPanel.classList.toggle('visible', historialVisible);
 
-    if (_historialVisible) {
-        _todasLasRutas = await historialObtener();
-        _renderizarHistorial(_todasLasRutas);
+    if (historialVisible) {
+        todasLasRutas = await historialObtener();
+        renderizarHistorial(todasLasRutas);
         // Reposicionar por si el layout cambió
-        _reposicionarPanelHistorial();
+        reposicionarPanelHistorial();
     }
 }
 
@@ -373,20 +373,20 @@ async function historialLimpiarTodo(desdePestana = false) {
         showNotification('El historial ya está vacío', 'info');
         return;
     }
-    const n = _todasLasRutas.length;
+    const n = todasLasRutas.length;
     // Limpiar la capa activa en el mapa si la hay
     historialLimpiarCapaMapa();
     // Borrar todas las rutas en paralelo
-    await Promise.all(_todasLasRutas.map(r => historialEliminar(r.id)));
-    _todasLasRutas = [];
+    await Promise.all(todasLasRutas.map(r => historialEliminar(r.id)));
+    todasLasRutas = [];
 
     // Refrescar panel flotante
-    if (_historialVisible) _renderizarHistorial(_todasLasRutas);
+    if (historialVisible) renderizarHistorial(todasLasRutas);
 
     // Refrescar pestaña si está visible
     const seccion = document.getElementById('historial-section');
     if (seccion && seccion.style.display !== 'none') {
-        _renderizarPestana(seccion, _todasLasRutas);
+        renderizarPestana(seccion, todasLasRutas);
     }
 
     // Eliminar la pestaña del historial y volver a capas
@@ -401,20 +401,20 @@ async function historialLimpiarTodo(desdePestana = false) {
 
 async function historialEliminarYRefrescar(id, desdePestana = false) {
     // Si la ruta activa en el mapa es la que se borra, limpiarla
-    if (window._historialRutaLayer && window._historialRutaLayerId === id) {
+    if (window.historialRutaLayer && window.historialRutaLayerId === id) {
         historialLimpiarCapaMapa();
     }
 
     await historialEliminar(id);
-    _todasLasRutas = await historialObtener();
+    todasLasRutas = await historialObtener();
 
     // Refrescar panel flotante
-    if (_historialVisible) _renderizarHistorial(_todasLasRutas);
+    if (historialVisible) renderizarHistorial(todasLasRutas);
 
     // Refrescar pestaña si está visible
     const seccion = document.getElementById('historial-section');
     if (seccion && seccion.style.display !== 'none') {
-        _renderizarPestana(seccion, _todasLasRutas);
+        renderizarPestana(seccion, todasLasRutas);
     }
 
     // Si ya no hay rutas y la pestaña estaba activa, volver a capas
@@ -431,7 +431,7 @@ async function historialEliminarYRefrescar(id, desdePestana = false) {
 
 /**
  * Pinta en el mapa la geometría de una ruta del historial.
- * Guarda la referencia en window._historialRutaLayer para poder borrarla después.
+ * Guarda la referencia en window.historialRutaLayer para poder borrarla después.
  */
 function historialRepintar(ruta) {
     // Eliminar capas previas del historial (ruta + borde emergencia)
@@ -450,17 +450,17 @@ function historialRepintar(ruta) {
 
             // Borde rojo si es emergencia
             if (esEmergencia) {
-                window._historialRutaBorde = L.geoJSON(geojson, {
+                window.historialRutaBorde = L.geoJSON(geojson, {
                     style: { color: '#e74c3c', weight: peso + 4, opacity: 0.9 }
                 }).addTo(map);
             }
 
-            window._historialRutaLayer   = L.geoJSON(geojson, {
+            window.historialRutaLayer   = L.geoJSON(geojson, {
                 style: { color: esEmergencia ? color : color, weight: peso, opacity: 0.85 }
             }).addTo(map);
-            window._historialRutaLayerId = ruta.id;
+            window.historialRutaLayerId = ruta.id;
 
-            map.fitBounds(window._historialRutaLayer.getBounds(), { padding: [40, 40] });
+            map.fitBounds(window.historialRutaLayer.getBounds(), { padding: [40, 40] });
         } catch (e) {
             console.warn('historialRepintar: error al parsear geojson_ruta', e);
         }
@@ -471,13 +471,13 @@ function historialRepintar(ruta) {
     }
 
     // Cerrar el panel flotante si estaba abierto
-    if (_historialVisible) toggleHistorial();
+    if (historialVisible) toggleHistorial();
     showNotification('Ruta del historial cargada en el mapa', 'success');
 }
 
 // ==================== CSS INYECTADO ====================
 
-(function _injectHistorialCSS() {
+(function injectHistorialCSS() {
     if (document.getElementById('historial-style')) return;
     const st = document.createElement('style');
     st.id = 'historial-style';
