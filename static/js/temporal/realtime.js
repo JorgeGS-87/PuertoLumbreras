@@ -13,16 +13,46 @@
 // ==================== BADGE DE ESTADO WS ====================
 
 function _actualizarBadgeWS(estado) {
+    const config = {
+        online:  { bg: '#dcfce7', color: '#166534', dot: '#22c55e', label: 'WS·ON'  },
+        offline: { bg: '#fef3c7', color: '#92400e', dot: '#f59e0b', label: 'WS·OFF' },
+        error:   { bg: '#fee2e2', color: '#991b1b', dot: '#ef4444', label: 'WS·ERR' },
+        stub:    { bg: '#f1f5f9', color: '#64748b', dot: '#94a3b8', label: 'WS·OFF' },
+    };
+    const c = config[estado] || config.stub;
+
+    const title = {
+        online:  'WebSocket conectado — tiempo real activo',
+        offline: 'WebSocket desconectado — reconectando…',
+        error:   'Error de conexión WebSocket',
+        stub:    typeof io === 'function'
+                     ? 'Servidor sin soporte WebSocket — modo solo lectura'
+                     : 'Tiempo real no disponible — Socket.IO no cargado',
+    }[estado] || '';
+
     let badge = document.getElementById('ws-badge');
-    if (!badge) {
+
+    if (badge) {
+        // Badge ya existente (mobile.html lo tiene pre-creado con sub-elementos)
+        badge.style.background = c.bg;
+        badge.style.color      = c.color;
+        badge.title            = title;
+        const dot   = document.getElementById('ws-badge-dot');
+        const label = document.getElementById('ws-badge-label');
+        if (dot)   dot.style.background = c.dot;
+        if (label) label.textContent    = c.label;
+    } else {
+        // Desktop: crear el badge dinámicamente
         badge = document.createElement('div');
         badge.id = 'ws-badge';
         badge.style.cssText = `
             display:inline-flex;align-items:center;gap:4px;font-size:11px;
             padding:2px 7px;border-radius:10px;font-weight:600;
             letter-spacing:0.02em;margin-left:6px;transition:background 0.3s,color 0.3s;
+            background:${c.bg};color:${c.color};
         `;
-        
+        badge.title = title;
+        badge.innerHTML = `<span id="ws-badge-dot" style="width:6px;height:6px;border-radius:50%;background:${c.dot};display:inline-block;"></span><span id="ws-badge-label">${c.label}</span>`;
         const statusBadge = document.querySelector('.status-badge');
         if (statusBadge?.parentNode) {
             statusBadge.parentNode.insertBefore(badge, statusBadge.nextSibling);
@@ -30,25 +60,6 @@ function _actualizarBadgeWS(estado) {
             document.querySelector('.header-left')?.appendChild(badge);
         }
     }
-    
-    const config = {
-        online:  { bg: '#dcfce7', color: '#166534', dot: '#22c55e', label: 'WS' },
-        offline: { bg: '#fef3c7', color: '#92400e', dot: '#f59e0b', label: 'WS' },
-        error:   { bg: '#fee2e2', color: '#991b1b', dot: '#ef4444', label: 'WS' },
-        stub:    { bg: '#f1f5f9', color: '#64748b', dot: '#94a3b8', label: 'WS·OFF' },
-    };
-    const c = config[estado] || config.stub;
-    badge.style.background = c.bg;
-    badge.style.color      = c.color;
-    badge.innerHTML = `<span style="width:6px;height:6px;border-radius:50%;background:${c.dot};display:inline-block;"></span>${c.label}`;
-    badge.title = {
-        online:  'WebSocket conectado — cambios en tiempo real activos',
-        offline: 'WebSocket desconectado — reconectando…',
-        error:   'Error de conexión WebSocket',
-        stub:    typeof io === 'function'
-                     ? 'Servidor sin soporte WebSocket — modo solo lectura'
-                     : 'Tiempo real no disponible — Socket.IO no cargado',
-    }[estado] || '';
 }
 
 // ==================== CONEXIÓN SOCKET.IO ====================
@@ -191,8 +202,12 @@ async function _abrirCapaCompartida() {
             _recibirObstaculoCompartido(obs);
         }
 
-        // 3. Activar indicador visual en el botón
+        // Activar indicador visual en el botón
         _actualizarBotonCompartida(true);
+
+        // Actualizar panel de obstáculos y habilitar botón de tabla
+        if (typeof _actualizarListaObstaculos === 'function') _actualizarListaObstaculos();
+        if (typeof refrescarTablaObstaculosSiAbierta === 'function') refrescarTablaObstaculosSiAbierta();
 
         showNotification(
             `🚧 Capa compartida activa — ${data.obstaculos.length} obstáculo(s)`,
@@ -340,18 +355,33 @@ function _eliminarObstaculoCompartidoLocal(bdId) {
 // ── Visual del botón ──────────────────────────────────────────────────────────
 
 function _actualizarBotonCompartida(activo) {
+    // Botón desktop
     const btn = document.getElementById('btn-capa-compartida');
-    if (!btn) return;
-    if (activo) {
-        btn.style.background   = '#e67e22';
-        btn.style.color        = '#fff';
-        btn.style.borderColor  = '#d35400';
-        btn.title = 'Capa compartida ACTIVA — pulsa para cerrar';
-    } else {
-        btn.style.background  = '';
-        btn.style.color       = '';
-        btn.style.borderColor = '';
-        btn.title = 'Abrir capa de obstáculos compartida';
+    if (btn) {
+        if (activo) {
+            btn.style.background   = '#e67e22';
+            btn.style.color        = '#fff';
+            btn.style.borderColor  = '#d35400';
+            btn.title = 'Capa compartida ACTIVA — pulsa para cerrar';
+        } else {
+            btn.style.background  = '';
+            btn.style.color       = '';
+            btn.style.borderColor = '';
+            btn.title = 'Abrir capa de obstáculos compartida';
+        }
+    }
+    // Botón mobile
+    const btnM = document.getElementById('btn-capa-compartida-mobile');
+    const descM = document.getElementById('compartida-layer-desc');
+    if (btnM) {
+        btnM.textContent       = activo ? 'Desactivar' : 'Activar';
+        btnM.style.background  = activo ? '#e67e22'  : '#ebf5fb';
+        btnM.style.color       = activo ? '#fff'     : '#2980b9';
+        btnM.style.borderColor = activo ? '#d35400'  : '#3498db';
+    }
+    if (descM) {
+        descM.textContent = activo ? 'ACTIVA — tiempo real' : 'Requiere sesión';
+        descM.style.color = activo ? '#e67e22' : '';
     }
 }
 
@@ -437,10 +467,10 @@ function _actualizarBotonCompartida(activo) {
             });
         };
 
-        // ── _aplicarPctPopup (cambio de % desde popup) ──
-        const _origAplicarPct = window._aplicarPctPopup || function(){};
-        window._aplicarPctPopup = function (idx) {
-            _origAplicarPct.apply(this, arguments);
+        // ── cambiarNivelObstaculo (cambio de nivel desde popup o lista) ──
+        const _origCambiarNivel = window.cambiarNivelObstaculo || function(){};
+        window.cambiarNivelObstaculo = function (idx, nivel) {
+            _origCambiarNivel.apply(this, arguments);
             if (!window._capaCompartidaActiva) return;
             const obs = obstaculos[idx];
             if (!obs || !obs._bdId) return;

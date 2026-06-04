@@ -154,7 +154,7 @@
                 <span id="user-name">Invitado</span>
                 <span id="user-rol-badge" class="user-rol-badge">invitado</span>
             </div>
-            <button onclick="cerrarSesion()" title="Cerrar sesión" class="btn-logout">
+            <button onclick="botonSalir()" title="Cerrar sesión" class="btn-logout">
                 ⏻ Salir
             </button>
         </div>
@@ -178,6 +178,8 @@
             </svg>
         </button>
         <button class="side-bar-item"        id="tab-momento" data-title="Momento" onclick="selectLeftTab('momento')">⏱️</button>
+        <div style="flex:1"></div>
+        <button class="side-bar-item" id="tab-info" data-title="Información / Créditos" onclick="selectLeftTab('info')" style="margin-bottom:12px; opacity:0.7; font-size:20px; font-weight:700; font-style:italic; font-family:Georgia,serif;">ℹ</button>
     </nav>
 
 
@@ -208,8 +210,11 @@
                     <div id="admin-vias-controls" style="display:none;">
                         <input type="file" id="file-vias" accept=".geojson,.json,.zip" onchange="cargarArchivo('vias', this)">
                         <div class="btn-group-row">
-                            <button class="upload-btn" onclick="document.getElementById('file-vias').click()">
+                            <button class="upload-btn" id="btn-cargar-vias" onclick="document.getElementById('file-vias').click()">
                                 📂 Cargar Vías
+                            </button>
+                            <button class="upload-btn danger" id="btn-eliminar-vias" style="display:none;" onclick="eliminarCapa('vias')">
+                                ❌ Eliminar
                             </button>
                             <button class="upload-btn" id="btn-config-campos" style="background:#8e44ad;display:none;" onclick="abrirConfigCamposRuta()">
                                 ⚙️ Config. Campos
@@ -323,6 +328,162 @@
 
                 </div>
 
+                <!-- ── Sección Info ── -->
+                <div id="info-section" style="display:none;">
+                    <h3 style="margin-bottom:20px; font-size:14px; color:#2c3e50; padding-bottom:8px; border-bottom:2px solid #3498db;">
+                        ℹ️ Información
+                    </h3>
+
+                    <!-- Pestañas -->
+                    <div style="display:flex; border-bottom:1px solid #e8ecf0; margin-bottom:16px; gap:2px;">
+                        <button class="info-panel-tab active" data-tab="contacto" onclick="switchInfoPanelTab(this)"
+                            style="flex:1; padding:8px 4px; background:none; border:none; border-bottom:2px solid #3498db;
+                                   color:#2c3e50; font-size:12px; font-weight:600; cursor:pointer;">
+                            📬 Contacto
+                        </button>
+                        <button class="info-panel-tab" data-tab="documentacion" onclick="switchInfoPanelTab(this)"
+                            style="flex:1; padding:8px 4px; background:none; border:none; border-bottom:2px solid transparent;
+                                   color:#95a5a6; font-size:12px; cursor:pointer;">
+                            🗺️ OGC
+                        </button>
+                        <button class="info-panel-tab" data-tab="creditos" onclick="switchInfoPanelTab(this)"
+                            style="flex:1; padding:8px 4px; background:none; border:none; border-bottom:2px solid transparent;
+                                   color:#95a5a6; font-size:12px; cursor:pointer;">
+                            📖 Docs
+                        </button>
+                    </div>
+
+                    <!-- Contenidos -->
+                    <div id="info-panel-contacto">
+                        <!-- Información de Contacto -->
+                        <table class="tabla-contacto">
+                            <tr>
+                                <th>Autor</th>
+                                <td>Jorge García Sanz</td>
+                            </tr>
+                            <tr>
+                                <th>Correo</th>
+                                <td>jorge.gsanz@alumnos.upm.es</td>
+                            </tr>
+                            <tr>
+                                <th>Titulación</th>
+                                <td>Grado en Ingeniería de la Tecnologías de la Información Geoespacial</td>
+                            </tr>
+                            <tr>
+                                <th>Universidad</th>
+                                <td>Universidad Politécnica de Madrid</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <div id="info-panel-documentacion" style="display:none; font-size:12px; color:#ecf0f1; line-height:1.6;">
+
+                        <!-- Servicios OGC -->
+                        <div style="background:#1a2a3a; border-radius:8px; padding:12px; margin-bottom:10px;">
+                            <div style="font-weight:700; font-size:13px; color:#3498db; margin-bottom:8px;">🌐 Servicios OGC disponibles</div>
+
+                            <div style="margin-bottom:10px;">
+                                <div style="font-weight:600; color:#e67e22; margin-bottom:4px;">WMS — Web Map Service 1.3.0</div>
+                                <div style="color:#bdc3c7; margin-bottom:4px;">Visualiza las capas como imágenes georreferenciadas. Compatible con QGIS, ArcGIS y cualquier cliente OGC.</div>
+                                <div style="background:#0d1b2a; border-radius:5px; padding:6px 8px; font-family:monospace; font-size:11px; color:#2ecc71; word-break:break-all;">
+                                    GET /wms?SERVICE=WMS&amp;REQUEST=GetCapabilities
+                                </div>
+                                <div style="margin-top:5px; display:flex; gap:5px; flex-wrap:wrap;">
+                                    <span style="background:#2c3e50; border-radius:4px; padding:2px 7px; font-size:11px;">GetCapabilities</span>
+                                    <span style="background:#2c3e50; border-radius:4px; padding:2px 7px; font-size:11px;">GetMap</span>
+                                    <span style="background:#2c3e50; border-radius:4px; padding:2px 7px; font-size:11px;">GetFeatureInfo</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div style="font-weight:600; color:#e67e22; margin-bottom:4px;">WFS — Web Feature Service 2.0.0</div>
+                                <div style="color:#bdc3c7; margin-bottom:4px;">Descarga features vectoriales en GeoJSON o GML 3.2. Soporta filtros por BBOX y límite de features.</div>
+                                <div style="background:#0d1b2a; border-radius:5px; padding:6px 8px; font-family:monospace; font-size:11px; color:#2ecc71; word-break:break-all;">
+                                    GET /wfs?SERVICE=WFS&amp;REQUEST=GetCapabilities
+                                </div>
+                                <div style="margin-top:5px; display:flex; gap:5px; flex-wrap:wrap;">
+                                    <span style="background:#2c3e50; border-radius:4px; padding:2px 7px; font-size:11px;">GetCapabilities</span>
+                                    <span style="background:#2c3e50; border-radius:4px; padding:2px 7px; font-size:11px;">DescribeFeatureType</span>
+                                    <span style="background:#2c3e50; border-radius:4px; padding:2px 7px; font-size:11px;">GetFeature</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Capas -->
+                        <div style="background:#1a2a3a; border-radius:8px; padding:12px; margin-bottom:10px;">
+                            <div style="font-weight:700; font-size:13px; color:#3498db; margin-bottom:8px;">🗂️ Capas expuestas</div>
+                            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                                <thead>
+                                    <tr style="color:#7f8c8d; border-bottom:1px solid #2c3e50;">
+                                        <th style="text-align:left; padding:4px 6px;">Nombre</th>
+                                        <th style="text-align:left; padding:4px 6px;">Tipo</th>
+                                        <th style="text-align:left; padding:4px 6px;">Descripción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr style="border-bottom:1px solid #1e2d3d;">
+                                        <td style="padding:4px 6px; font-family:monospace; color:#2ecc71;">georuta:vias</td>
+                                        <td style="padding:4px 6px; color:#bdc3c7;">LineString</td>
+                                        <td style="padding:4px 6px; color:#bdc3c7;">Red viaria OSM</td>
+                                    </tr>
+                                    <tr style="border-bottom:1px solid #1e2d3d;">
+                                        <td style="padding:4px 6px; font-family:monospace; color:#2ecc71;">georuta:puntos</td>
+                                        <td style="padding:4px 6px; color:#bdc3c7;">Point</td>
+                                        <td style="padding:4px 6px; color:#bdc3c7;">Puntos de interés</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:4px 6px; font-family:monospace; color:#2ecc71;">georuta:portales</td>
+                                        <td style="padding:4px 6px; color:#bdc3c7;">Point</td>
+                                        <td style="padding:4px 6px; color:#bdc3c7;">Numeración postal</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- QGIS -->
+                        <div style="background:#1a2a3a; border-radius:8px; padding:12px; margin-bottom:10px;">
+                            <div style="font-weight:700; font-size:13px; color:#3498db; margin-bottom:8px;">🛠️ Conexión desde QGIS</div>
+                            <div style="color:#bdc3c7; margin-bottom:6px;"><span style="color:#e67e22; font-weight:600;">WMS:</span> Capa → Añadir capa WMS/WMTS</div>
+                            <div style="background:#0d1b2a; border-radius:5px; padding:5px 8px; font-family:monospace; font-size:11px; color:#2ecc71; margin-bottom:8px;">http://localhost:5000/wms</div>
+                            <div style="color:#bdc3c7; margin-bottom:6px;"><span style="color:#e67e22; font-weight:600;">WFS:</span> Capa → Añadir capa WFS/OGC API</div>
+                            <div style="background:#0d1b2a; border-radius:5px; padding:5px 8px; font-family:monospace; font-size:11px; color:#2ecc71;">http://localhost:5000/wfs</div>
+                        </div>
+
+                        <!-- Ejemplos GetFeature -->
+                        <div style="background:#1a2a3a; border-radius:8px; padding:12px;">
+                            <div style="font-weight:700; font-size:13px; color:#3498db; margin-bottom:8px;">📋 Ejemplos de consulta</div>
+                            <div style="color:#7f8c8d; font-size:11px; margin-bottom:4px;">Obtener vías en GeoJSON:</div>
+                            <div style="background:#0d1b2a; border-radius:5px; padding:5px 8px; font-family:monospace; font-size:10px; color:#2ecc71; word-break:break-all; margin-bottom:8px;">
+                                /wfs?SERVICE=WFS&amp;REQUEST=GetFeature&amp;TYPENAME=georuta:vias&amp;outputFormat=application/json&amp;COUNT=100
+                            </div>
+                            <div style="color:#7f8c8d; font-size:11px; margin-bottom:4px;">Filtrar por BBOX:</div>
+                            <div style="background:#0d1b2a; border-radius:5px; padding:5px 8px; font-family:monospace; font-size:10px; color:#2ecc71; word-break:break-all;">
+                                /wfs?SERVICE=WFS&amp;REQUEST=GetFeature&amp;TYPENAME=georuta:puntos&amp;BBOX=-1.88,37.53,-1.75,37.60&amp;outputFormat=application/json
+                            </div>
+                        </div>
+
+                    </div>
+                    <div id="info-panel-creditos" style="display:none;">
+                        <p style="font-size:13px; color:#2c3e50; font-weight:600; margin-bottom:10px;">📚 Documentación del proyecto</p>
+                        <a href="static/data/GeoRuta_AnexoA_ManualUsuario.pptx" download
+                        style="display:flex; align-items:center; gap:10px; padding:10px 12px;
+                                background:#eaf3fb; border:1px solid #aed6f1; border-radius:8px;
+                                text-decoration:none; color:#2471a3; font-size:13px; font-weight:600;
+                                transition:background 0.2s;"
+                        onmouseover="this.style.background='#d6eaf8'"
+                        onmouseout="this.style.background='#eaf3fb'">
+                            <span style="font-size:22px;">📊</span>
+                            <span>
+                                Anexo A — Manual de Usuario<br>
+                                <span style="font-size:11px; color:#5d6d7e; font-weight:400;">Presentación PowerPoint (.pptx)</span>
+                            </span>
+                        </a>
+                        <p style="font-size:11px; color:#95a5a6; margin-top:10px; font-style:italic;">
+                            El archivo se descarga directamente desde el servidor.<br>
+                        </p>
+                    </div>
+                </div>
+
                 <!-- ── Sección Momento ── -->
                 <div class="momento-section" id="momento-section" style="display: none;">
                     <h3 style="margin-bottom: 20px; font-size: 14px; color: #2c3e50; padding-bottom: 8px; border-bottom: 2px solid #3498db">
@@ -334,7 +495,7 @@
                         <label style="display: block; font-size: 13px; color: #2c3e50; margin-bottom: 8px; font-weight: 600;">
                             📅 Día de la semana
                         </label>
-                        <select id="select-dia" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #dfe6e9; font-size: 14px; background: white;" onchange="if(window.estadoTemporal) { window.estadoTemporal.dia = parseInt(this.value); if(typeof actualizarDisplayHora === 'function') actualizarDisplayHora(); clearTimeout(window._simDebounce); window._simDebounce = setTimeout(function(){ if(window.estadoTemporal && window.estadoTemporal.activo && typeof aplicarSimulacionTemporal === 'function') aplicarSimulacionTemporal(); }, 300); }">
+                        <select id="select-dia" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #dfe6e9; font-size: 14px; background: white;" onchange="if(window.estadoTemporal) { window.estadoTemporal.dia = parseInt(this.value); if(typeof actualizarDisplayHora === 'function') actualizarDisplayHora(); clearTimeout(window.simDebounce); window.simDebounce = setTimeout(function(){ if(window.estadoTemporal && window.estadoTemporal.activo && typeof aplicarSimulacionTemporal === 'function') aplicarSimulacionTemporal(); }, 300); }">
                             <option value="1">Lunes</option>
                             <option value="2">Martes</option>
                             <option value="3">Miércoles</option>
@@ -370,8 +531,8 @@
                             step="0.25" 
                             value="12"
                             style="width: 100%; height: 8px; border-radius: 5px; background: linear-gradient(to right, #34495e 0%, #3498db 25%, #f39c12 50%, #e74c3c 75%, #34495e 100%); outline: none; cursor: pointer;"
-                            oninput="if(window.estadoTemporal) { window.estadoTemporal.hora = parseFloat(this.value); if(typeof actualizarDisplayHora === 'function') actualizarDisplayHora(); clearTimeout(window._simDebounce); window._simDebounce = setTimeout(function(){ if(window.estadoTemporal && window.estadoTemporal.activo && typeof aplicarSimulacionTemporal === 'function') aplicarSimulacionTemporal(); }, 400); }"
-                            onchange="if(window.estadoTemporal) { window.estadoTemporal.hora = parseFloat(this.value); if(typeof actualizarDisplayHora === 'function') actualizarDisplayHora(); clearTimeout(window._simDebounce); window._simDebounce = setTimeout(function(){ if(window.estadoTemporal && window.estadoTemporal.activo && typeof aplicarSimulacionTemporal === 'function') aplicarSimulacionTemporal(); }, 400); }">
+                            oninput="if(window.estadoTemporal) { window.estadoTemporal.hora = parseFloat(this.value); if(typeof actualizarDisplayHora === 'function') actualizarDisplayHora(); clearTimeout(window.simDebounce); window.simDebounce = setTimeout(function(){ if(window.estadoTemporal && window.estadoTemporal.activo && typeof aplicarSimulacionTemporal === 'function') aplicarSimulacionTemporal(); }, 400); }"
+                            onchange="if(window.estadoTemporal) { window.estadoTemporal.hora = parseFloat(this.value); if(typeof actualizarDisplayHora === 'function') actualizarDisplayHora(); clearTimeout(window.simDebounce); window.simDebounce = setTimeout(function(){ if(window.estadoTemporal && window.estadoTemporal.activo && typeof aplicarSimulacionTemporal === 'function') aplicarSimulacionTemporal(); }, 400); }">
                         
                         <!-- Marcadores de hora -->
                         <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 10px; color: #7f8c8d;">
@@ -476,7 +637,7 @@
                 </div>
 
                 <!-- Dropdown opciones de emergencia (visible solo cuando emergencia está activa) -->
-                <div id="emergencia-opciones-dropdown" style="display:none;
+                <div id="emergencia-opciones-lista" style="display:none;
                     background:#fff3f3;border:1px solid #e74c3c;border-radius:8px;
                     padding:8px 12px;margin:4px 0 2px;font-size:12px;">
                     <div style="font-size:11px;font-weight:700;color:#c0392b;margin-bottom:7px;
@@ -643,8 +804,194 @@
          position:fixed no quede atrapado en el stacking context del mapa -->
     <div class="map-controls" id="map-controls">
         <button class="control-btnHome" onclick="resetView()" title="Vista inicial">🏠</button>
-        <button class="control-btnHome" id="btn-capas-base" title="Capas base">🗺️</button>
+        <button class="control-btnHome" id="btn-capas-base" title="Capas base" onclick="toggleCapasBasePanel()">🗺️</button>
+        <button class="control-btnHome" id="btn-capa-compartida" title="Abrir capa de obstáculos compartida" onclick="window.toggleCapaCompartida && window.toggleCapaCompartida()">🚧</button>
     </div>
+
+    <!-- Panel selector de capas base -->
+    <div id="capas-base-panel" style="
+        display: none;
+        position: fixed;
+        bottom: 80px;
+        right: 16px;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10);
+        z-index: 2000;
+        min-width: 210px;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        overflow: hidden;
+        border: 1px solid #e0e0e0;">
+        <div style="padding: 10px 14px 8px; border-bottom: 1px solid #f0f0f0;
+                    font-size: 12px; font-weight: 700; color: #2c3e50;
+                    letter-spacing: 0.05em; text-transform: uppercase;">
+            🗺️ Capa base
+        </div>
+        <div id="capas-base-lista" style="padding: 6px 0;">
+            <!-- Las opciones se generan con JS -->
+        </div>
+    </div>
+
+    <script>
+    // ── Definición de capas base disponibles ─────────────────────────────────
+    var CAPAS_BASE = [
+        {
+            id:    'osm',
+            label: '🗺️ OpenStreetMap',
+            url:   'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            attr:  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        },
+        {
+            id:    'topo',
+            label: '🏔️ OpenTopoMap',
+            url:   'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+            attr:  '© <a href="https://opentopomap.org">OpenTopoMap</a> contributors',
+            maxZoom: 17
+        },
+        {
+            id:    'satellite',
+            label: '🛰️ Satélite (ESRI)',
+            url:   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            attr:  'Tiles © Esri — Source: Esri, USGS, NOAA',
+            maxZoom: 19
+        },
+        {
+            id:    'hybrid',
+            label: '🛰️ Híbrido (ESRI)',
+            url:   'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+            attr:  'Tiles © Esri',
+            maxZoom: 19,
+            overlay: true  // se superpone sobre satélite
+        },
+        {
+            id:    'carto-light',
+            label: '☀️ CartoDB Claro',
+            url:   'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+            attr:  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
+            maxZoom: 19
+        },
+        {
+            id:    'carto-dark',
+            label: '🌑 CartoDB Oscuro',
+            url:   'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            attr:  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
+            maxZoom: 19
+        },
+        {
+            id:    'stamen-terrain',
+            label: '🌿 Stamen Terrain',
+            url:   'https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png',
+            attr:  '© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://stamen.com/">Stamen Design</a>',
+            maxZoom: 18
+        },
+        {
+            id:    'watercolor',
+            label: '🎨 Stamen Acuarela',
+            url:   'https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg',
+            attr:  '© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://stamen.com/">Stamen Design</a>',
+            maxZoom: 16
+        },
+        {
+            id:    'cycle',
+            label: '🚴 OpenCycleMap',
+            url:   'https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png',
+            attr:  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 17
+        },
+        {
+            id:    'none',
+            label: '⬜ Sin capa base',
+            url:   null,
+            attr:  '',
+            maxZoom: 22
+        }
+    ];
+
+    var capaBaseActual = null;   // referencia a la capa Leaflet activa
+    var capaBaseId     = 'osm';  // ID de la seleccionada
+
+    // Renderiza los botones del panel
+    function renderCapasBase() {
+        var lista = document.getElementById('capas-base-lista');
+        if (!lista) return;
+        lista.innerHTML = CAPAS_BASE.map(function(c) {
+            var activa = c.id === capaBaseId;
+            return '<button onclick="seleccionarCapaBase(\'' + c.id + '\')" style="\
+                display:block;width:100%;text-align:left;border:none;background:' +
+                (activa ? '#eaf3fb' : 'transparent') + ';\
+                padding:8px 16px;font-size:13px;color:' + (activa ? '#2980b9' : '#2c3e50') + ';\
+                font-weight:' + (activa ? '700' : '400') + ';\
+                cursor:pointer;transition:background 0.1s;\
+                border-left:3px solid ' + (activa ? '#3498db' : 'transparent') + ';\
+                " onmouseover="if(\'' + c.id + '\'!==_capaBaseId)this.style.background=\'#f5f7fa\'" \
+                   onmouseout="if(\'' + c.id + '\'!==_capaBaseId)this.style.background=\'transparent\'">\
+                ' + c.label + '</button>';
+        }).join('');
+    }
+
+    // Abre/cierra el panel
+    function toggleCapasBasePanel() {
+        var panel = document.getElementById('capas-base-panel');
+        if (!panel) return;
+        var visible = panel.style.display !== 'none';
+        panel.style.display = visible ? 'none' : 'block';
+        if (!visible) renderCapasBase();
+    }
+
+    // Cierra el panel al hacer clic fuera de él
+    document.addEventListener('click', function(e) {
+        var panel = document.getElementById('capas-base-panel');
+        var btn   = document.getElementById('btn-capas-base');
+        if (panel && panel.style.display !== 'none') {
+            if (!panel.contains(e.target) && e.target !== btn) {
+                panel.style.display = 'none';
+            }
+        }
+    });
+
+    // Cambia la capa base en el mapa Leaflet
+    function seleccionarCapaBase(id) {
+        capaBaseId = id;
+        renderCapasBase();
+
+        // Esperar a que window.map esté disponible (definido en map-config.js)
+        var intentos = 0;
+        function aplicar() {
+            if (!window.map) {
+                if  (intentos++ < 40) setTimeout (aplicar, 250);
+                return;
+            }
+            // Eliminar capa base anterior
+            if  (capaBaseActual) {
+                window.map.removeLayer (capaBaseActual);
+                capaBaseActual = null;
+            }
+            var def = CAPAS_BASE.find(function(c) { return c.id === id; });
+            if (!def || !def.url) return; // "Sin capa base"
+
+            capaBaseActual = L.tileLayer(def.url, {
+                attribution: def.attr,
+                maxZoom:     def.maxZoom || 19,
+                subdomains:  'abc'
+            }).addTo(window.map);
+
+            // Asegurarse de que quede por debajo de las capas vectoriales
+            capaBaseActual.setZIndex(0);
+        }
+        aplicar();
+        document.getElementById('capas-base-panel').style.display = 'none';
+    }
+
+    // Hook: cuando map-config.js crea el mapa, reemplazar su capa base inicial
+    // por la seleccionada aquí (por defecto OSM, igual que antes).
+    // Si map-config.js ya usa OSM no hay conflicto; si usa otra, esta la gestiona.
+    window.addEventListener('load', function() {
+        setTimeout(function() {
+            if (window.map && capaBaseId) seleccionarCapaBase (capaBaseId);
+        }, 800);
+    });
+    </script>
 
     <div id="notification" class="notification" style="display:none;"></div>
 
@@ -1206,7 +1553,7 @@
                 🚧 Nuevo obstáculo
             </div>
             <div class="obstaculo-hint">
-                Indica en qué medida bloquea la vía.<br>Dijkstra decidirá si merece la pena rodearlo.
+                Selecciona el nivel de impacto en la vía.<br>Dijkstra decidirá si merece la pena rodearlo.
             </div>
             <div id="obstaculo-id-hint"
                  style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(52,152,219,0.8);margin-bottom:14px;
@@ -1221,17 +1568,33 @@
                         padding:5px 8px;margin-bottom:10px;">
             </div>
 
+            <!-- Input oculto que guarda el nivel seleccionado (1-4) -->
+            <input type="hidden" id="obs-nivel-value" value="2">
+
             <div class="obstaculo-field">
-                <label class="obstaculo-label">
-                    Afectación: <strong id="obstaculo-pct-display" style="color:#f39c12;">50%</strong>
-                </label>
-                <input type="range" id="obstaculo-pct" min="0" max="100" value="50" class="obstaculo-slider"
-                    oninput="const obsVal=this.value,obsColor=obsVal<33?'#27ae60':obsVal<66?'#f39c12':'#e74c3c';
-                             document.getElementById('obstaculo-pct-display').textContent=obsVal+'%';
-                             document.getElementById('obstaculo-pct-display').style.color=obsColor;
-                             this.style.accentColor=obsColor;">
-                <div class="obstaculo-slider-marks">
-                    <span>0% Sin bloqueo</span><span>50%</span><span>100% Corte total</span>
+                <label class="obstaculo-label">Nivel de impacto</label>
+                <div style="display:flex;gap:6px;margin-top:4px;">
+                    <button id="obs-nivel-btn-1" type="button" onclick="_seleccionarNivelObs(1)"
+                        style="flex:1;padding:8px 4px;font-size:12px;border-radius:6px;
+                            border:2px solid #ddd;background:#f8f9fa;color:#555;cursor:pointer;transition:all 0.15s;">
+                        <strong>Nivel 1</strong><br><span style="font-size:10px;">Leve</span>
+                    </button>
+                    <button id="obs-nivel-btn-2" type="button" onclick="_seleccionarNivelObs(2)"
+                        style="flex:1;padding:8px 4px;font-size:12px;border-radius:6px;
+                            border:2px solid #f39c12;background:#f39c12;color:#fff;cursor:pointer;
+                            font-weight:700;transition:all 0.15s;">
+                        <strong>Nivel 2</strong><br><span style="font-size:10px;">Moderado</span>
+                    </button>
+                    <button id="obs-nivel-btn-3" type="button" onclick="_seleccionarNivelObs(3)"
+                        style="flex:1;padding:8px 4px;font-size:12px;border-radius:6px;
+                            border:2px solid #ddd;background:#f8f9fa;color:#555;cursor:pointer;transition:all 0.15s;">
+                        <strong>Nivel 3</strong><br><span style="font-size:10px;">Alto</span>
+                    </button>
+                    <button id="obs-nivel-btn-4" type="button" onclick="_seleccionarNivelObs(4)"
+                        style="flex:1;padding:8px 4px;font-size:12px;border-radius:6px;
+                            border:2px solid #ddd;background:#f8f9fa;color:#555;cursor:pointer;transition:all 0.15s;">
+                        <strong>Nivel 4</strong><br><span style="font-size:10px;">Máximo</span>
+                    </button>
                 </div>
             </div>
 
@@ -1303,7 +1666,7 @@
          para pois-controles-registrado (visible con rol registrado o admin). -->
     <script>
     (function() {
-        function _sincronizarControlesPoi(rol) {
+        function sincronizarControlesPoi(rol) {
             const el = document.getElementById('pois-controles-registrado');
             if (!el) return;
             el.style.display = (rol === 'registrado' || rol === 'admin') ? '' : 'none';
@@ -1313,33 +1676,41 @@
         // Detectar rol inicial desde la API (se llama al cargar la página)
         fetch('/api/auth/me')
             .then(r => r.json())
-            .then(data => _sincronizarControlesPoi(data.rol || 'invitado'))
+            .then(data => {
+                window.userRol  = data.rol || 'invitado';
+                window._userRol = window.userRol;   // alias para realtime.js
+                sincronizarControlesPoi(window.userRol);
+            })
             .catch(() => {});
 
         // Parchear las funciones globales que auth.js expone para actualizar la UI
         // cuando el usuario inicia/cierra sesión.
-        const _hookFn = function(original) {
+        const hookFn = function(original) {
             return function() {
                 const ret = original.apply(this, arguments);
                 fetch('/api/auth/me')
                     .then(r => r.json())
-                    .then(data => _sincronizarControlesPoi(data.rol || 'invitado'))
+                    .then(data => {
+                        window.userRol  = data.rol || 'invitado';
+                        window._userRol = window.userRol;   // alias para realtime.js
+                        sincronizarControlesPoi(window.userRol);
+                    })
                     .catch(() => {});
                 return ret;
             };
         };
 
         // Esperar a que auth.js defina las funciones y entonces parchearlas
-        const _waitAuth = setInterval(function() {
+        const waitAuth = setInterval(function() {
             if (typeof window.entrar === 'function' || typeof window.cerrarSesion === 'function') {
-                clearInterval(_waitAuth);
-                if (typeof window.entrar       === 'function') window.entrar       = _hookFn(window.entrar);
-                if (typeof window.cerrarSesion === 'function') window.cerrarSesion = _hookFn(window.cerrarSesion);
+                clearInterval (waitAuth);
+                if (typeof window.entrar       === 'function') window.entrar       = hookFn(window.entrar);
+                if (typeof window.cerrarSesion === 'function') window.cerrarSesion = hookFn(window.cerrarSesion);
                 // También parchear abrirModalRegistro por si se llama directamente
                 if (typeof window.abrirModalRegistro === 'function') {
-                    const _orig = window.abrirModalRegistro;
+                    const orig = window.abrirModalRegistro;
                     window.abrirModalRegistro = function() {
-                        const ret = _orig.apply(this, arguments);
+                        const ret = orig.apply(this, arguments);
                         fetch('/api/auth/me').then(r=>r.json()).then(d=>_sincronizarControlesPoi(d.rol||'invitado')).catch(()=>{});
                         return ret;
                     };
@@ -1347,6 +1718,90 @@
             }
         }, 150);
     })();
+    </script>
+
+    <!-- Lógica del botón Salir:
+         - Si el usuario está autenticado con cuenta real -> cierra sesión y pasa a invitado
+         - Si ya es invitado -> redirige al login -->
+    <script>
+    async function botonSalir() {
+        try {
+            const r    = await fetch('/api/auth/me');
+            const data = await r.json();
+            const esInvitado = data.invitado === true || data.rol === 'invitado';
+
+            if (esInvitado) {
+                // Ya es invitado -> ir al login
+                window.location.href = '/login';
+            } else {
+                // Tiene sesión real -> cerrar sesión y reconvertir a invitado
+                await fetch('/api/auth/salir', { method: 'POST' });
+                await fetch('/api/auth/entrar', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({ usuario: 'Invitado', invitado: true })
+                });
+                // Notificar al resto de la app si auth.js expone una función de refresco
+                if (typeof window.cerrarSesion === 'function') {
+                    window.cerrarSesion();
+                } else {
+                    window.location.reload();
+                }
+            }
+        } catch (e) {
+            // Si falla la petición, ir al login de forma segura
+            window.location.href = '/login';
+        }
+    }
+    </script>
+    <script>
+    function switchInfoPanelTab(btn) {
+        document.querySelectorAll('.info-panel-tab').forEach(b => {
+            b.style.borderBottom = '2px solid transparent';
+            b.style.color = '#95a5a6';
+            b.style.fontWeight = 'normal';
+        });
+        btn.style.borderBottom = '2px solid #3498db';
+        btn.style.color = '#2c3e50';
+        btn.style.fontWeight = '600';
+        ['contacto','documentacion','creditos'].forEach(t => {
+            document.getElementById('info-panel-' + t).style.display = 'none';
+        });
+        document.getElementById('info-panel-' + btn.dataset.tab).style.display = 'block';
+    }
+
+    /* Integración de la pestaña "info" en selectLeftTab.
+       Se parchea tras DOMContentLoaded para no pisar la definición original. */
+    document.addEventListener('DOMContentLoaded', function() {
+        const origSelectLeftTab = window.selectLeftTab;
+        window.selectLeftTab = function(tab) {
+            if (tab === 'info') {
+                // Abrir el panel si está colapsado
+                const panel = document.getElementById('left-panel');
+                if (panel && panel.classList.contains('collapsed')) {
+                    if (typeof toggleLeftPanel === 'function') toggleLeftPanel();
+                }
+                // Ocultar todas las secciones conocidas
+                ['layers-section','momento-section','info-section'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
+                document.getElementById('info-section').style.display = 'block';
+                // Actualizar título del panel
+                const titulo = document.getElementById('left-panel-title');
+                if (titulo) titulo.textContent = 'ℹ️ Información';
+                // Marcar pestaña activa en la barra lateral
+                document.querySelectorAll('.side-bar-item').forEach(b => b.classList.remove('active'));
+                const tabBtn = document.getElementById('tab-info');
+                if (tabBtn) tabBtn.classList.add('active');
+            } else {
+                if (typeof origSelectLeftTab === 'function') origSelectLeftTab(tab);
+                // Si se cambia de pestaña, ocultar info-section
+                const infoSec = document.getElementById('info-section');
+                if (infoSec) infoSec.style.display = 'none';
+            }
+        };
+    });
     </script>
 
 </body>

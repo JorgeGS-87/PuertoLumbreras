@@ -419,23 +419,36 @@ function _actualizarLabelsMsw() {
 
 /**
  * Tabla de 4 niveles de impacto para obstáculos.
- * Idéntica en escala a NIVELES_EVENTO (event-manager.js):
- *   Nivel 1 → 25%  → ×1.75  (impacto leve)
- *   Nivel 2 → 50%  → ×2.5   (impacto moderado)
- *   Nivel 3 → 75%  → ×3.25  (impacto alto)
- *   Nivel 4 → 100% → ×4.0   (impacto máximo)
+ * obstruccion es el valor interno (0-1) usado en la fórmula de penalización:
+ *   factor = 1 / (1 - obstruccion * 0.99)
+ *   Nivel 1 → obstruccion=0.25 → factor ≈ ×1.33  (Leve)
+ *   Nivel 2 → obstruccion=0.50 → factor ≈ ×2.02  (Moderado)
+ *   Nivel 3 → obstruccion=0.75 → factor ≈ ×4.03  (Alto)
+ *   Nivel 4 → obstruccion=0.99 → factor ≈ ×100   (Máximo — prácticamente bloqueado)
+ *
+ * Los eventos usan la misma fórmula → factores idénticos por nivel.
  */
 const NIVELES_OBS = {
-    1: { pct: 25,  color: '#27ae60', label: 'Nivel 1', desc: 'Leve'     },
-    2: { pct: 50,  color: '#f39c12', label: 'Nivel 2', desc: 'Moderado' },
-    3: { pct: 75,  color: '#e67e22', label: 'Nivel 3', desc: 'Alto'     },
-    4: { pct: 100, color: '#e74c3c', label: 'Nivel 4', desc: 'Máximo'   },
+    1: { obstruccion: 0.25, color: '#27ae60', label: 'Nivel 1', desc: 'Leve'     },
+    2: { obstruccion: 0.50, color: '#f39c12', label: 'Nivel 2', desc: 'Moderado' },
+    3: { obstruccion: 0.75, color: '#e67e22', label: 'Nivel 3', desc: 'Alto'     },
+    4: { obstruccion: 0.99, color: '#e74c3c', label: 'Nivel 4', desc: 'Máximo'   },
 };
+
+/** Convierte un nivel (1-4) a su valor de obstrucción. */
+function _obstruccionDeNivel(nivel) {
+    return (NIVELES_OBS[nivel] ?? NIVELES_OBS[2]).obstruccion;
+}
 
 /** Convierte obstruccion (0-1) al nivel 1-4 más cercano. */
 function _nivelObs(obstruccion) {
-    const nivel = Math.round((obstruccion ?? 0.5) * 4);
-    return Math.max(1, Math.min(4, nivel || 1));
+    const ob = obstruccion ?? 0.5;
+    let mejor = 1, mejorDist = Infinity;
+    for (const [n, cfg] of Object.entries(NIVELES_OBS)) {
+        const d = Math.abs(cfg.obstruccion - ob);
+        if (d < mejorDist) { mejorDist = d; mejor = parseInt(n); }
+    }
+    return mejor;
 }
 
 /** Devuelve el color del nivel correspondiente a la obstruccion dada. */
@@ -605,20 +618,35 @@ function _popupHTML(idx) {
         </div>`;
 }
 
-function _aplicarPctPopup(idx) {
-    const obs    = obstaculos[idx];
+/** Cambia el nivel de un obstáculo existente (llamado desde botones del popup). */
+function cambiarNivelObstaculo(idx, nivel) {
+    const obs = obstaculos[idx];
     if (!obs) return;
-    const slider = document.getElementById(`obs-pct-slider-${idx}`);
-    if (!slider) return;
-    const nuevaObs = parseInt(slider.value, 10) / 100;
-    if (nuevaObs === obs.obstruccion) return;
+    nivel = Math.max(1, Math.min(4, nivel));
+    const nuevaObs = _obstruccionDeNivel(nivel);
+    if (nuevaObs === obs.obstruccion) return;  // sin cambio: no repintar ni notificar
     obs.obstruccion = nuevaObs;
     const color = _colorObs(nuevaObs);
     if (obs.circulo) obs.circulo.setStyle({ color, fillColor: color });
     obs.segmentosBloqueados?.forEach(s => s.setStyle({ color }));
-    obs.marker.bindPopup(_popupHTML(idx), { maxWidth: 230 });
+    const info = NIVELES_OBS[nivel];
+    obs.marker.bindPopup(_popupHTML(idx), { maxWidth: 240 }).openPopup();
     _actualizarListaObstaculos();
-    showNotification(`Obstáculo ${obs.obsId !== null ? '#' + obs.obsId : '(sin ID)'} → ${Math.round(nuevaObs*100)}%`, 'info');
+    if (typeof window.refrescarTablaObstaculosSiAbierta === 'function')
+        window.refrescarTablaObstaculosSiAbierta();
+    // Emitir por WS si la capa compartida está activa
+    if (window._capaCompartidaActiva && obs._bdId && window._rt?.emit) {
+        window._rt.emit('obs_compartido_mover', {
+            id: obs._bdId, lat: obs.latlng.lat, lng: obs.latlng.lng,
+            porcentaje: Math.round(nuevaObs * 100), portal: obs.portal || '',
+        });
+    }
+    showNotification(`Obstáculo → ${info.label} (${info.desc})`, 'info');
+}
+
+/** @deprecated Mantener por compatibilidad con realtime.js que lo parchea */
+function _aplicarPctPopup(idx) {
+    // No hace nada: la lógica se gestiona vía cambiarNivelObstaculo
 }
 
 // ==================== MODAL % AL CREAR OBSTÁCULO ====================
@@ -626,20 +654,15 @@ function _aplicarPctPopup(idx) {
 let _latlngPendiente   = null;
 let _moverObstaculoIdx = null;
 
-/** Resetea el modal a su estado inicial cada vez que se abre */
+/** Resetea el modal al nivel 2 (Moderado) y lo muestra */
 function _pedirPorcentajeObstaculo(latlng) {
     _latlngPendiente = latlng;
 
-    const slider  = document.getElementById('obstaculo-pct');
-    const display = document.getElementById('obstaculo-pct-display');
     const titulo  = document.getElementById('obstaculo-titulo');
     const hint    = document.getElementById('obstaculo-id-hint');
     const errEl   = document.getElementById('obstaculo-id-error');
 
-    if (slider)  { slider.value = 50; slider.style.accentColor = '#f39c12'; }
-    if (display) { display.textContent = '50%'; display.style.color = '#f39c12'; }
-
-    // Restaurar título a su estado por defecto
+    // Restaurar título
     if (titulo) {
         titulo.contentEditable = 'false';
         titulo.textContent     = '🚧 Nuevo obstáculo';
@@ -648,11 +671,41 @@ function _pedirPorcentajeObstaculo(latlng) {
         titulo.style.cursor        = 'default';
         titulo.style.color         = '';
     }
-    if (hint)   hint.style.display  = '';
-    if (errEl)  { errEl.style.display = 'none'; errEl.textContent = ''; }
+    if (hint)  hint.style.display  = '';
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+
+    // Seleccionar nivel 2 por defecto
+    _seleccionarNivelObs(2);
 
     document.getElementById('obstaculo-modal').style.display = 'flex';
 }
+
+/** Marca visualmente el nivel seleccionado en el modal de creación de obstáculo */
+function _seleccionarNivelObs(nivel) {
+    window._nivelObstaculoPendiente = nivel;
+    const input = document.getElementById('obs-nivel-value');
+    if (input) input.value = nivel;
+    for (let n = 1; n <= 4; n++) {
+        const btn = document.getElementById(`obs-nivel-btn-${n}`);
+        if (!btn) continue;
+        const info = NIVELES_OBS[n];
+        const sel  = n === nivel;
+        btn.style.background  = sel ? info.color : '#f8f8f8';
+        btn.style.color       = sel ? '#fff'      : '#555';
+        btn.style.borderColor = sel ? info.color  : '#ddd';
+        btn.style.fontWeight  = sel ? '700' : '400';
+        btn.style.transform   = sel ? 'scale(1.06)' : 'scale(1)';
+    }
+    const desc = document.getElementById('obs-nivel-desc');
+    if (desc) {
+        const info = NIVELES_OBS[nivel];
+        desc.textContent  = `${info.label} — ${info.desc}  (factor ×${(1/(1-info.obstruccion*0.99)).toFixed(1)})`;
+        desc.style.color  = info.color;
+    }
+}
+
+// Alias de compatibilidad por si algún script externo llama al nombre antiguo
+const _seleccionarNivelModal = _seleccionarNivelObs;
 
 /**
  * Activa la edición inline del título, estilo "renombrar carpeta en Windows":
@@ -730,18 +783,17 @@ function cerrarObstaculoModal() {
 }
 
 function confirmarObstaculo() {
-    const pct    = parseInt(document.getElementById('obstaculo-pct')?.value ?? 50, 10);
+    const nivelInput = document.getElementById('obs-nivel-value');
+    const nivel  = Math.max(1, Math.min(4, parseInt(nivelInput?.value ?? window._nivelObstaculoPendiente ?? 2, 10) || 2));
     const titulo = document.getElementById('obstaculo-titulo');
     const errEl  = document.getElementById('obstaculo-id-error');
 
-    // Leer el ID del título si el usuario lo puso
     const textoTitulo = titulo?.textContent?.trim() ?? '';
     const matchId     = textoTitulo.match(/^🚧\s*Obstáculo\s*#([\w\-]+)$/);
     let obsId = null;
 
     if (matchId) {
         const parsed = matchId[1];
-        // Doble check por si se cambió algo entre blur y click
         if (_obsIdEnUso(parsed)) {
             if (errEl) { errEl.textContent = `El ID "\${parsed}" ya está en uso. Cambia el título.`; errEl.style.display = 'block'; }
             return;
@@ -750,7 +802,7 @@ function confirmarObstaculo() {
     }
 
     document.getElementById('obstaculo-modal').style.display = 'none';
-    if (_latlngPendiente) crearObstaculo(_latlngPendiente, pct / 100, obsId);
+    if (_latlngPendiente) crearObstaculo(_latlngPendiente, _obstruccionDeNivel(nivel), obsId);
     _latlngPendiente = null;
 }
 
@@ -817,7 +869,7 @@ function _moverObstaculoA(idx, nuevaLatlng) {
     });
 
     // Reasignar popup (el índice no cambia)
-    obs.marker.bindPopup(_popupHTML(idx), { maxWidth: 230 });
+    obs.marker.bindPopup(_popupHTML(idx), { maxWidth: 240 });
 
     _actualizarListaObstaculos();
     if (typeof window.refrescarTablaObstaculosSiAbierta === 'function')
@@ -1329,14 +1381,15 @@ function crearObstaculo(latlng, obstruccion = 0.5, obsId = null, portal = '') {
     const obs  = { obsId, marker, circulo, latlng, obstruccion, segmentosBloqueados, portal: portal || '' };
     obstaculos.push(obs);
 
-    marker.bindPopup(_popupHTML(idx), { maxWidth: 230 });
+    marker.bindPopup(_popupHTML(idx), { maxWidth: 240 });
     marker.on('popupclose', () => _aplicarPctPopup(idx));
 
     _actualizarListaObstaculos();
     if (typeof window.refrescarTablaObstaculosSiAbierta === 'function')
         window.refrescarTablaObstaculosSiAbierta();
     const label = obsId !== null ? `#${obsId}` : `sin ID`;
-    showNotification(`Obstáculo ${label} (${Math.round(obstruccion*100)}%) creado — ${segmentosBloqueados.length} segmento(s) afectado(s)`, 'success');
+    const _nInfo = NIVELES_OBS[_nivelObs(obstruccion)];
+    showNotification(`Obstáculo ${label} — ${_nInfo.label} (${_nInfo.desc}) creado — ${segmentosBloqueados.length} segmento(s) afectado(s)`, 'success');
 }
 
 function eliminarObstaculo(index) {
@@ -1376,6 +1429,7 @@ async function exportarObstaculos(options = {}) {
         lat:            obs.latlng.lat,
         lon:            obs.latlng.lng,
         id:             obs.obsId !== null ? obs.obsId : (i + 1),
+        nivel:          _nivelObs(obs.obstruccion ?? 0.5),
         pct:            Math.round((obs.obstruccion ?? 0.5) * 100),
         vias_afectadas: _nombresViasAfectadas(obs).join(', '),
         fecha_creacion: new Date().toISOString().slice(0, 19).replace('T', ' '),
@@ -1440,11 +1494,13 @@ async function exportarObstaculosCSV(options = {}) {
     const payload = activos.map((obs, i) => {
         const viasAfectadas = _nombresViasAfectadas(obs);
         const escruce = viasAfectadas.length > 1;
+        const nivel   = _nivelObs(obs.obstruccion ?? 0.5);
         return {
             id:           i + 1,
             Nombre:       obs.obsId !== null ? obs.obsId : `${i + 1}`,
             coord_lat:    obs.latlng.lat,
             coord_lon:    obs.latlng.lng,
+            Nivel:        nivel,
             Porcentaje:   Math.round((obs.obstruccion ?? 0.5) * 100),
             Cruce:        escruce ? 'Sí' : 'No',
             Calles:       viasAfectadas.join('; '),
@@ -1650,19 +1706,31 @@ function importarObstaculosCSV(input) {
  * Cuando todos están resueltos, llama a _aplicarImportacion.
  */
 function _resolverImportacion(obsArray) {
-    // Normalizar: cada elemento tendrá { lat, lon, pct, id, nombre }
-    const pendientes = obsArray.map(o => ({
-        lat: o.lat,
-        lon: o.lon,
-        pct: o.pct ?? 50,
-        id:  (o.id !== null && o.id !== undefined && String(o.id).trim() !== '' && String(o.id).trim() !== 'None')
-             ? String(o.id).trim()
-             : null,
-        nombre: (o.Nombre ?? o.nombre) || null,  // El nombre es el identificador real
-        cruce: o.Cruce || o.cruce || 'No',
-        calles: o.Calles || o.calles || '',
-        portal: o.portal || o.Portal || ''
-    }));
+    // Normalizar: cada elemento tendrá { lat, lon, obstruccion, id, nombre }
+    const pendientes = obsArray.map(o => {
+        // Acepta nivel directo (1-4), pct legacy (0-100) o obstruccion (0-1)
+        let obstruccion;
+        if (o.nivel !== undefined && o.nivel !== null) {
+            const nivel = Math.max(1, Math.min(4, parseInt(o.nivel, 10) || 2));
+            obstruccion = _obstruccionDeNivel(nivel);
+        } else if (o.pct !== undefined && o.pct !== null) {
+            obstruccion = parseInt(o.pct, 10) / 100;
+        } else {
+            obstruccion = 0.5;
+        }
+        return {
+            lat: o.lat,
+            lon: o.lon,
+            obstruccion,
+            id:  (o.id !== null && o.id !== undefined && String(o.id).trim() !== '' && String(o.id).trim() !== 'None')
+                 ? String(o.id).trim()
+                 : null,
+            nombre: (o.Nombre ?? o.nombre) || null,
+            cruce: o.Cruce || o.cruce || 'No',
+            calles: o.Calles || o.calles || '',
+            portal: o.portal || o.Portal || ''
+        };
+    });
 
     // Resolver conflictos iterativamente
     _resolverSiguienteConflicto(pendientes, 0, []);
@@ -1724,7 +1792,7 @@ function _mostrarModalConflictoId(obs, pendientes, idx, resueltos) {
             <div id="conflict-id-error" style="color:#e74c3c;font-size:12px;margin-top:4px;display:none;"></div>
         </div>
         <div class="mbox-row" style="font-size:12px;color:#7f8c8d;">
-            Obstáculo: ${obs.pct}% de bloqueo · (${obs.lat.toFixed(5)}, ${obs.lon.toFixed(5)})
+            Obstáculo: ${NIVELES_OBS[_nivelObs(obs.obstruccion ?? 0.5)]?.label ?? 'Nivel 2'} · (${obs.lat.toFixed(5)}, ${obs.lon.toFixed(5)})
         </div>
     `;
 
@@ -1772,7 +1840,7 @@ function _aplicarImportacion(resueltos) {
     resueltos.forEach(obs => {
         // Usar el Nombre del CSV si existe, sino usar el id
         const obsId = obs.nombre || obs.id;
-        crearObstaculo(L.latLng(obs.lat, obs.lon), obs.pct / 100, obsId, obs.portal || '');
+        crearObstaculo(L.latLng(obs.lat, obs.lon), obs.obstruccion ?? 0.5, obsId, obs.portal || '');
     });
     showNotification(`${resueltos.length} obstáculo(s) importado(s)`, 'success');
 }

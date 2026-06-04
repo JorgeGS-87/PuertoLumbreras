@@ -153,7 +153,8 @@
                 <div id="admin-vias-controls" style="display:none;">
                     <input type="file" id="file-vias" accept=".geojson,.json,.zip" onchange="cargarArchivo('vias', this)">
                     <div class="m-btn-row">
-                        <button class="m-btn m-btn-blue" onclick="document.getElementById('file-vias').click()">📂 Cargar Vías</button>
+                        <button class="m-btn m-btn-blue" id="btn-cargar-vias" onclick="document.getElementById('file-vias').click()">📂 Cargar Vías</button>
+                        <button class="m-btn m-btn-red" id="btn-eliminar-vias" style="display:none;" onclick="eliminarCapa('vias')">❌ Eliminar</button>
                         <button class="m-btn m-btn-purple" id="btn-config-campos" style="display:none;" onclick="abrirConfigCamposRuta()">⚙️ Config.</button>
                     </div>
                 </div>
@@ -1033,7 +1034,7 @@
             btn.innerHTML = '🗺️';
             btn.style.cssText = [
                 'position:fixed',
-                'top:74px',
+                'top:126px',
                 'left:12px',
                 'width:44px',
                 'height:44px',
@@ -1053,6 +1054,37 @@
             document.body.appendChild(btn);
 
             if (typeof L !== 'undefined') L.DomEvent.disableClickPropagation(btn);
+
+            // ── Botón capa compartida ────────────────────────────────────────
+            const btnComp = document.createElement('button');
+            btnComp.id        = 'btn-capa-compartida';
+            btnComp.title     = 'Capa de obstáculos compartida';
+            btnComp.innerHTML = '🚧';
+            btnComp.style.cssText = [
+                'position:fixed',
+                'top:178px',
+                'left:12px',
+                'width:44px',
+                'height:44px',
+                'background:#fff',
+                'border:none',
+                'border-radius:12px',
+                'font-size:20px',
+                'cursor:pointer',
+                'display:flex',
+                'align-items:center',
+                'justify-content:center',
+                'box-shadow:0 2px 10px rgba(0,0,0,0.18)',
+                'z-index:1600',
+                'pointer-events:all',
+                'transition:background 0.15s',
+            ].join(';');
+            btnComp.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (typeof window.toggleCapaCompartida === 'function') window.toggleCapaCompartida();
+            });
+            document.body.appendChild(btnComp);
+            if (typeof L !== 'undefined') L.DomEvent.disableClickPropagation(btnComp);
 
             let panelAbierto = false;
 
@@ -1152,7 +1184,10 @@
         }
         fetch('/api/auth/me')
             .then(r => r.json())
-            .then(data => _sincronizarControlesPoi(data.rol || 'invitado'))
+            .then(data => {
+                window._userRol = data.rol || 'invitado';
+                _sincronizarControlesPoi(window._userRol);
+            })
             .catch(() => {});
         const _waitAuth = setInterval(function() {
             if (typeof window.cerrarSesion === 'function') {
@@ -1161,7 +1196,10 @@
                     const _orig = window.abrirModalRegistro;
                     window.abrirModalRegistro = function() {
                         const ret = _orig.apply(this, arguments);
-                        fetch('/api/auth/me').then(r=>r.json()).then(d=>_sincronizarControlesPoi(d.rol||'invitado')).catch(()=>{});
+                        fetch('/api/auth/me').then(r=>r.json()).then(d=>{
+                            window._userRol = d.rol || 'invitado';
+                            _sincronizarControlesPoi(window._userRol);
+                        }).catch(()=>{});
                         return ret;
                     };
                 }

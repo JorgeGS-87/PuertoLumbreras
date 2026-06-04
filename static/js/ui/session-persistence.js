@@ -32,11 +32,11 @@ async function sesionGuardarObstaculos(silencioso = false) {
     const lista = (typeof obstaculos !== 'undefined' ? obstaculos : []).filter(Boolean);
 
     const payload = lista.map(obs => ({
-        lat:          obs.lat,
-        lng:          obs.lng,
-        porcentaje:   obs.porcentaje ?? 50,
-        id_etiqueta:  obs.id_etiqueta ?? null,
-        radio:        obs.radio ?? 15,
+        lat:         obs.latlng?.lat ?? obs.lat,
+        lng:         obs.latlng?.lng ?? obs.lng,
+        obstruccion: obs.obstruccion ?? 0.5,
+        obsId:       obs.obsId ?? null,
+        portal:      obs.portal ?? '',
     }));
 
     try {
@@ -124,9 +124,13 @@ function _mostrarDialogoRecuperacion(obstaculosGuardados, fechaGuardado) {
     // Botón restaurar
     document.getElementById('srm-btn-restaurar').onclick = async () => {
         modal.style.display = 'none';
-        await _restaurarObstaculos(obstaculosGuardados);
+        const creados = await _restaurarObstaculos(obstaculosGuardados);
         await fetch('/api/sesion/confirmar-recuperado', { method: 'POST' });
-        showNotification(`✅ ${obstaculosGuardados.length} obstáculos restaurados`, 'success');
+        if (creados > 0) {
+            showNotification(`✅ ${creados} obstáculos restaurados`, 'success');
+        } else {
+            showNotification('⚠️ La sesión guardada tenía datos inválidos y no se pudo restaurar', 'warning');
+        }
     };
 
     // Botón descartar
@@ -142,14 +146,36 @@ function _mostrarDialogoRecuperacion(obstaculosGuardados, fechaGuardado) {
  * @param {Array} lista
  */
 async function _restaurarObstaculos(lista) {
+    let creados = 0;
+    let saltados = 0;
+
     for (const obs of lista) {
-        // crearObstaculo(lat, lng, porcentaje, idEtiqueta) — función de route-manager.js
-        if (typeof crearObstaculo === 'function') {
-            crearObstaculo(obs.lat, obs.lng, obs.porcentaje ?? 50, obs.id_etiqueta ?? null);
+        // Validar que lat/lng sean números válidos antes de llamar a Leaflet
+        const lat = parseFloat(obs.lat);
+        const lng = parseFloat(obs.lng);
+
+        if (isNaN(lat) || isNaN(lng)) {
+            console.warn('[SesionPersist] obstáculo con coordenadas inválidas, saltando:', obs);
+            saltados++;
+            continue;
         }
-        // Pequeña pausa para no saturar el DOM con muchos obstáculos de golpe
+
+        if (typeof crearObstaculo === 'function') {
+            const latlng      = L.latLng(lat, lng);
+            const obstruccion = obs.obstruccion ?? 0.5;
+            const obsId       = obs.obsId ?? null;
+            const portal      = obs.portal ?? '';
+            crearObstaculo(latlng, obstruccion, obsId, portal);
+            creados++;
+        }
+
         await new Promise(res => setTimeout(res, 20));
     }
+
+    if (saltados > 0) {
+        console.warn(`[SesionPersist] ${saltados} obstáculos saltados por datos inválidos (sesión antigua corrupta)`);
+    }
+    return creados;
 }
 
 // ==================== CERRAR SESIÓN CON CONFIRMACIÓN ====================
@@ -238,11 +264,11 @@ function _guardarEmergencia() {
 
     const payload = JSON.stringify({
         obstaculos: lista.map(obs => ({
-            lat:         obs.lat,
-            lng:         obs.lng,
-            porcentaje:  obs.porcentaje ?? 50,
-            id_etiqueta: obs.id_etiqueta ?? null,
-            radio:       obs.radio ?? 15,
+            lat:         obs.latlng?.lat ?? obs.lat,
+            lng:         obs.latlng?.lng ?? obs.lng,
+            obstruccion: obs.obstruccion ?? 0.5,
+            obsId:       obs.obsId ?? null,
+            portal:      obs.portal ?? '',
         }))
     });
 

@@ -125,8 +125,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# — SocketIO (async_mode='eventlet' requiere: pip install eventlet) —
-socketio = SocketIO(app, cors_allowed_origins='*', async_mode='eventlet')
+# — SocketIO (threading: no requiere eventlet, más estable) —
+socketio = SocketIO(app, cors_allowed_origins='*', async_mode='threading')
 
 
 # ── Modelos de BD ────────────────────────────────────────────────────────────
@@ -162,18 +162,18 @@ class SesionObstaculos(db.Model):
 
 
 class ObstaculoCompartido(db.Model):
-    """Obstáculo de la capa compartida, visible y editable por todos los usuarios registrados."""
+    """Obstáculo de la capa compartida, editable por todos los registrados/admin en tiempo real."""
     __tablename__ = 'obstaculos_compartidos'
 
-    id           = db.Column(db.Integer,    primary_key=True)
-    obs_id       = db.Column(db.String(64), nullable=True)   # ID/etiqueta opcional
-    lat          = db.Column(db.Float,      nullable=False)
-    lng          = db.Column(db.Float,      nullable=False)
-    porcentaje   = db.Column(db.Integer,    nullable=False, default=50)  # 0-100
-    portal       = db.Column(db.String(256), nullable=True, default='')
-    autor        = db.Column(db.String(64), nullable=False)  # usuario que lo creó/modificó
-    creado_en    = db.Column(db.DateTime,   default=datetime.utcnow)
-    modificado_en= db.Column(db.DateTime,   default=datetime.utcnow, onupdate=datetime.utcnow)
+    id            = db.Column(db.Integer,     primary_key=True)
+    obs_id        = db.Column(db.String(64),  nullable=True)
+    lat           = db.Column(db.Float,       nullable=False)
+    lng           = db.Column(db.Float,       nullable=False)
+    nivel_val     = db.Column(db.Integer,     nullable=False, default=2)
+    portal        = db.Column(db.String(256), nullable=True,  default='')
+    autor         = db.Column(db.String(64),  nullable=False)
+    creado_en     = db.Column(db.DateTime,    default=datetime.utcnow)
+    modificado_en = db.Column(db.DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 # Crear tablas si no existen (idempotente, no destruye datos)
@@ -949,7 +949,44 @@ def obtener_vias():
 def eliminar_vias():
     global vias_gdf, grafo_vias
     vias_gdf = grafo_vias = None
-    return jsonify({'mensaje': 'Vías eliminadas'})
+
+    # Intentar restaurar la capa OSM por defecto (Vías.geojson)
+    vias_path = os.path.join('static', 'data', 'Vías.geojson')
+    if os.path.exists(vias_path):
+        try:
+            gdf = EPSG4326(vias_path)
+            gdf['lanes']    = gdf['lanes'].apply(normalizar_lanes)       if 'lanes'    in gdf.columns else 1
+            gdf['maxspeed'] = gdf['maxspeed'].apply(normalizar_maxspeed) if 'maxspeed' in gdf.columns else 50
+
+            clip_path = os.path.join('static', 'data', 'PuertoLumbreras.zip')
+            if os.path.exists(clip_path):
+                try:
+                    clip_dir = tempfile.mkdtemp(prefix='clip_restore_')
+                    with zipfile.ZipFile(clip_path) as z:
+                        z.extractall(clip_dir)
+                    shp = next((os.path.join(r, f)
+                                for r, _, fs in os.walk(clip_dir)
+                                for f in fs if f.endswith('.shp')), None)
+                    if shp:
+                        clip_gdf = EPSG4326(shp)
+                        gdf = gdf[gdf.intersects(clip_gdf.unary_union)].reset_index(drop=True)
+                    shutil.rmtree(clip_dir, ignore_errors=True)
+                except Exception:
+                    pass
+
+            vias_gdf   = gdf
+            grafo_vias = crear_grafo(gdf)
+            print(f'[eliminar-vias] OSM restaurada: {len(gdf)} vias')
+            return jsonify({
+                'mensaje':        'Capa eliminada — vías OSM restauradas',
+                'osm_restaurada': True,
+                'total_vias':     len(gdf),
+                'nodos_grafo':    grafo_vias.number_of_nodes(),
+            })
+        except Exception as e:
+            print(f'[eliminar-vias] No se pudo restaurar OSM: {e}')
+
+    return jsonify({'mensaje': 'Vias eliminadas', 'osm_restaurada': False})
 
 
 @app.route('/api/recortar-capa', methods=['POST'])
@@ -1714,7 +1751,7 @@ def calcular_ruta():
                     t  = j / 20      # Valor entre 0.0 y 1.0
                     pt = (u[1] + t*(v[1]-u[1]), u[0] + t*(v[0]-u[0])) # Fórmula de interpolación lineal: pt=u+t(v−u); Calcula pt, un punto intermedio en la línea del segmento
                     if distanciaLatLon(obs_ll, pt) <= radio: # Si el punto intermedio pt está dentro del radio del obstáculo
-                        factor = 1.0 / (1.0 - obstruccion * 0.99) # Calcula el factor de penalización basado en el porcentaje de obstrucción. Cuanto mayor sea la obstrucción, mayor será el factor (más tiempo).
+                        factor = 1.0 / (1.0 - obstruccion * 0.99) # Calcula el factor de penalización basado en el nivel de obstrucción. Cuanto mayor sea la obstrucción, mayor será el factor (más tiempo).
                         prev   = penalizados.get((u, v), 1.0) # Si el segmento ya tiene un factor de penalización por otro obstáculo, se toma el máximo para reflejar el efecto acumulativo
                         penalizados[(u, v)] = max(prev, factor) # Guarda el factor de penalización para el segmento (u, v) en el diccionario penalizados. Si el segmento ya tiene un factor, se actualiza al máximo entre el existente y el nuevo.
                         break
@@ -2114,13 +2151,14 @@ def exportar_obstaculos():
         registros = []
         for obs in features:
             try:
-                pct_val = int(obs.get('pct', 50))
+                nivel_val = int(obs.get('nivel', 2))
+                nivel_val = max(1, min(4, nivel_val))
             except (ValueError, TypeError):
-                pct_val = 50
+                nivel_val = 2
             registros.append({
                 'geometry':       Point(obs['lon'], obs['lat']),
                 'id':             str(obs.get('id', '')),
-                'pct':            pct_val,
+                'nivel':          nivel_val,
                 'vias_afectadas': str(obs.get('vias_afectadas', '')),
                 'fecha_creacion': str(obs.get('fecha_creacion', '')),
             })
@@ -2210,11 +2248,22 @@ def importar_obstaculos():
 
         features = []
         for _, row in gdf.iterrows():
+            if 'nivel' in row and row['nivel'] is not None:
+                try:   nivel_val = max(1, min(4, int(row['nivel'])))
+                except: nivel_val = 2
+            elif 'pct' in row and row['pct'] is not None:   # legacy
+                try:
+                    pct_raw = int(row['pct'])
+                    nivel_val = max(1, min(4, round(pct_raw / 25))) if pct_raw > 0 else 1
+                except: nivel_val = 2
+            else:
+                nivel_val = 2
+
             features.append({
                 'lat':            row.geometry.y,
                 'lon':            row.geometry.x,
                 'id':             _val(row, 'id',             None),
-                'pct':            int(_val(row, 'pct',            50)),
+                'nivel':          nivel_val,
                 'vias_afectadas': str(_val(row, 'vias_afectadas', '')),
                 'fecha_creacion': str(_val(row, 'fecha_creacion', '')),
             })
@@ -2232,7 +2281,7 @@ def importar_obstaculos():
 def exportar_obstaculos_csv():
     """
     Recibe la lista de obstáculos desde el frontend y los devuelve como CSV.
-    Formato: id, Nombre, coord_lat, coord_lon, Porcentaje, Cruce, Calles, Portal
+    Formato: id, Nombre, coord_lat, coord_lon, Nivel, Cruce, Calles, Portal
     """
     data     = request.get_json(force=True, silent=True) or {}
     features = data.get('obstaculos', [])
@@ -2246,14 +2295,14 @@ def exportar_obstaculos_csv():
         writer = csv.writer(output)
         
         # Escribir encabezado en el orden especificado
-        writer.writerow(['id', 'Nombre', 'coord_lat', 'coord_lon', 'Porcentaje', 'Cruce', 'Calles', 'Portal'])
+        writer.writerow(['id', 'Nombre', 'coord_lat', 'coord_lon', 'Nivel', 'Cruce', 'Calles', 'Portal'])
         
         # Escribir datos
         for obs in features:
             try:
-                pct_val = int(obs.get('Porcentaje', obs.get('porcentaje', 50)))
+                nivel_val = max(1, min(4, int(obs.get('Nivel', obs.get('nivel', 2)))))
             except (ValueError, TypeError):
-                pct_val = 50
+                nivel_val = 2
             
             # Validar que coord_lat y coord_lon existan
             coord_lat = obs.get('coord_lat')
@@ -2273,7 +2322,7 @@ def exportar_obstaculos_csv():
                 nombre,
                 coord_lat,
                 coord_lon,
-                pct_val,
+                nivel_val,
                 cruce,
                 calles,
                 portal
@@ -2298,7 +2347,7 @@ def exportar_obstaculos_csv():
 def importar_obstaculos_csv():
     """
     Recibe un archivo CSV con obstáculos y devuelve las features como JSON al frontend.
-    Formato esperado: id, Nombre, coord_lat, coord_lon, Porcentaje, Cruce, Calles, Portal
+    Formato esperado: id, Nombre, coord_lat, coord_lon, Nivel, Cruce, Calles, Portal
 
     Portal es solo el número de portal (ej. "12").
     La calle se toma de Calles, que debe contener un único elemento (sin ";").
@@ -2323,8 +2372,16 @@ def importar_obstaculos_csv():
 
         for fila_num, row in enumerate(reader, start=2):  # fila 1 = cabecera
             try:
-                porcentaje = int(row.get('Porcentaje', 50))
-                porcentaje = max(0, min(100, porcentaje))
+                if 'Nivel' in row and row['Nivel'].strip():
+                    try:   nivel = max(1, min(4, int(row['Nivel'].strip())))
+                    except: nivel = 2
+                elif 'Nivel' in row and row['Nivel'].strip():   # legacy
+                    try:
+                        pct_raw = max(0, min(100, int(row['Nivel'].strip())))
+                        nivel = max(1, min(4, round(pct_raw / 25))) if pct_raw > 0 else 1
+                    except: nivel = 2
+                else:
+                    nivel = 2
 
                 obs_id = row.get('id', '').strip()
                 if not obs_id:
@@ -2397,7 +2454,7 @@ def importar_obstaculos_csv():
                 features.append({
                     'lat':    coord_lat,
                     'lon':    coord_lon,
-                    'pct':    porcentaje,
+                    'nivel':  nivel_val,
                     'id':     obs_id,
                     'Nombre': nombre_obs,
                     'Cruce':  cruce,
@@ -2783,7 +2840,7 @@ def api_sesion_confirmar():
     return jsonify({'ok': True})
 
 
-# ==================== OBSTÁCULOS COMPARTIDOS ====================
+# ==================== SOCKETIO ====================
 
 def _obs_a_dict(obs):
     return {
@@ -2791,7 +2848,7 @@ def _obs_a_dict(obs):
         'obs_id':     obs.obs_id,
         'lat':        obs.lat,
         'lng':        obs.lng,
-        'porcentaje': obs.porcentaje,
+        'nivel':      obs.nivel_val,
         'portal':     obs.portal or '',
         'autor':      obs.autor,
     }
@@ -2805,8 +2862,6 @@ def api_obs_compartidos_get():
     return jsonify({'obstaculos': [_obs_a_dict(o) for o in todos]})
 
 
-# ==================== SOCKETIO ====================
-
 @socketio.on('connect')
 def ws_on_connect():
     print(f'[WS] Cliente conectado: {session.get("usuario", "anon")}')
@@ -2819,21 +2874,20 @@ def ws_on_disconnect():
 
 @socketio.on('obs_compartido_crear')
 def ws_obs_crear(data):
-    usuario = session.get('usuario')
     if not session.get('autenticado') or session.get('rol') == 'invitado':
         return
     obs = ObstaculoCompartido(
         obs_id     = data.get('obs_id') or None,
         lat        = float(data['lat']),
         lng        = float(data['lng']),
-        porcentaje = int(data.get('porcentaje', 50)),
+        nivel_val  = int(data.get('nivel', 2)),
         portal     = data.get('portal', ''),
-        autor      = usuario,
+        autor      = session.get('usuario'),
     )
     db.session.add(obs)
     db.session.commit()
     socketio.emit('obs_compartido_nuevo', _obs_a_dict(obs))
-    print(f'[WS] obs_compartido_crear: #{obs.id} por {usuario}')
+    print(f'[WS] obs_compartido_crear: #{obs.id} por {session.get("usuario")}')
 
 
 @socketio.on('obs_compartido_eliminar')
@@ -2859,13 +2913,630 @@ def ws_obs_mover(data):
         return
     if 'lat'        in data: obs.lat        = float(data['lat'])
     if 'lng'        in data: obs.lng        = float(data['lng'])
-    if 'porcentaje' in data: obs.porcentaje = int(data['porcentaje'])
+    if 'nivel'      in data: obs.nivel_val  = int(data['nivel'])
     if 'portal'     in data: obs.portal     = data['portal']
     obs.autor         = session.get('usuario')
     obs.modificado_en = datetime.utcnow()
     db.session.commit()
     socketio.emit('obs_compartido_actualizado', _obs_a_dict(obs))
     print(f'[WS] obs_compartido_mover: #{obs.id} por {session.get("usuario")}')
+
+
+# ==================== OGC WMS (Web Map Service) ====================
+#
+# Implementación mínima pero estándar OGC WMS 1.3.0.
+# Soporta:
+#   GetCapabilities → descripción XML de capas disponibles
+#   GetMap          → imagen PNG de la capa en el BBOX solicitado
+#   GetFeatureInfo  → atributos del feature bajo el pixel clicado
+#
+# Capas expuestas:
+#   vias       → Red viaria OSM (LineString)
+#   puntos     → Puntos de interés
+#   obstaculos → Obstáculos activos
+#
+# Uso desde QGIS: Capa → Añadir capa WMS/WMTS → URL: http://localhost:5000/wms
+
+import io as _io
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+    _MATPLOTLIB_OK = True
+except ImportError:
+    _MATPLOTLIB_OK = False
+
+# ── Colores por tipo de vía (misma paleta que symbology.js) ──────────────────
+_COLOR_VIA = {
+    'motorway': '#B66963', 'motorway_link': '#B66963',
+    'trunk': '#CE8B4F',    'trunk_link': '#CE8B4F',
+    'primary': '#CE8B4F',  'primary_link': '#CE8B4F',
+    'secondary': '#E7B92E','secondary_link': '#E7B92E',
+    'tertiary': '#BDB58B', 'tertiary_link': '#BDB58B',
+    'residential': '#C7C5BD', 'unclassified': '#C7C5BD',
+    'service': '#C7C5BD',  'living_street': '#C7C5BD',
+    'footway': '#45812B',  'pedestrian': '#45812B',
+    'cycleway': '#5B75A7', 'track': '#A8987C',
+    'path': '#A8987C',     'default': '#D6D6D6',
+}
+
+
+def _hex_to_rgb(h):
+    h = h.lstrip('#')
+    return tuple(int(h[i:i+2], 16) / 255 for i in (0, 2, 4))
+
+
+def _wms_capabilities_xml():
+    """Genera el XML de GetCapabilities para WMS 1.3.0."""
+    layers_xml = ''
+    capas = []
+    if vias_gdf is not None:
+        b = vias_gdf.total_bounds  # [minx, miny, maxx, maxy]
+        capas.append(('vias', 'Red de Vías OSM', b))
+    if PuntosDinteres_dic:
+        # bbox combinado de todos los puntos
+        all_pts = gpd.GeoDataFrame(
+            pd.concat(PuntosDinteres_dic.values(), ignore_index=True),
+            crs='EPSG:4258'
+        )
+        b = all_pts.total_bounds
+        capas.append(('puntos', 'Puntos de Interés', b))
+    if not capas:
+        # bbox por defecto (municipio de Puerto Lumbreras)
+        capas = [
+            ('vias', 'Red de Vías OSM', [-1.88, 37.53, -1.75, 37.60]),
+            ('puntos', 'Puntos de Interés', [-1.88, 37.53, -1.75, 37.60]),
+            ('obstaculos', 'Obstáculos activos', [-1.88, 37.53, -1.75, 37.60]),
+        ]
+
+    for name, title, b in capas:
+        layers_xml += f"""
+        <Layer queryable="1" opaque="0">
+          <Name>{name}</Name>
+          <Title>{title}</Title>
+          <CRS>EPSG:4258</CRS>
+          <CRS>CRS:84</CRS>
+          <EX_GeographicBoundingBox>
+            <westBoundLongitude>{b[0]:.6f}</westBoundLongitude>
+            <eastBoundLongitude>{b[2]:.6f}</eastBoundLongitude>
+            <southBoundLatitude>{b[1]:.6f}</southBoundLatitude>
+            <northBoundLatitude>{b[3]:.6f}</northBoundLatitude>
+          </EX_GeographicBoundingBox>
+          <BoundingBox CRS="EPSG:4258"
+            minx="{b[1]:.6f}" miny="{b[0]:.6f}"
+            maxx="{b[3]:.6f}" maxy="{b[2]:.6f}"/>
+        </Layer>"""
+
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<WMS_Capabilities version="1.3.0"
+  xmlns="http://www.opengis.net/wms"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.opengis.net/wms
+    http://schemas.opengis.net/wms/1.3.0/capabilities_1_3_0.xsd">
+  <Service>
+    <Name>WMS</Name>
+    <Title>GeoRuta WMS — Puerto Lumbreras</Title>
+    <Abstract>Servicio WMS del sistema GeoRuta. Expone la red viaria, puntos de interés y obstáculos sísmicos del municipio de Puerto Lumbreras (Murcia).</Abstract>
+    <OnlineResource xlink:href="/wms" xmlns:xlink="http://www.w3.org/1999/xlink"/>
+    <ContactInformation>
+      <ContactOrganization>GeoRuta — ETSIGCT</ContactOrganization>
+    </ContactInformation>
+    <Fees>none</Fees>
+    <AccessConstraints>none</AccessConstraints>
+  </Service>
+  <Capability>
+    <Request>
+      <GetCapabilities>
+        <Format>text/xml</Format>
+        <DCPType><HTTP><Get><OnlineResource xlink:href="/wms" xmlns:xlink="http://www.w3.org/1999/xlink"/></Get></HTTP></DCPType>
+      </GetCapabilities>
+      <GetMap>
+        <Format>image/png</Format>
+        <DCPType><HTTP><Get><OnlineResource xlink:href="/wms" xmlns:xlink="http://www.w3.org/1999/xlink"/></Get></HTTP></DCPType>
+      </GetMap>
+      <GetFeatureInfo>
+        <Format>text/plain</Format>
+        <Format>application/json</Format>
+        <DCPType><HTTP><Get><OnlineResource xlink:href="/wms" xmlns:xlink="http://www.w3.org/1999/xlink"/></Get></HTTP></DCPType>
+      </GetFeatureInfo>
+    </Request>
+    <Exception><Format>XML</Format></Exception>
+    <Layer>
+      <Title>GeoRuta — Capas disponibles</Title>
+      <CRS>EPSG:4258</CRS>
+      <CRS>CRS:84</CRS>
+      {layers_xml}
+    </Layer>
+  </Capability>
+</WMS_Capabilities>"""
+    return xml
+
+
+def _wms_get_map(layer_name, bbox, width, height, styles=''):
+    """
+    Renderiza la capa indicada en el BBOX solicitado y devuelve bytes PNG.
+    bbox = (miny, minx, maxy, maxx) en EPSG:4258 (lat/lon).
+    """
+    if not _MATPLOTLIB_OK:
+        raise RuntimeError('matplotlib no disponible')
+
+    miny, minx, maxy, maxx = bbox   # EPSG:4258: BBOX = miny,minx,maxy,maxx
+    fig, ax = plt.subplots(figsize=(width / 96, height / 96), dpi=96)
+    ax.set_facecolor('#f0f0f0')
+    ax.set_xlim(minx, maxx)
+    ax.set_ylim(miny, maxy)
+    ax.axis('off')
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+    if layer_name == 'vias' and vias_gdf is not None:
+        for _, row in vias_gdf.iterrows():
+            hw = str(row.get('highway', 'default') or 'default').lower()
+            color = _hex_to_rgb(_COLOR_VIA.get(hw, _COLOR_VIA['default']))
+            geom = row.geometry
+            lines = [geom] if geom.geom_type == 'LineString' else list(geom.geoms)
+            for line in lines:
+                xs, ys = zip(*line.coords)
+                ax.plot(xs, ys, color=color, linewidth=0.8, solid_capstyle='round')
+
+    elif layer_name == 'puntos' and PuntosDinteres_dic:
+        colores = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
+                   '#1abc9c', '#e67e22', '#34495e']
+        for i, (nombre, gdf) in enumerate(PuntosDinteres_dic.items()):
+            color = colores[i % len(colores)]
+            pts = gdf[gdf.geometry.intersects(
+                ShapelyPolygon([(minx,miny),(maxx,miny),(maxx,maxy),(minx,maxy)])
+            )]
+            if not pts.empty:
+                ax.scatter(pts.geometry.x, pts.geometry.y,
+                           c=color, s=10, zorder=5, linewidths=0)
+
+    elif layer_name == 'obstaculos':
+        # obstaculos es lista global de route-manager equivalente
+        # En el servidor Python no hay "obstaculos" de JS, solo los que
+        # el cliente envía → devolvemos capa vacía con mensaje
+        ax.text((minx+maxx)/2, (miny+maxy)/2,
+                'Sin obstáculos activos\n(gestión en cliente)',
+                ha='center', va='center', fontsize=8, color='#555')
+
+    buf = _io.BytesIO()
+    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0)
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
+
+
+def _wms_get_feature_info(layer_name, bbox, x, y, width, height):
+    """
+    Devuelve los atributos del feature más cercano al píxel (x,y).
+    bbox = (miny, minx, maxy, maxx).
+    """
+    miny, minx, maxy, maxx = bbox
+    # Convertir píxel → coordenada geográfica
+    lon = minx + (x / width)  * (maxx - minx)
+    lat = maxy - (y / height) * (maxy - miny)
+    punto = Point(lon, lat)
+    radio = max((maxx - minx) / width * 5, 0.0002)  # ~5 píxeles
+
+    resultados = []
+    if layer_name == 'vias' and vias_gdf is not None:
+        cerca = vias_gdf[vias_gdf.distance(punto) <= radio]
+        for _, row in cerca.head(3).iterrows():
+            props = {k: str(v) for k, v in row.items() if k != 'geometry'}
+            resultados.append(props)
+
+    elif layer_name == 'puntos' and PuntosDinteres_dic:
+        for nombre, gdf in PuntosDinteres_dic.items():
+            cerca = gdf[gdf.distance(punto) <= radio]
+            for _, row in cerca.head(2).iterrows():
+                props = {k: str(v) for k, v in row.items() if k != 'geometry'}
+                props['_capa'] = nombre
+                resultados.append(props)
+
+    return resultados
+
+
+@app.route('/wms')
+def wms_endpoint():
+    """
+    Endpoint OGC WMS 1.3.0.
+    Parámetros estándar: SERVICE, REQUEST, VERSION, LAYERS, BBOX, WIDTH, HEIGHT,
+                         CRS/SRS, FORMAT, QUERY_LAYERS, I, J.
+    """
+    service  = request.args.get('SERVICE', 'WMS').upper()
+    req_type = request.args.get('REQUEST', 'GetCapabilities').strip()
+
+    if service != 'WMS':
+        return Response(
+            '<ServiceExceptionReport><ServiceException>SERVICE debe ser WMS</ServiceException></ServiceExceptionReport>',
+            mimetype='application/xml', status=400)
+
+    # ── GetCapabilities ──────────────────────────────────────────────────────
+    if req_type == 'GetCapabilities':
+        return Response(_wms_capabilities_xml(), mimetype='text/xml; charset=utf-8')
+
+    # ── GetMap ───────────────────────────────────────────────────────────────
+    if req_type == 'GetMap':
+        if not _MATPLOTLIB_OK:
+            return Response(
+                '<ServiceExceptionReport><ServiceException>matplotlib no instalado</ServiceException></ServiceExceptionReport>',
+                mimetype='application/xml', status=500)
+        try:
+            layer  = request.args.get('LAYERS', 'vias').split(',')[0].strip().lower()
+            bbox_s = request.args.get('BBOX', '')
+            width  = int(request.args.get('WIDTH',  256))
+            height = int(request.args.get('HEIGHT', 256))
+            width  = min(max(width,  64), 2048)
+            height = min(max(height, 64), 2048)
+
+            if not bbox_s:
+                raise ValueError('BBOX requerido')
+            parts = [float(v) for v in bbox_s.split(',')]
+            if len(parts) != 4:
+                raise ValueError('BBOX debe tener 4 valores')
+
+            png = _wms_get_map(layer, parts, width, height)
+            return Response(png, mimetype='image/png')
+
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            xml_err = f'<ServiceExceptionReport><ServiceException>{e}</ServiceException></ServiceExceptionReport>'
+            return Response(xml_err, mimetype='application/xml', status=400)
+
+    # ── GetFeatureInfo ───────────────────────────────────────────────────────
+    if req_type == 'GetFeatureInfo':
+        try:
+            layer  = request.args.get('QUERY_LAYERS', request.args.get('LAYERS', 'vias')).split(',')[0].strip().lower()
+            bbox_s = request.args.get('BBOX', '')
+            width  = int(request.args.get('WIDTH',  256))
+            height = int(request.args.get('HEIGHT', 256))
+            i      = int(request.args.get('I', request.args.get('X', 0)))
+            j      = int(request.args.get('J', request.args.get('Y', 0)))
+            fmt    = request.args.get('INFO_FORMAT', 'application/json').lower()
+
+            parts = [float(v) for v in bbox_s.split(',')]
+            resultados = _wms_get_feature_info(layer, parts, i, j, width, height)
+
+            if 'json' in fmt:
+                return jsonify({'features': resultados, 'layer': layer})
+            else:
+                lines = [f'Layer: {layer}', f'Features: {len(resultados)}']
+                for r in resultados:
+                    lines.append('---')
+                    for k, v in r.items():
+                        lines.append(f'{k}: {v}')
+                return Response('\n'.join(lines), mimetype='text/plain; charset=utf-8')
+
+        except Exception as e:
+            return Response(str(e), mimetype='text/plain', status=400)
+
+    return Response(
+        f'<ServiceExceptionReport><ServiceException>REQUEST no soportado: {req_type}</ServiceException></ServiceExceptionReport>',
+        mimetype='application/xml', status=400)
+
+
+# ==================== OGC WFS (Web Feature Service) ====================
+#
+# Implementación estándar OGC WFS 2.0.0.
+# Soporta:
+#   GetCapabilities → descripción XML de feature types
+#   DescribeFeatureType → esquema de atributos de la capa
+#   GetFeature → features en GeoJSON (outputFormat=application/json)
+#                o GML 3.2 (outputFormat por defecto)
+#
+# Filtros soportados (parámetros URL):
+#   TYPENAME         → nombre de la capa (vias / puntos / obstaculos_sesion)
+#   COUNT / MAXFEATURES → límite de features
+#   BBOX             → filtro espacial (minx,miny,maxx,maxy,EPSG:4258)
+#   PROPERTYNAME     → lista de atributos a incluir
+#   outputFormat     → application/json | text/xml
+#
+# Uso desde QGIS: Capa → Añadir capa WFS → URL: http://localhost:5000/wfs
+
+
+def _wfs_capabilities_xml():
+    """Genera el XML de GetCapabilities para WFS 2.0.0."""
+    feature_types = ''
+    tipos = []
+    if vias_gdf is not None:
+        b = vias_gdf.total_bounds
+        tipos.append(('georuta:vias', 'Red de Vías OSM',
+                       f'{b[1]:.6f} {b[0]:.6f}', f'{b[3]:.6f} {b[2]:.6f}'))
+    if PuntosDinteres_dic:
+        all_pts = gpd.GeoDataFrame(
+            pd.concat(PuntosDinteres_dic.values(), ignore_index=True), crs='EPSG:4258')
+        b = all_pts.total_bounds
+        tipos.append(('georuta:puntos', 'Puntos de Interés',
+                       f'{b[1]:.6f} {b[0]:.6f}', f'{b[3]:.6f} {b[2]:.6f}'))
+    if portales_gdf is not None:
+        b = portales_gdf.total_bounds
+        tipos.append(('georuta:portales', 'Numeración Postal',
+                       f'{b[1]:.6f} {b[0]:.6f}', f'{b[3]:.6f} {b[2]:.6f}'))
+    if not tipos:
+        tipos = [('georuta:vias', 'Red de Vías OSM', '37.53 -1.88', '37.60 -1.75')]
+
+    for ft_name, ft_title, ll, ur in tipos:
+        feature_types += f"""
+    <FeatureType>
+      <Name>{ft_name}</Name>
+      <Title>{ft_title}</Title>
+      <DefaultCRS>urn:ogc:def:crs:EPSG::4258</DefaultCRS>
+      <OtherCRS>urn:ogc:def:crs:EPSG::4326</OtherCRS>
+      <ows:WGS84BoundingBox>
+        <ows:LowerCorner>{ll}</ows:LowerCorner>
+        <ows:UpperCorner>{ur}</ows:UpperCorner>
+      </ows:WGS84BoundingBox>
+      <OutputFormats>
+        <Format>application/json</Format>
+        <Format>text/xml; subtype=gml/3.2</Format>
+      </OutputFormats>
+    </FeatureType>"""
+
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<wfs:WFS_Capabilities version="2.0.0"
+  xmlns:wfs="http://www.opengis.net/wfs/2.0"
+  xmlns:ows="http://www.opengis.net/ows/1.1"
+  xmlns:ogc="http://www.opengis.net/ogc"
+  xmlns:gml="http://www.opengis.net/gml/3.2"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.opengis.net/wfs/2.0
+    http://schemas.opengis.net/wfs/2.0/wfs.xsd">
+  <ows:ServiceIdentification>
+    <ows:Title>GeoRuta WFS — Puerto Lumbreras</ows:Title>
+    <ows:Abstract>Servicio WFS del sistema GeoRuta. Expone la red viaria, puntos de interés y numeración postal del municipio de Puerto Lumbreras (Murcia).</ows:Abstract>
+    <ows:ServiceType>WFS</ows:ServiceType>
+    <ows:ServiceTypeVersion>2.0.0</ows:ServiceTypeVersion>
+    <ows:Fees>none</ows:Fees>
+    <ows:AccessConstraints>none</ows:AccessConstraints>
+  </ows:ServiceIdentification>
+  <ows:ServiceProvider>
+    <ows:ProviderName>GeoRuta — ETSIGCT</ows:ProviderName>
+  </ows:ServiceProvider>
+  <ows:OperationsMetadata>
+    <ows:Operation name="GetCapabilities">
+      <ows:DCP><ows:HTTP><ows:Get xlink:href="/wfs"/></ows:HTTP></ows:DCP>
+    </ows:Operation>
+    <ows:Operation name="DescribeFeatureType">
+      <ows:DCP><ows:HTTP><ows:Get xlink:href="/wfs"/></ows:HTTP></ows:DCP>
+    </ows:Operation>
+    <ows:Operation name="GetFeature">
+      <ows:DCP><ows:HTTP><ows:Get xlink:href="/wfs"/></ows:HTTP></ows:DCP>
+      <ows:Parameter name="outputFormat">
+        <ows:AllowedValues>
+          <ows:Value>application/json</ows:Value>
+          <ows:Value>text/xml; subtype=gml/3.2</ows:Value>
+        </ows:AllowedValues>
+      </ows:Parameter>
+    </ows:Operation>
+  </ows:OperationsMetadata>
+  <FeatureTypeList>
+    {feature_types}
+  </FeatureTypeList>
+</wfs:WFS_Capabilities>"""
+    return xml
+
+
+def _wfs_describe_feature_type(typename):
+    """Genera el esquema XSD de atributos para el FeatureType indicado."""
+    tn = typename.split(':')[-1].lower() if typename else 'vias'
+    gdf = None
+    geom_type = 'gml:LineStringPropertyType'
+    if tn == 'vias' and vias_gdf is not None:
+        gdf = vias_gdf
+        geom_type = 'gml:LineStringPropertyType'
+    elif tn == 'puntos' and PuntosDinteres_dic:
+        gdf = pd.concat(PuntosDinteres_dic.values(), ignore_index=True)
+        gdf = gpd.GeoDataFrame(gdf, crs='EPSG:4258')
+        geom_type = 'gml:PointPropertyType'
+    elif tn == 'portales' and portales_gdf is not None:
+        gdf = portales_gdf
+        geom_type = 'gml:PointPropertyType'
+
+    elements = f'<xs:element name="geometry" type="{geom_type}" minOccurs="0"/>\n'
+    if gdf is not None:
+        for col in gdf.columns:
+            if col == 'geometry': continue
+            dtype = str(gdf[col].dtype)
+            xs_type = 'xs:integer' if 'int' in dtype else \
+                      'xs:decimal' if 'float' in dtype else 'xs:string'
+            elements += f'        <xs:element name="{col}" type="{xs_type}" minOccurs="0" nillable="true"/>\n'
+
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  targetNamespace="http://georuta.local"
+  xmlns:georuta="http://georuta.local"
+  xmlns:gml="http://www.opengis.net/gml/3.2"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  elementFormDefault="qualified" version="1.0">
+  <xs:import namespace="http://www.opengis.net/gml/3.2"
+    schemaLocation="http://schemas.opengis.net/gml/3.2.1/gml.xsd"/>
+  <xs:element name="{tn}" type="georuta:{tn}Type" substitutionGroup="gml:AbstractFeature"/>
+  <xs:complexType name="{tn}Type">
+    <xs:complexContent>
+      <xs:extension base="gml:AbstractFeatureType">
+        <xs:sequence>
+        {elements}
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+</xs:schema>"""
+
+
+def _wfs_get_feature_geojson(typename, bbox_str=None, count=None, property_names=None):
+    """
+    Devuelve un FeatureCollection GeoJSON con los features de la capa indicada,
+    opcionalmente filtrados por BBOX y limitados por COUNT.
+    """
+    tn = typename.split(':')[-1].lower() if typename else 'vias'
+
+    if tn == 'vias':
+        gdf = vias_gdf
+    elif tn == 'puntos':
+        if not PuntosDinteres_dic:
+            gdf = None
+        else:
+            gdf = gpd.GeoDataFrame(
+                pd.concat(PuntosDinteres_dic.values(), ignore_index=True),
+                crs='EPSG:4258')
+    elif tn == 'portales':
+        gdf = portales_gdf
+    else:
+        gdf = None
+
+    if gdf is None:
+        return {'type': 'FeatureCollection', 'features': [],
+                'totalFeatures': 0, 'numberMatched': 0, 'numberReturned': 0}
+
+    gdf = gdf.copy()
+
+    # Filtro BBOX (minx,miny,maxx,maxy,CRS — CRS ignorado, asumimos 4258)
+    if bbox_str:
+        try:
+            parts = bbox_str.split(',')
+            minx, miny, maxx, maxy = float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3])
+            from shapely.geometry import box as shp_box
+            bbox_geom = shp_box(minx, miny, maxx, maxy)
+            gdf = gdf[gdf.intersects(bbox_geom)].copy()
+        except Exception:
+            pass
+
+    total = len(gdf)
+    if count:
+        try:
+            gdf = gdf.head(int(count))
+        except Exception:
+            pass
+
+    # Filtro de propiedades
+    if property_names:
+        cols = [p.strip() for p in property_names.split(',') if p.strip() in gdf.columns]
+        cols.append('geometry')
+        gdf = gdf[cols]
+
+    # Serializar
+    for col in gdf.columns:
+        if col != 'geometry':
+            try:
+                gdf[col] = gdf[col].astype(str)
+            except Exception:
+                pass
+
+    data = json.loads(gdf.to_json())
+    data['totalFeatures']  = total
+    data['numberMatched']  = total
+    data['numberReturned'] = len(gdf)
+    data['timeStamp']      = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    data['crs'] = {'type': 'name', 'properties': {'name': 'EPSG:4258'}}
+    return data
+
+
+def _wfs_get_feature_gml(typename, bbox_str=None, count=None):
+    """Genera una respuesta GML 3.2 mínima para el FeatureType."""
+    data = _wfs_get_feature_geojson(typename, bbox_str, count)
+    tn = typename.split(':')[-1].lower() if typename else 'vias'
+    members = ''
+    for feat in data.get('features', [])[:50]:  # max 50 en GML por rendimiento
+        props = feat.get('properties', {})
+        geom  = feat.get('geometry', {})
+        prop_xml = ''.join(
+            f'<georuta:{k}>{v}</georuta:{k}>'
+            for k, v in (props or {}).items()
+            if v and v != 'None'
+        )
+        # Geometría simplificada (solo punto/línea)
+        geom_xml = ''
+        if geom.get('type') == 'Point':
+            c = geom['coordinates']
+            geom_xml = f'<gml:Point srsName="EPSG:4258"><gml:pos>{c[1]} {c[0]}</gml:pos></gml:Point>'
+        elif geom.get('type') == 'LineString':
+            coords = ' '.join(f'{c[1]} {c[0]}' for c in geom['coordinates'])
+            geom_xml = f'<gml:LineString srsName="EPSG:4258"><gml:posList>{coords}</gml:posList></gml:LineString>'
+
+        members += f"""
+  <wfs:member>
+    <georuta:{tn} gml:id="{tn}.{feat.get('id','0')}">
+      {geom_xml}
+      {prop_xml}
+    </georuta:{tn}>
+  </wfs:member>"""
+
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<wfs:FeatureCollection
+  xmlns:wfs="http://www.opengis.net/wfs/2.0"
+  xmlns:gml="http://www.opengis.net/gml/3.2"
+  xmlns:georuta="http://georuta.local"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  numberMatched="{data['numberMatched']}"
+  numberReturned="{data['numberReturned']}"
+  timeStamp="{data.get('timeStamp','')}">
+  {members}
+</wfs:FeatureCollection>"""
+
+
+@app.route('/wfs')
+def wfs_endpoint():
+    """
+    Endpoint OGC WFS 2.0.0.
+    Parámetros: SERVICE, REQUEST, VERSION, TYPENAME/TYPENAMES,
+                BBOX, COUNT/MAXFEATURES, PROPERTYNAME, outputFormat.
+    """
+    service  = request.args.get('SERVICE', 'WFS').upper()
+    req_type = request.args.get('REQUEST', 'GetCapabilities').strip()
+
+    if service != 'WFS':
+        return Response(
+            '<ows:ExceptionReport><ows:Exception exceptionCode="InvalidParameterValue">'
+            '<ows:ExceptionText>SERVICE debe ser WFS</ows:ExceptionText>'
+            '</ows:Exception></ows:ExceptionReport>',
+            mimetype='application/xml', status=400)
+
+    # ── GetCapabilities ──────────────────────────────────────────────────────
+    if req_type == 'GetCapabilities':
+        return Response(_wfs_capabilities_xml(),
+                        mimetype='text/xml; charset=utf-8')
+
+    # ── DescribeFeatureType ──────────────────────────────────────────────────
+    if req_type == 'DescribeFeatureType':
+        typename = request.args.get('TYPENAME',
+                   request.args.get('TYPENAMES', 'georuta:vias'))
+        return Response(_wfs_describe_feature_type(typename),
+                        mimetype='text/xml; charset=utf-8')
+
+    # ── GetFeature ───────────────────────────────────────────────────────────
+    if req_type == 'GetFeature':
+        typename = request.args.get('TYPENAME',
+                   request.args.get('TYPENAMES', 'georuta:vias'))
+        bbox_str  = request.args.get('BBOX')
+        count     = request.args.get('COUNT',
+                    request.args.get('MAXFEATURES'))
+        prop_names = request.args.get('PROPERTYNAME')
+        out_fmt   = request.args.get('outputFormat',
+                    request.args.get('OUTPUTFORMAT', 'application/json')).lower()
+
+        try:
+            if 'json' in out_fmt:
+                data = _wfs_get_feature_geojson(typename, bbox_str, count, prop_names)
+                return Response(
+                    json.dumps(data, ensure_ascii=False),
+                    mimetype='application/json; charset=utf-8')
+            else:
+                gml = _wfs_get_feature_gml(typename, bbox_str, count)
+                return Response(gml,
+                    mimetype='text/xml; subtype=gml/3.2; charset=utf-8')
+
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            return Response(
+                f'<ows:ExceptionReport><ows:Exception><ows:ExceptionText>{e}</ows:ExceptionText></ows:Exception></ows:ExceptionReport>',
+                mimetype='application/xml', status=500)
+
+    return Response(
+        f'<ows:ExceptionReport><ows:Exception exceptionCode="OperationNotSupported">'
+        f'<ows:ExceptionText>REQUEST no soportado: {req_type}</ows:ExceptionText>'
+        f'</ows:Exception></ows:ExceptionReport>',
+        mimetype='application/xml', status=400)
 
 
 # ==================== ERRORES ====================

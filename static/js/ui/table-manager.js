@@ -920,11 +920,12 @@ function _obstaculosAGeoJSON() {
             geometry: { type: 'Point', coordinates: [obs.latlng.lng, obs.latlng.lat] },
             properties: {
                 id,
-                Nombre:           obs.obsId !== null ? obs.obsId : id,  // id como valor alternativo visual
-                _NombreEsExplicito: obs.obsId !== null,                  // indicador interno para la tabla
+                Nombre:           obs.obsId !== null ? obs.obsId : id,
+                _NombreEsExplicito: obs.obsId !== null,
                 coord_lat:        obs.latlng.lat,
                 coord_lon:        obs.latlng.lng,
-                Porcentaje:       Math.round((obs.obstruccion ?? 0.5) * 100),
+                Nivel:            _nivelObs(obs.obstruccion ?? 0.5),
+                NivelDesc:        (typeof NIVELES_OBS !== 'undefined' ? (NIVELES_OBS[_nivelObs(obs.obstruccion ?? 0.5)]?.desc || '') : ''),
                 Cruce:            esCruce ? 'Sí' : 'No',
                 Calles:           nombres.join(';') || '—',
                 Portal:           obs.portal || '',
@@ -936,7 +937,7 @@ function _obstaculosAGeoJSON() {
 }
 
 /** Columnas fijas de la tabla de obstáculos — mismo orden que el CSV de exportación */
-const _OBS_COLS = ['id', 'Nombre', 'coord_lat', 'coord_lon', 'Porcentaje', 'Cruce', 'Calles', 'Portal'];
+const _OBS_COLS = ['id', 'Nombre', 'coord_lat', 'coord_lon', 'Nivel', 'NivelDesc', 'Cruce', 'Calles', 'Portal'];
 
 function abrirTablaObstaculos() {
     const geo = _obstaculosAGeoJSON();

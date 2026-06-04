@@ -14,7 +14,6 @@ function cargarArchivo(tipo, input) {
     const file = input?.files?.[0];
     if (!file) return;
 
-    // Los POIs ya no se cargan con ZIP: se gestionan desde el módulo poi-manager
     if (tipo === 'puntos') {
         showNotification('Usa "Añadir POI" o "Importar" en el panel de capas', 'info');
         input.value = '';
@@ -28,9 +27,10 @@ function cargarArchivo(tipo, input) {
     const formData = new FormData();
     formData.append('file', file);
 
-    // El botón que disparó la carga es el siguiente hermano del <input type="file">
-    const btn = input.nextElementSibling;
-    if (btn) { btn.textContent = '⏳ Cargando...'; btn.disabled = true; }
+    const btnCargar   = document.getElementById('btn-cargar-vias');
+    const btnEliminar = document.getElementById('btn-eliminar-vias');
+    const btnConfig   = document.getElementById('btn-config-campos');
+    if (btnCargar) { btnCargar.textContent = '⏳ Cargando...'; btnCargar.disabled = true; }
 
     fetch(endpoint, { method: 'POST', body: formData })
         .then(r => {
@@ -40,7 +40,7 @@ function cargarArchivo(tipo, input) {
         .then(data => {
             if (data.error) {
                 showNotification('❌ ' + data.error, 'error');
-                if (btn) { btn.textContent = _labelCargar(tipo); btn.disabled = false; }
+                if (btnCargar) { btnCargar.textContent = '📂 Cargar Vías'; btnCargar.disabled = false; }
                 return;
             }
 
@@ -58,32 +58,27 @@ function cargarArchivo(tipo, input) {
                 const sn = document.getElementById('stat-nodos'); if (sn) sn.textContent = data.nodos_grafo ?? 0;
             }
 
-            // Cambiar botón a "Eliminar"
-            if (btn) {
-                btn.textContent = '❌ Eliminar';
-                btn.classList.add('danger');
-                btn.disabled = false;
-                btn.onclick = () => eliminarCapa(tipo, btn);
-            }
+            // Mostrar Eliminar, ocultar Cargar
+            if (btnCargar)   { btnCargar.textContent = '📂 Cargar Vías'; btnCargar.disabled = false; btnCargar.style.display = 'none'; }
+            if (btnEliminar) { btnEliminar.style.display = ''; }
 
             showNotification(data.mensaje || 'Capa cargada', 'success');
             cargarEnMapa(tipo);
 
-            // Hacer zoom a la capa recién cargada
             if (Array.isArray(data.bounds) && data.bounds.length === 4) {
                 map.fitBounds([[data.bounds[1], data.bounds[0]], [data.bounds[3], data.bounds[2]]]);
             }
         })
         .catch(err => {
             showNotification('Error al cargar: ' + err.message, 'error');
-            if (btn) { btn.textContent = _labelCargar(tipo); btn.disabled = false; }
+            if (btnCargar) { btnCargar.textContent = '📂 Cargar Vías'; btnCargar.disabled = false; }
             console.error('cargarArchivo error:', err);
         });
 }
 
 // ==================== ELIMINAR CAPA ====================
 
-function eliminarCapa(tipo, btn) {
+function eliminarCapa(tipo) {
     const labels    = { vias: 'Vías', puntos: 'Puntos de Interés' };
     const endpoints = { vias: '/api/eliminar-vias', puntos: '/api/eliminar-puntos-interes' };
 
@@ -91,31 +86,52 @@ function eliminarCapa(tipo, btn) {
 
     fetch(endpoints[tipo], { method: 'POST' })
         .then(r => r.json())
-        .then(() => {
+        .then(data => {
             if (tipo === 'vias') {
+                // Limpiar capa actual del mapa
                 if (viasLayer && map.hasLayer(viasLayer)) map.removeLayer(viasLayer);
                 viasLayer = null;
                 window.currentViasGeoJSON = null;
-                const ul  = document.getElementById('legend-list'); if (ul)  ul.innerHTML  = '';
-                const chk = document.getElementById('check-vias');  if (chk) chk.checked   = false;
-                const sv  = document.getElementById('stat-vias');   if (sv)  sv.textContent = '0';
-                const sn  = document.getElementById('stat-nodos');  if (sn)  sn.textContent = '0';
-                const fi  = document.getElementById('file-vias');   if (fi)  fi.value       = '';
-                _resetLayerItem('layer-vias', 'Sin cargar');
-                if (btn) { btn.textContent = '📂 Cargar Vías'; btn.classList.remove('danger'); btn.onclick = () => document.getElementById('file-vias').click(); }
+                window.camposRutaConfigurados = false;
+
+                const ul  = document.getElementById('legend-list');     if (ul)  ul.innerHTML  = '';
+                const chk = document.getElementById('check-vias');      if (chk) chk.checked   = false;
+                const fi  = document.getElementById('file-vias');       if (fi)  fi.value       = '';
+
+                const btnCargar   = document.getElementById('btn-cargar-vias');
+                const btnEliminar = document.getElementById('btn-eliminar-vias');
+                const btnConfig   = document.getElementById('btn-config-campos');
+                if (btnEliminar) btnEliminar.style.display = 'none';
+                if (btnConfig)   btnConfig.style.display   = 'none';
+
+                if (data.osm_restaurada) {
+                    // El servidor ya recargó la OSM — solo actualizar el mapa visual
+                    const sv = document.getElementById('stat-vias');  if (sv) sv.textContent = data.total_vias  ?? 0;
+                    const sn = document.getElementById('stat-nodos'); if (sn) sn.textContent = data.nodos_grafo ?? 0;
+                    _resetLayerItem('layer-vias', `${data.total_vias ?? 0} vías OSM`);
+                    if (btnCargar) btnCargar.style.display = 'none';   // sigue sin capa personalizada
+                    cargarEnMapa('vias');
+                    showNotification('Capa eliminada — vías OSM restauradas ✅', 'success');
+                } else {
+                    const sv = document.getElementById('stat-vias');  if (sv) sv.textContent = '0';
+                    const sn = document.getElementById('stat-nodos'); if (sn) sn.textContent = '0';
+                    _resetLayerItem('layer-vias', 'Sin cargar');
+                    if (btnCargar) { btnCargar.style.display = ''; btnCargar.textContent = '📂 Cargar Vías'; }
+                    showNotification('Capa eliminada. No hay vías OSM de respaldo.', 'warning');
+                }
+
             } else if (tipo === 'puntos') {
                 if (puntosInteresLayerGroup && map.hasLayer(puntosInteresLayerGroup)) map.removeLayer(puntosInteresLayerGroup);
                 puntosInteresLayerGroup = null;
                 window.currentPuntosGeoJSON = null;
                 const chk = document.getElementById('check-puntos'); if (chk) chk.checked   = false;
                 const sp  = document.getElementById('stat-puntos');  if (sp)  sp.textContent = '0';
-                // Descriptor: reflejar POIs manuales si los hay
                 const _nManuales = (typeof poisManuales !== 'undefined') ? poisManuales.filter(Boolean).length : 0;
                 _resetLayerItem('layer-puntos', _nManuales > 0 ? `${_nManuales} POI(s) manual(es)` : 'Sin añadir');
+                showNotification('Capa eliminada', 'info');
             }
 
             populateTableLayerSelect();
-            showNotification('Capa eliminada', 'info');
         })
         .catch(err => {
             showNotification('Error eliminando: ' + err.message, 'error');
@@ -176,6 +192,11 @@ function cargarEnMapa(tipo) {
                 populateAttributeDropdownVias(geojson);
                 populateTableLayerSelect();
                 const btnTablaVias = document.getElementById('btn-tabla-vias'); if (btnTablaVias) btnTablaVias.disabled = false;
+
+                // Autodetectar campos de ruta y mostrar Config. Campos
+                if (typeof autodetectarCamposRuta === 'function') autodetectarCamposRuta(geojson);
+                const btnConfig = document.getElementById('btn-config-campos');
+                if (btnConfig) btnConfig.style.display = '';
 
             } else if (tipo === 'puntos') {
                 if (puntosInteresLayerGroup) map.removeLayer(puntosInteresLayerGroup);

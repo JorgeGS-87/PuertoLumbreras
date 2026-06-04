@@ -43,6 +43,7 @@ function _aplicarPermisos(rol, usuario) {
     if (!esReg) _show('btn-tabla-obstaculos', false);
     _showG('obstaculos-admin-controls', esReg);
     _show('layer-eventos',           esAdmin);
+    _show('layer-compartida',        esReg);
     _showB('admin-eventos-controls', esAdmin);
     _show('msw-btn-evento',          esAdmin);
     _show('msw-btn-obstaculo',       true);

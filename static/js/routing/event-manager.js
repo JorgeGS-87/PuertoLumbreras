@@ -205,28 +205,32 @@ function _ocultarBotonCrearEventoMovil() {
 // ── Niveles de afluencia ──────────────────────────────────────────────────────
 
 /**
- * Tabla de 4 niveles de afluencia/impacto.
- * afluencia (0-1) se mapea a nivel 1-4 con _nivelAfluencia().
- * Los valores de porcentaje coinciden exactamente con los de los obstáculos:
- *   Nivel 1 → 25% → ×1.75   (impacto leve)
- *   Nivel 2 → 50% → ×2.5    (impacto moderado)
- *   Nivel 3 → 75% → ×3.25   (impacto alto)
- *   Nivel 4 → 100% → ×4.0   (impacto máximo)
+ * Tabla de 4 niveles de impacto para eventos.
+ * Usa la MISMA fórmula de penalización que los obstáculos:
+ *   factor = 1 / (1 - obstruccion * 0.99)
+ *   Nivel 1 → obstruccion=0.25 → factor ≈ ×1.33  (Leve)
+ *   Nivel 2 → obstruccion=0.50 → factor ≈ ×2.02  (Moderado)
+ *   Nivel 3 → obstruccion=0.75 → factor ≈ ×4.03  (Alto)
+ *   Nivel 4 → obstruccion=0.99 → factor ≈ ×100   (Máximo)
  */
 const NIVELES_EVENTO = {
-    1: { pct: 25,  color: '#2980b9', label: 'Nivel 1',  desc: 'Leve' },
-    2: { pct: 50,  color: '#f39c12', label: 'Nivel 2',  desc: 'Moderado' },
-    3: { pct: 75,  color: '#e67e22', label: 'Nivel 3',  desc: 'Alto' },
-    4: { pct: 100, color: '#e74c3c', label: 'Nivel 4',  desc: 'Máximo' },
+    1: { obstruccion: 0.25, color: '#2980b9', label: 'Nivel 1', desc: 'Leve' },
+    2: { obstruccion: 0.50, color: '#f39c12', label: 'Nivel 2', desc: 'Moderado' },
+    3: { obstruccion: 0.75, color: '#e67e22', label: 'Nivel 3', desc: 'Alto' },
+    4: { obstruccion: 0.99, color: '#e74c3c', label: 'Nivel 4', desc: 'Máximo' },
 };
 
 /**
  * Devuelve el nivel (1-4) dado un valor de afluencia (0-1).
- * Redondea al nivel más cercano por cuartos.
  */
 function _nivelAfluencia(afluencia) {
-    const nivel = Math.round(afluencia * 4);
-    return Math.max(1, Math.min(4, nivel || 1));
+    const ob = afluencia ?? 0.5;
+    let mejor = 1, mejorDist = Infinity;
+    for (const [n, cfg] of Object.entries(NIVELES_EVENTO)) {
+        const d = Math.abs(cfg.obstruccion - ob);
+        if (d < mejorDist) { mejorDist = d; mejor = parseInt(n); }
+    }
+    return mejor;
 }
 
 /**
@@ -483,7 +487,7 @@ function _seleccionarNivelEvento(nivel) {
     // Actualizar descripción
     const desc = document.getElementById('ev-nivel-desc');
     if (desc) {
-        desc.textContent  = `${info.label} — ${info.desc} (equiv. ${info.pct}% obstáculo · factor ×${(1 / (1 - info.pct/100 * 0.99)).toFixed(2)})`;
+        desc.textContent  = `${info.label} — ${info.desc}  (factor ×${(1/(1-info.obstruccion*0.99)).toFixed(1)})`;
         desc.style.color  = info.color;
     }
 }
@@ -543,7 +547,7 @@ function confirmarEvento() {
     const fechaStr  = document.getElementById('ev-fecha')?.value;
     const horaStr   = document.getElementById('ev-hora')?.value   || '00:00';
     const nivel     = parseInt(document.getElementById('ev-nivel-value')?.value ?? 2, 10);
-    const afluencia = (NIVELES_EVENTO[nivel]?.pct ?? 50) / 100;
+    const afluencia = NIVELES_EVENTO[nivel]?.obstruccion ?? 0.5;
     const duracion  = parseFloat(document.getElementById('ev-duracion')?.value ?? 2);
 
     // Helper: marca un campo en rojo, muestra notificación y hace foco
@@ -860,7 +864,7 @@ async function exportarEventos(options = {}) {
         nombre:       ev.nombre,
         fecha_inicio: ev.fechaInicio.toISOString(),
         fecha_fin:    ev.fechaFin.toISOString(),
-        afluencia:    _nivelAfluencia(ev.afluencia) * 25,  // nivel→pct: 1→25, 2→50, 3→75, 4→100
+        afluencia:    ev.afluencia,   // valor obstruccion 0-1 (mismo sistema que obstáculos)
         duracion:     ev.duracion,
     }));
 
@@ -1006,7 +1010,9 @@ function importarEventos(input) {
                     const fechaInicio = new Date(ev.fecha_inicio);
                     const fechaFin    = new Date(ev.fecha_fin);
                     const duracion    = (fechaFin - fechaInicio) / 3600000;
-                    const afluencia   = (ev.afluencia ?? 50) / 100;  // pct→0-1, _nivelAfluencia() lo discretiza al crear
+                    const afluencia   = (typeof ev.afluencia === 'number' && ev.afluencia <= 1)
+                        ? ev.afluencia
+                        : (ev.afluencia ?? 50) / 100;  // compatibilidad con archivos viejos
                     _crearEvento(vertices, ev.nombre, fechaInicio, afluencia, duracion);
                 } catch (e) {
                     console.warn('[event-manager] Error al importar evento:', e);
@@ -1059,7 +1065,7 @@ window.obtenerPenalizacionEventos = function (s, e, fechaEfectiva) {
 
         // Misma fórmula que el backend usa para obstáculos:
         // factor = 1 / (1 - afluencia * 0.99)
-        const factor = 1.0 / (1.0 - Math.min(ev.afluencia, 0.99) * 0.99);
+        const factor = 1.0 / (1.0 - Math.min(ev.afluencia, 0.99) * 0.99);  // ev.afluencia ES obstruccion (0-1)
         if (factor > factorMax) factorMax = factor;
         console.log(`[event-manager] Evento "${ev.nombre}" activo, factor ${factor} para segmento ${s}→${e}`);
     }

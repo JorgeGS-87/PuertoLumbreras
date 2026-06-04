@@ -186,6 +186,11 @@ function _htmlItem(r) {
     const tiempo = r.tiempo_min  != null ? `${Math.round(r.tiempo_min)} min` : '—';
     const dist   = r.distancia_km != null ? `${parseFloat(r.distancia_km).toFixed(1)} km` : '—';
     const icono  = _iconoVehiculo(r.vehiculo);
+    const estaVisible = window._historialRutaLayerId === r.id;
+    const btnLabel = estaVisible ? '🗺️ Ocultar ruta' : '🗺️ Ver en mapa';
+    const btnStyle = estaVisible
+        ? 'hist-repintar-btn hist-repintar-btn--activo'
+        : 'hist-repintar-btn';
 
     return `
         <div class="hist-item" data-id="${r.id}">
@@ -203,10 +208,11 @@ function _htmlItem(r) {
                 <span class="hist-stat">⏱ ${tiempo}</span>
                 <span class="hist-stat">📏 ${dist}</span>
             </div>
-            ${r.origen_coords && r.destino_coords ? `
-            <button class="hist-repintar-btn"
-                onclick="historialRepintar(${JSON.stringify(r).replace(/"/g, '&quot;')})"
-                title="Ver ruta en mapa">🗺️ Ver en mapa</button>` : ''}
+            ${(r.origen_coords && r.destino_coords) || r.geojson_ruta ? `
+            <button class="${btnStyle}"
+                onclick="historialToggleRuta(${r.id})"
+                id="hist-btn-${r.id}"
+                title="Ver/Ocultar ruta en mapa">${btnLabel}</button>` : ''}
         </div>
     `;
 }
@@ -294,10 +300,11 @@ function _renderizarPestana(seccion, rutas) {
                 <span class="hist-stat">⏱ ${r.tiempo_min != null ? Math.round(r.tiempo_min) + ' min' : '—'}</span>
                 <span class="hist-stat">📏 ${r.distancia_km != null ? parseFloat(r.distancia_km).toFixed(1) + ' km' : '—'}</span>
             </div>
-            ${r.origen_coords && r.destino_coords ? `
-            <button class="hist-repintar-btn"
-                onclick="historialRepintar(${JSON.stringify(r).replace(/"/g, '&quot;')})"
-                title="Ver ruta en mapa">🗺️ Ver en mapa</button>` : ''}
+            ${(r.origen_coords && r.destino_coords) || r.geojson_ruta ? `
+            <button class="hist-repintar-btn ${window._historialRutaLayerId === r.id ? 'hist-repintar-btn--activo' : ''}"
+                id="hist-btn-${r.id}"
+                onclick="historialToggleRuta(${r.id})"
+                title="Ver/Ocultar ruta en mapa">${window._historialRutaLayerId === r.id ? '🗺️ Ocultar ruta' : '🗺️ Ver en mapa'}</button>` : ''}
         </div>`).join('')}
     `;
 }
@@ -433,8 +440,55 @@ async function historialEliminarYRefrescar(id, desdePestana = false) {
  * Pinta en el mapa la geometría de una ruta del historial.
  * Guarda la referencia en window._historialRutaLayer para poder borrarla después.
  */
-function historialRepintar(ruta) {
-    // Eliminar capas previas del historial (ruta + borde emergencia)
+/**
+ * Alterna visibilidad de una ruta del historial en el mapa.
+ * Si ya está visible (mismo id), la oculta. Si no, la pinta.
+ */
+function historialToggleRuta(id) {
+    const estaVisible = window._historialRutaLayerId === id;
+    if (estaVisible) {
+        // Ocultar
+        historialLimpiarCapaMapa();
+        _refrescarBotonesHistorial();
+        showNotification('Ruta del historial ocultada', 'info');
+        return;
+    }
+    // Buscar la ruta en memoria
+    const ruta = _todasLasRutas.find(r => r.id === id);
+    if (ruta) {
+        historialRepintar(ruta, /* cerrarPanel= */ false);
+    } else {
+        // No tenemos la ruta en memoria → cargar del servidor
+        fetch('/api/historial')
+            .then(r => r.json())
+            .then(data => {
+                const r2 = (data.rutas || []).find(r => r.id === id);
+                if (r2) historialRepintar(r2, false);
+                else showNotification('Ruta no encontrada', 'warning');
+            })
+            .catch(() => showNotification('Error al cargar ruta', 'error'));
+    }
+}
+
+/** Refresca el texto de todos los botones Ver/Ocultar del panel flotante y la pestaña */
+function _refrescarBotonesHistorial() {
+    document.querySelectorAll('[id^="hist-btn-"]').forEach(btn => {
+        const btnId = parseInt(btn.id.replace('hist-btn-', ''), 10);
+        const activo = window._historialRutaLayerId === btnId;
+        btn.textContent = activo ? '🗺️ Ocultar ruta' : '🗺️ Ver en mapa';
+        btn.className   = activo
+            ? 'hist-repintar-btn hist-repintar-btn--activo'
+            : 'hist-repintar-btn';
+    });
+}
+
+/**
+ * Pinta la ruta en el mapa (motor interno).
+ * @param {Object}  ruta          - Objeto de ruta del historial
+ * @param {boolean} cerrarPanel   - Si true, cierra el panel flotante al pintar
+ */
+function historialRepintar(ruta, cerrarPanel = true) {
+    // Eliminar capas previas
     historialLimpiarCapaMapa();
 
     if (ruta.geojson_ruta) {
@@ -448,7 +502,6 @@ function historialRepintar(ruta) {
             const color        = esCamion ? '#2980b9' : '#85c9f7';
             const peso         = esCamion ? 7 : 5;
 
-            // Borde rojo si es emergencia
             if (esEmergencia) {
                 window._historialRutaBorde = L.geoJSON(geojson, {
                     style: { color: '#e74c3c', weight: peso + 4, opacity: 0.9 }
@@ -456,7 +509,7 @@ function historialRepintar(ruta) {
             }
 
             window._historialRutaLayer   = L.geoJSON(geojson, {
-                style: { color: esEmergencia ? color : color, weight: peso, opacity: 0.85 }
+                style: { color, weight: peso, opacity: 0.85 }
             }).addTo(map);
             window._historialRutaLayerId = ruta.id;
 
@@ -470,8 +523,8 @@ function historialRepintar(ruta) {
         map.fitBounds([[o[0], o[1]], [d[0], d[1]]], { padding: [60, 60] });
     }
 
-    // Cerrar el panel flotante si estaba abierto
-    if (_historialVisible) toggleHistorial();
+    _refrescarBotonesHistorial();
+    if (cerrarPanel && _historialVisible) toggleHistorial();
     showNotification('Ruta del historial cargada en el mapa', 'success');
 }
 
@@ -654,10 +707,13 @@ function historialRepintar(ruta) {
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
 }
-.hist-repintar-btn:hover {
-    background: #3b82f6;
-    color: #fff;
+.hist-repintar-btn--activo {
+    background: #85c9f7 !important;
+    color: #1a3a5c !important;
+    border-color: #3498db !important;
+    font-weight: 700 !important;
 }
+
 
 /* Botón "Ver más" en el panel flotante */
 .hist-ver-mas-btn {
