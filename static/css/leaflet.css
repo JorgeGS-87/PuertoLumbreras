@@ -37,7 +37,7 @@
 .leaflet-safari .leaflet-tile-container {
 	width: 1600px;
 	height: 1600px;
-	-webkit-transform-origin: 0 0;
+	transform-origin: 0 0;
 	}
 .leaflet-marker-icon,
 .leaflet-marker-shadow {
@@ -62,7 +62,7 @@
 
 .leaflet-container img.leaflet-tile {
 	/* See: https://bugs.chromium.org/p/chromium/issues/detail?id=600120 */
-	mix-blend-mode: normal;
+	mix-blend-mode: plus-lighter;
 }
 
 .leaflet-container.leaflet-touch-zoom {
@@ -101,7 +101,7 @@
 	}
 /* workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=888319 */
 .leaflet-overlay-pane svg {
-	-moz-user-select: none;
+	user-select: none;
 	}
 
 .leaflet-pane         { z-index: 400; }
@@ -546,7 +546,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 	}
 
 .leaflet-oldie .leaflet-popup-content-wrapper {
-	-ms-zoom: 1;
+	zoom: 1;
 	}
 .leaflet-oldie .leaflet-popup-tip {
 	width: 24px;

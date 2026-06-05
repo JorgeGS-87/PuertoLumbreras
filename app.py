@@ -17,6 +17,8 @@ import shutil
 from datetime import datetime, timedelta
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio   import SocketIO, emit as ws_emit
+import matplotlib
+import matplotlib.pyplot as plt
 
 # ── MongoDB (usuarios) ────────────────────────────────────────────────────────
 try:
@@ -2454,7 +2456,7 @@ def importar_obstaculos_csv():
                 features.append({
                     'lat':    coord_lat,
                     'lon':    coord_lon,
-                    'nivel':  nivel_val,
+                    'nivel':  nivel,
                     'id':     obs_id,
                     'Nombre': nombre_obs,
                     'Cruce':  cruce,
@@ -2943,10 +2945,7 @@ def ws_obs_mover(data):
 
 import io as _io
 try:
-    import matplotlib
     matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as mpatches
     _MATPLOTLIB_OK = True
 except ImportError:
     _MATPLOTLIB_OK = False
