@@ -2843,14 +2843,18 @@ def api_sesion_confirmar():
 # ==================== SOCKETIO ====================
 
 def _obs_a_dict(obs):
+    # Tabla nivel (1-4) → obstruccion (0-1), igual que NIVELES_OBS en route-manager.js
+    _NIVEL_A_OBS = {1: 0.25, 2: 0.50, 3: 0.75, 4: 0.99}
+    nivel = max(1, min(4, obs.nivel_val or 2))
     return {
-        'id':         obs.id,
-        'obs_id':     obs.obs_id,
-        'lat':        obs.lat,
-        'lng':        obs.lng,
-        'nivel':      obs.nivel_val,
-        'portal':     obs.portal or '',
-        'autor':      obs.autor,
+        'id':          obs.id,
+        'obs_id':      obs.obs_id,
+        'lat':         obs.lat,
+        'lng':         obs.lng,
+        'nivel':       nivel,
+        'obstruccion': _NIVEL_A_OBS[nivel],
+        'portal':      obs.portal or '',
+        'autor':       obs.autor,
     }
 
 

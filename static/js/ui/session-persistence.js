@@ -27,6 +27,9 @@
  */
 async function sesionGuardarObstaculos(silencioso = false) {
     if (!['registrado', 'admin'].includes(window._userRol)) return false;
+    // La capa compartida se gestiona por WS+BD → no guardar en sesión privada
+    if (window._capaCompartidaActiva) return false;
+
 
     // obstaculos está definido en route-manager.js como array global
     const lista = (typeof obstaculos !== 'undefined' ? obstaculos : []).filter(Boolean);
@@ -258,6 +261,9 @@ function _mostrarDialogoGuardarAlSalir(callback) {
  */
 function _guardarEmergencia() {
     if (!['registrado', 'admin'].includes(window._userRol)) return;
+    // La capa compartida se gestiona por WS+BD → no guardar en sesión privada
+    if (window._capaCompartidaActiva) return;
+
 
     const lista = (typeof obstaculos !== 'undefined' ? obstaculos : []).filter(Boolean);
     if (!lista.length) return;

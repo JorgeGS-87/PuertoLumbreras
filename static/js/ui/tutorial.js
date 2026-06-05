@@ -37,7 +37,6 @@
       'display:flex!important;align-items:center!important;gap:8px!important;margin:0!important;}',
       'html body .driver-popover-next-btn,html body .driver-popover-done-btn,',
       'html body .driver-popover-prev-btn,html body .driver-popover-close-btn{display:none!important;}',
-      'html body .driver-popover-footer:empty{display:none!important;}',
       /* Cursor */
       '#tut-cursor{position:fixed;width:22px;height:22px;background:rgba(52,152,219,0.90);',
       'border:2px solid #fff;border-radius:50%;pointer-events:none;z-index:999999;',
@@ -69,13 +68,10 @@
       'box-shadow:0 4px 14px rgba(41,128,185,0.55)!important;}',
       'html body #leftsideTabs #btn-tutorial{margin-top:0!important;margin-bottom:20px!important;}',
       /* Botón Saltar */
-      'html body #tut-skip-btn{display:block!important;width:100%!important;',
-      'background:transparent!important;border:1px solid rgba(94,160,200,0.35)!important;',
-      'border-radius:5px!important;color:rgba(168,216,240,0.85)!important;',
-      'font-size:12px!important;padding:7px 12px!important;cursor:pointer!important;',
-      'text-align:center!important;letter-spacing:0.2px!important;}',
-      'html body #tut-skip-btn:hover{color:#e8f4fd!important;',
-      'border-color:rgba(94,160,200,0.75)!important;background:rgba(52,152,219,0.10)!important;}'
+      'html body #tut-skip-btn{margin-right:auto!important;order:-1!important;',
+      'background:transparent!important;border:1px solid rgba(94,160,200,0.40)!important;',
+      'border-radius:5px!important;color:rgba(168,216,240,0.80)!important;',
+      'font-size:11px!important;padding:5px 10px!important;cursor:pointer!important;}'
     ].join('');
     document.head.appendChild(s);
   }
@@ -90,7 +86,7 @@
     cur.id = 'tut-cursor';
     document.body.appendChild(cur);
   }
-  function showCur(x, y) { if (!_cur) initCur(); cur.style.display = 'block'; cur.style.left = x + 'px'; cur.style.top = y + 'px'; }
+  function showCur(x, y) { if (!cur) initCur(); cur.style.display = 'block'; cur.style.left = x + 'px'; cur.style.top = y + 'px'; }
   function hideCur() { if (cur) cur.style.display = 'none'; }
 
   /** Mueve el cursor animado hasta (x,y). Resuelve después de la transición CSS. */
@@ -177,50 +173,30 @@
    * Usamos una transición CSS en clip-path para animar el spotlight.
    * ─────────────────────────────────────────────────────────────── */
 
-  var spotEl = null;   // el div de spotlight
+  var spotEl = null;   // el div de spotlight (técnica box-shadow)
 
+  /**
+   * Técnica spotlight con box-shadow:
+   * Un div posicionado exactamente sobre el elemento con un box-shadow
+   * de radio enorme (~9999px) en rgba(0,0,0,0.62) crea el efecto de
+   * "agujero" iluminado sobre un fondo oscuro. Funciona en todos los
+   * navegadores sin clip-path.
+   */
   function ensureSpot() {
     if (spotEl) return spotEl;
     spotEl = document.createElement('div');
     spotEl.id = 'tut-spotlight';
     Object.assign(spotEl.style, {
-      position:       'fixed',
-      inset:          '0',
-      pointerEvents:  'none',
-      zIndex:         '99997',          // justo debajo del popover Driver (99998+)
-      background:     'rgba(0,0,0,0)',  // transparente por defecto
-      transition:     'background 0.5s ease',
+      position:      'fixed',
+      pointerEvents: 'none',
+      zIndex:        '99997',
+      borderRadius:  '8px',
+      boxShadow:     '0 0 0 0 rgba(0,0,0,0)',
+      transition:    'box-shadow 0.55s ease, top 0.55s ease, left 0.55s ease, width 0.55s ease, height 0.55s ease',
+      display:       'none',
     });
     document.body.appendChild(spotEl);
     return spotEl;
-  }
-
-  /**
-   * Genera el valor de clip-path para recortar un rectángulo redondeado
-   * definido por {left,top,width,height} con radio `r`.
-   * El path cubre TODO menos ese rectángulo (regla even-odd con borde pantalla).
-   */
-  function spotPath(rect, r, pad) {
-    pad = pad || 18;   // padding alrededor del elemento
-    r   = r   || 16;
-    var W = window.innerWidth, H = window.innerHeight;
-    var x = rect.left - pad, y = rect.top - pad;
-    var w = rect.width + pad * 2, h = rect.height + pad * 2;
-    // Clampar al viewport
-    x = Math.max(0, x); y = Math.max(0, y);
-    if (x + w > W) w = W - x;
-    if (y + h > H) h = H - y;
-    var x2 = x + w, y2 = y + h;
-    // Outer rectangle (pantalla completa) + inner rectangle redondeado (agujero)
-    // SVG path even-odd: primero el exterior, luego el interior
-    return 'path(evenodd, "' +
-      'M 0 0 L ' + W + ' 0 L ' + W + ' ' + H + ' L 0 ' + H + ' Z ' +
-      'M ' + (x+r) + ' ' + y + ' ' +
-      'L ' + (x2-r) + ' ' + y + ' Q ' + x2 + ' ' + y + ' ' + x2 + ' ' + (y+r) + ' ' +
-      'L ' + x2 + ' ' + (y2-r) + ' Q ' + x2 + ' ' + y2 + ' ' + (x2-r) + ' ' + y2 + ' ' +
-      'L ' + (x+r) + ' ' + y2 + ' Q ' + x + ' ' + y2 + ' ' + x + ' ' + (y2-r) + ' ' +
-      'L ' + x + ' ' + (y+r) + ' Q ' + x + ' ' + y + ' ' + (x+r) + ' ' + y + ' Z' +
-      '")';
   }
 
   /**
@@ -230,7 +206,8 @@
    * durMs = duración de la animación de entrada.
    */
   function quitarOverlay(elOrRect, durMs) {
-    durMs = durMs || 650;
+    durMs = durMs || 550;
+    var pad = 14, r = 8;
 
     // Obtener rect
     var rect;
@@ -239,41 +216,39 @@
     } else if (elOrRect && typeof elOrRect.left === 'number') {
       rect = elOrRect;
     } else {
-      // Fallback: usar el elemento #map completo
       var mapEl = document.getElementById('map');
       rect = mapEl ? mapEl.getBoundingClientRect()
                    : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
     }
 
-    // Ocultar overlay Driver.js (para que no compita)
+    // Ocultar overlay de Driver.js para que no compita visualmente
     var ov = document.getElementById('driver-overlay') ||
              document.querySelector('.driver-overlay') ||
              document.querySelector('[class*="driver-overlay"]');
     if (ov) {
-      ov.dataset.tutOvBak = ov.style.opacity || '';
-      ov.style.transition = 'opacity ' + (durMs/1000).toFixed(2) + 's ease';
-      ov.style.opacity    = '0';
+      ov.dataset.tutOvBak    = ov.style.opacity || '';
+      ov.style.transition    = 'opacity ' + (durMs/1000).toFixed(2) + 's ease';
+      ov.style.opacity       = '0';
       ov.style.pointerEvents = 'none';
     }
 
-    // Crear/actualizar spotlight
+    // Posicionar el div spotlight sobre el elemento
     var sp = ensureSpot();
-    // Estado inicial: sin oscurecimiento, sin agujero
-    sp.style.transition  = 'none';
-    sp.style.background  = 'rgba(0,0,0,0)';
-    sp.style.clipPath    = '';
-    sp.style.webkitClipPath = '';
+    var dur = (durMs/1000).toFixed(2) + 's';
+    sp.style.transition = 'none';
+    sp.style.display    = 'block';
+    sp.style.top        = (rect.top  - pad) + 'px';
+    sp.style.left       = (rect.left - pad) + 'px';
+    sp.style.width      = (rect.width  + pad * 2) + 'px';
+    sp.style.height     = (rect.height + pad * 2) + 'px';
+    sp.style.borderRadius = r + 'px';
+    sp.style.boxShadow  = '0 0 0 0 rgba(0,0,0,0)';
 
-    // Forzar reflow para que la transición arrange desde el estado inicial
-    void sp.offsetWidth;
+    void sp.offsetWidth; // reflow
 
-    sp.style.transition     = 'background ' + (durMs/1000).toFixed(2) + 's ease, ' +
-                              '-webkit-clip-path ' + (durMs/1000).toFixed(2) + 's ease, ' +
-                              'clip-path ' + (durMs/1000).toFixed(2) + 's ease';
-    sp.style.background     = 'rgba(0,0,0,0.62)';
-    var path = spotPath(rect, 16, 20);
-    sp.style.clipPath        = path;
-    sp.style.webkitClipPath  = path;
+    sp.style.transition = 'box-shadow ' + dur + ' ease';
+    // El box-shadow enorme crea el oscurecimiento alrededor; el div en sí es transparente
+    sp.style.boxShadow  = '0 0 0 9999px rgba(0,0,0,0.62)';
 
     return wait(durMs);
   }
@@ -282,40 +257,48 @@
    * Cierra el spotlight con fade-out suave y restaura el overlay de Driver.js.
    */
   function restaurarOverlay(durMs) {
-    durMs = durMs || 500;
+    durMs = durMs || 450;
+    var dur = (durMs/1000).toFixed(2) + 's';
 
     var sp = spotEl;
     if (sp) {
-      sp.style.transition    = 'background ' + (durMs/1000).toFixed(2) + 's ease, ' +
-                               '-webkit-clip-path ' + (durMs/1000).toFixed(2) + 's ease, ' +
-                               'clip-path ' + (durMs/1000).toFixed(2) + 's ease';
-      sp.style.background    = 'rgba(0,0,0,0)';
-      sp.style.clipPath       = '';
-      sp.style.webkitClipPath = '';
+      sp.style.transition = 'box-shadow ' + dur + ' ease';
+      sp.style.boxShadow  = '0 0 0 0 rgba(0,0,0,0)';
     }
 
     var ov = document.getElementById('driver-overlay') ||
              document.querySelector('.driver-overlay') ||
              document.querySelector('[class*="driver-overlay"]');
     if (ov) {
-      ov.style.transition    = 'opacity ' + (durMs/1000).toFixed(2) + 's ease';
+      ov.style.transition    = 'opacity ' + dur + ' ease';
       ov.style.opacity       = ov.dataset.tutOvBak || '';
       ov.style.pointerEvents = '';
     }
 
     return wait(durMs).then(function() {
-      if (sp) { sp.style.transition = 'none'; }
+      if (sp) { sp.style.display = 'none'; sp.style.transition = 'none'; }
       if (ov) { ov.style.transition = ''; }
     });
   }
 
   function skipBtn(destroyFn) {
-    requestAnimationFrame(function() {
+    // El popover puede no estar en el DOM al dispararse onHighlightStarted;
+    // reintenta cada 50 ms hasta un máximo de 20 veces (~1 s)
+    var intentos = 0;
+    function intentar() {
       if (document.getElementById('tut-skip-btn')) return;
-      var f = document.querySelector('.driver-popover-footer'); if (!f) return;
-      var b = document.createElement('button'); b.id = 'tut-skip-btn'; b.textContent = '✕  Saltar tutorial';
-      b.addEventListener('click', destroyFn); f.insertBefore(b, f.firstChild);
-    });
+      var f = document.querySelector('.driver-popover-footer');
+      if (!f) {
+        if (intentos++ < 20) setTimeout(intentar, 50);
+        return;
+      }
+      var b = document.createElement('button');
+      b.id = 'tut-skip-btn';
+      b.textContent = '✕  Salir del tutorial';
+      b.addEventListener('click', destroyFn);
+      f.appendChild(b);
+    }
+    setTimeout(intentar, 30);
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -412,7 +395,7 @@
         var res = document.getElementById('msw-resultados');
         return quitarOverlay(res, 600);
       })
-      .then(function() { return wait(2500); })
+      .then(function() { return wait(1000); })
       .then(function() { return restaurarOverlay(400); })
       .then(function() { return wait(200); })
       // Añadir el número SIN borrar lo que hay
@@ -427,7 +410,7 @@
         var item = res && (res.querySelector('li') || res.querySelector('.msw-resultado') || res.querySelector('div'));
         return quitarOverlay(item || res, 500);
       })
-      .then(function() { return wait(1800); })
+      .then(function() { return wait(1000); })
       .then(function() { return restaurarOverlay(400); })
       .then(function() { return wait(200); })
       .then(function() { return selPrimero(); });
@@ -564,7 +547,7 @@
       return animarSlider();
     }).then(function() {
       // Pausa para que el usuario vea el valor final del slider
-      return wait(1400);
+      return wait(1000);
     }).then(function() {
       // Restaurar overlay y mover cursor al botón Colocar
       return restaurarOverlay(400);
@@ -643,7 +626,7 @@
       {
         popover: { title: '🗺️ Bienvenido a GeoRuta', side: 'over', align: 'center',
           description: 'Este tutorial funciona <strong>automáticamente</strong>, como un vídeo.<br><br>Observa cómo el sistema realiza todas las acciones por ti. Puedes saltarlo en cualquier momento con el botón inferior.' },
-        accion: solo(5000),
+        accion: solo(3500),
       },
 
       /* 1 — Cabecera */
@@ -651,7 +634,7 @@
         element: '.header',
         popover: { title: '📡 Cabecera', side: 'bottom', align: 'start',
           description: 'Aquí verás el nombre de la app y el <strong>indicador de estado del servidor</strong>. Un punto verde indica que Flask está operativo.' },
-        accion: senalar('.header', 5000),
+        accion: senalar('.header', 3500),
       },
 
       /* 2 — Badge usuario */
@@ -659,7 +642,7 @@
         element: '#user-badge',
         popover: { title: '👤 Perfil de usuario', side: 'bottom', align: 'end',
           description: 'Haz clic para identificarte. Tres roles:<br>• <strong>Invitado</strong> — routing básico<br>• <strong>Registrado</strong> — importar/exportar<br>• <strong>Admin</strong> — acceso total' },
-        accion: senalar('user-badge', 5000),
+        accion: senalar('user-badge', 3500),
       },
 
       /* 3 — Abrir panel de capas */
@@ -669,7 +652,7 @@
           description: 'La barra de iconos izquierda da acceso al panel lateral. El tutorial lo abrirá ahora en la pestaña <strong>Capas</strong>.' },
         accion: function(next) {
           badge('Abriendo panel de capas…');
-          abrirPanelCapas().then(function() { badge(''); wait(1500).then(next); });
+          abrirPanelCapas().then(function() { badge(''); wait(1200).then(next); });
         },
       },
 
@@ -678,7 +661,7 @@
         element: '#layer-vias',
         popover: { title: '🛣️ Red viaria', side: 'right', align: 'start',
           description: 'La capa de vías OSM es el <strong>grafo dirigido</strong> base para Dijkstra. Actívala o desactívala con el checkbox.' },
-        accion: senalar('layer-vias', 5000),
+        accion: senalar('layer-vias', 3500),
       },
 
       /* 5 — Widget buscador */
@@ -689,7 +672,7 @@
         accion: function(next) {
           var w = document.getElementById('map-search-widget');
           if (w && w.style.display === 'none') w.style.display = '';
-          senalar('map-search-widget', 4500)(next);
+          senalar('map-search-widget', 3000)(next);
         },
       },
 
@@ -707,7 +690,7 @@
               var item = res && (res.querySelector('li') || res.querySelector('.msw-resultado') || res.querySelector('div'));
               return quitarOverlay(item || res, 600);
             })
-            .then(function() { return wait(2500); })
+            .then(function() { return wait(1000); })
             .then(function() { return restaurarOverlay(400); })
             .then(function() { return wait(200); })
             .then(function() { badge('Seleccionando resultado…'); return selPrimero(); })
@@ -735,7 +718,7 @@
                 return quitarOverlay(popup || document.getElementById('map'), 600);
               });
             })
-            .then(function() { return wait(2800); })
+            .then(function() { return wait(2000); })
             .then(function() { return restaurarOverlay(500); })
             .then(function() { return wait(300); })
             .then(next);
@@ -749,7 +732,7 @@
           description: 'Abre el panel de routing. El tutorial lo pulsará ahora.' },
         accion: function(next) {
           badge('Abriendo panel de routing…');
-          abrirMswPanel().then(function() { badge(''); wait(1500).then(next); });
+          abrirMswPanel().then(function() { badge(''); wait(1200).then(next); });
         },
       },
 
@@ -761,7 +744,7 @@
         accion: function(next) {
           var btn = document.getElementById('msw-btn-coche');
           (btn ? click(btn).then(function() { btn.click(); }) : Promise.resolve())
-            .then(function() { return wait(4000); }).then(next);
+            .then(function() { return wait(3000); }).then(next);
         },
       },
 
@@ -780,7 +763,7 @@
             // Spotlight sobre el marcador de origen en el mapa
             var r = rectMarker(C.origen.lat, C.origen.lng, 100);
             return quitarOverlay(r || document.getElementById('map'), 650);
-          }).then(function() { return wait(2800); })
+          }).then(function() { return wait(2000); })
           .then(function() { return restaurarOverlay(500); })
           .then(function() { return wait(300); })
           .then(next);
@@ -802,7 +785,7 @@
             // Spotlight sobre el marcador de destino en el mapa
             var r = rectMarker(C.destino.lat, C.destino.lng, 100);
             return quitarOverlay(r || document.getElementById('map'), 650);
-          }).then(function() { return wait(2800); })
+          }).then(function() { return wait(2000); })
           .then(function() { return restaurarOverlay(500); })
           .then(function() { return wait(300); })
           .then(next);
@@ -820,7 +803,7 @@
             badge('');
             // La ruta llena el mapa — spotlight al mapa completo
             return quitarOverlay(document.getElementById('map'), 650);
-          }).then(function() { return wait(4500); })
+          }).then(function() { return wait(3000); })
           .then(function() { return restaurarOverlay(500); })
           .then(function() { return wait(300); })
           .then(next);
@@ -832,7 +815,7 @@
         element: '#msw-resultados-ruta',
         popover: { title: '📊 Resultados', side: 'left', align: 'start',
           description: 'Aquí aparecen: <strong>distancia</strong> (km), <strong>tiempo estimado</strong>, <strong>velocidad media</strong> y <strong>tipo de vía dominante</strong>.' },
-        accion: senalar('msw-resultados-ruta', 6000),
+        accion: senalar('msw-resultados-ruta', 3000),
       },
 
       /* 14 — Activar modo obstáculos */
@@ -855,15 +838,15 @@
       {
         element: '#map',
         popover: { title: '🖱️ Creando obstáculo en el mapa', side: 'over', align: 'center',
-          description: 'El tutorial centra el mapa en una vía, hace clic, ajusta la obstrucción al <strong>65 %</strong> y pulsa <strong>Colocar</strong>.' },
+          description: 'El tutorial centra el mapa en una vía, hace clic, ajusta el nivel de obstrucción a <strong>nivel medio-alto</strong> y pulsa <strong>Colocar</strong>.' },
         accion: function(next) {
-          badge('Creando obstáculo al 65 %…');
+          badge('Creando obstáculo — nivel medio-alto…');
           crearObstaculo(C.obs1.lat, C.obs1.lng, 65).then(function() {
             badge('');
             // Spotlight sobre el marcador del obstáculo en el mapa
             var r = rectMarker(C.obs1.lat, C.obs1.lng, 110);
             return quitarOverlay(r || document.getElementById('map'), 650);
-          }).then(function() { return wait(2800); })
+          }).then(function() { return wait(2000); })
           .then(function() { return restaurarOverlay(500); })
           .then(function() { return wait(300); })
           .then(next);
@@ -874,17 +857,17 @@
       {
         element: '#obstaculos-panel-flotante',
         popover: { title: '📋 Panel de obstáculos activos', side: 'left', align: 'start',
-          description: 'Cada obstáculo aparece aquí con su <strong>ID</strong>, <strong>porcentaje</strong> y <strong>vía afectada</strong>. Elimina con ✕.' },
-        accion: senalar('obstaculos-panel-flotante', 5500),
+          description: 'Cada obstáculo aparece aquí con su <strong>ID</strong>, <strong>nivel de obstrucción</strong> y <strong>vía afectada</strong>. Elimina con ✕.' },
+        accion: senalar('obstaculos-panel-flotante', 3500),
       },
 
       /* 17 — Crear y eliminar obstáculo 2 */
       {
         element: '#obstaculos-panel-flotante',
         popover: { title: '🗑️ Crear y eliminar obstáculo', side: 'left', align: 'start',
-          description: 'El tutorial crea un segundo obstáculo (30 %) y luego lo elimina con el botón <strong>✕</strong> del panel.' },
+          description: 'El tutorial crea un segundo obstáculo con <strong>nivel bajo</strong> de obstrucción y luego lo elimina con el botón <strong>✕</strong> del panel.' },
         accion: function(next) {
-          badge('Creando segundo obstáculo al 30 %…');
+          badge('Creando obstáculo — nivel bajo…');
           crearObstaculo(C.obs2.lat, C.obs2.lng, 30).then(function() {
             badge('Eliminando obstáculo con ✕…');
             return wait(800);
@@ -904,7 +887,7 @@
       /* 18 — Editar obstáculo (informativo) */
       {
         popover: { title: '🔄 Editar un obstáculo', side: 'over', align: 'center',
-          description: 'Haz clic en el marcador 🚧 del mapa para abrir su popup:<br>• <strong>📍 Mover</strong> — el siguiente clic lo reubica<br>• <strong>Slider</strong> — cambia el porcentaje al cerrar' },
+          description: 'Haz clic en el marcador 🚧 del mapa para abrir su popup:<br>• <strong>📍 Mover</strong> — el siguiente clic lo reubica<br>• <strong>Slider</strong> — cambia el nivel de obstrucción al cerrar' },
         accion: function(next) {
           try {
             var mapa = window.map || window.myMap;
@@ -927,7 +910,7 @@
           description: 'El tutorial eliminará todos los obstáculos activos de una sola vez.' },
         accion: function(next) {
           badge('Limpiando todos los obstáculos…');
-          limpiarObstaculos().then(function() { badge(''); wait(1500).then(next); });
+          limpiarObstaculos().then(function() { badge(''); wait(1200).then(next); });
         },
       },
 
@@ -938,7 +921,7 @@
           description: 'El tutorial abrirá el panel de capas para mostrar las opciones de importación y exportación de obstáculos.' },
         accion: function(next) {
           badge('Abriendo panel de capas…');
-          abrirPanelCapas().then(function() { badge(''); wait(1500).then(next); });
+          abrirPanelCapas().then(function() { badge(''); wait(1200).then(next); });
         },
       },
 
@@ -947,7 +930,7 @@
         element: '#layer-obstaculos',
         popover: { title: '🚧 Sección obstáculos', side: 'right', align: 'start',
           description: 'Cuántos obstáculos hay activos y las opciones de <strong>importación / exportación</strong>. Solo para <strong>Registrado</strong> y <strong>Admin</strong>.' },
-        accion: senalar('layer-obstaculos', 5500),
+        accion: senalar('layer-obstaculos', 3500),
       },
 
       /* 22 — Exportar */
@@ -973,7 +956,7 @@
           description: 'El tutorial abrirá la simulación de tráfico configurada para <strong>viernes a las 8:30 h</strong> — hora punta escolar y de oficinas.' },
         accion: function(next) {
           badge('Abriendo Modo Momento — viernes 8:30 h…');
-          activarMomento(5, 8.5).then(function() { badge(''); wait(1500).then(next); });
+          activarMomento(5, 8.5).then(function() { badge(''); wait(1200).then(next); });
         },
       },
 
@@ -982,7 +965,7 @@
         element: '#momento-section',
         popover: { title: '📅 Simulación temporal', side: 'right', align: 'start',
           description: 'Franjas críticas:<br>• <strong>Colegios</strong> L–V 8–9 h, 13:30–14:30 h, 17–18 h<br>• <strong>Oficinas</strong> L–V 8–9 h, 14–15 h, 18–19:30 h<br>• <strong>Ocio</strong> V–S–D 20–24 h, 12–15 h' },
-        accion: senalar('momento-section', 6000),
+        accion: senalar('momento-section', 3000),
       },
 
       /* 26 — Opciones de salida */
@@ -1002,7 +985,7 @@
       {
         popover: { title: '✅ ¡GeoRuta listo!', side: 'over', align: 'center',
           description: 'Has visto todas las funciones principales:<br><br>• <strong>Buscar</strong> direcciones y portales<br>• <strong>Calcular rutas</strong> con Dijkstra<br>• <strong>Obstáculos</strong> sísmicos<br>• <strong>Import/export</strong> GIS<br>• <strong>Simulación</strong> de tráfico temporal<br><br>Relanza el tutorial con el botón <strong>?</strong> en la barra lateral.' },
-        accion: function(next) { hideCur(); wait(6000).then(next); },
+        accion: function(next) { hideCur(); wait(4000).then(next); },
       },
 
     ];
@@ -1038,8 +1021,8 @@
           skipBtn(function() { abortado = true; driverObj.destroy(); cleanup(); });
           // Ejecutar la acción del paso
           p.accion(function() {
-            if (!_abortado) {
-              try { driverObj.moveNext(); } catch(e) {}
+            if (!abortado) {
+              try { driverObj.moveNext(); } catch(e) { console.warn('[tutorial] moveNext error:', e); }
             }
           });
         },
@@ -1049,11 +1032,8 @@
     var driverObj = window.driver.js.driver({
       showProgress:   true,
       progressText:   'Paso {{current}} de {{total}}',
-      nextBtnText:    '',
-      prevBtnText:    '',
-      doneBtnText:    '',
-      showButtons:    [],
-      allowClose:     false,
+      showButtons:    ['close'],
+      allowClose:     true,
       overlayOpacity: 0.55,
       smoothScroll:   true,
       animate:        true,
@@ -1069,6 +1049,67 @@
     activo = false;
     hideCur();
     if (document.getElementById('tut-bar')) document.getElementById('tut-bar').style.width = '0%';
+
+    /* ── Restaurar el estado de la app al salir del tutorial ── */
+
+    // 1. Desactivar Modo Momento
+    try {
+      var sliderHora = document.getElementById('slider-hora');
+      var selectDia  = document.getElementById('select-dia');
+      if (sliderHora) { sliderHora.value = 0; sliderHora.dispatchEvent(new Event('input',  { bubbles: true })); }
+      if (selectDia)  { selectDia.value  = 0; selectDia.dispatchEvent(new Event('change', { bubbles: true })); }
+      if (window.estadoTemporal) window.estadoTemporal.activo = false;
+      if (typeof desactivarSimulacionTemporal === 'function') desactivarSimulacionTemporal();
+      else if (typeof aplicarSimulacionTemporal === 'function') aplicarSimulacionTemporal();
+      // Botón desactivar si existe
+      var btnDesact = document.querySelector('.btn-desactivar-momento, [data-action="desactivar-momento"]');
+      if (btnDesact) btnDesact.click();
+    } catch(e) { console.warn('[tutorial cleanup] Momento:', e); }
+
+    // 2. Cerrar el panel izquierdo
+    try {
+      var leftPanel = document.getElementById('left-panel');
+      if (leftPanel && !leftPanel.classList.contains('collapsed')) {
+        var btnToggle = document.getElementById('side-toggle-left');
+        if (btnToggle) btnToggle.click();
+        else if (typeof toggleLeftPanel === 'function') toggleLeftPanel();
+      }
+    } catch(e) { console.warn('[tutorial cleanup] Panel izquierdo:', e); }
+
+    // 3. Apagar modo obstáculos
+    try {
+      if (typeof modoObstaculo !== 'undefined' && modoObstaculo) {
+        if (typeof desactivarModoObstaculo === 'function') desactivarModoObstaculo();
+        else {
+          var btnObs = document.getElementById('msw-btn-obstaculo');
+          if (btnObs) btnObs.click();
+        }
+      }
+    } catch(e) { console.warn('[tutorial cleanup] Obstáculos:', e); }
+
+    // 4. Limpiar la barra de búsqueda
+    try {
+      var inp = document.getElementById('msw-input');
+      if (inp) {
+        inp.value = '';
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      var resultados = document.getElementById('msw-resultados');
+      if (resultados) resultados.style.display = 'none';
+    } catch(e) { console.warn('[tutorial cleanup] Buscador:', e); }
+
+    // 5. Cerrar el panel "Cómo llegar" pulsando la ✕ (llama a cerrarMsw() y limpia la ruta)
+    try {
+      var mswPanel = document.getElementById('msw-panel');
+      if (mswPanel && mswPanel.style.display !== 'none') {
+        if (typeof cerrarMsw === 'function') {
+          cerrarMsw();
+        } else {
+          var btnCerrar = document.querySelector('.msw-cerrar-btn');
+          if (btnCerrar) btnCerrar.click();
+        }
+      }
+    } catch(e) { console.warn('[tutorial cleanup] Panel Cómo llegar:', e); }
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -1086,9 +1127,9 @@
 
     var bar = document.getElementById('leftsideTabs');
     if (bar) {
-      // Insertar DESPUÉS del último botón existente (tab-info con margin-bottom:12px).
-      // El CSS de #leftsideTabs #btn-tutorial aplica margin-bottom:20px
-      // para separarlo del borde inferior. No se necesita ningún estilo inline.
+      // Colocar al final de la barra pero anclado abajo,
+      // a la misma altura visual que los controles del mapa
+      btn.style.cssText = 'margin-top:auto;margin-bottom:12px;flex-shrink:0;';
       bar.appendChild(btn);
     } else {
       document.body.appendChild(btn);
