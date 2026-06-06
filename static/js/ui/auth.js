@@ -371,7 +371,10 @@ function _htmlAdmin() {
 }
 
 async function _cargarAdminUsuarios() {
-    const res  = await fetch('/api/admin/usuarios/online').catch(() => null);
+    const res = await fetch('/api/admin/usuarios/online', {
+    credentials: 'include'
+}).catch(() => null);
+
     if (!res || !res.ok) {
         const msg = document.getElementById('cm-admin-msg');
         if (msg) _cmMsg(msg, 'No se pudo cargar la lista de usuarios.', 'error');

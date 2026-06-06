@@ -20,7 +20,7 @@
     s.textContent = [
       'html body .driver-popover{background:#1a2535!important;border:1.5px solid #2980b9!important;',
       'border-radius:10px!important;box-shadow:0 8px 32px rgba(41,128,185,0.28),0 2px 10px rgba(0,0,0,0.55)!important;',
-      'padding:0!important;max-width:340px!important;font-family:"Segoe UI",system-ui,sans-serif!important;color:#c8dff0!important;}',
+      'padding:0!important;max-width:340px!important;font-family:var(--font-base)!important;color:#c8dff0!important;}',
       'html body .driver-popover-title{background:linear-gradient(135deg,#1c4f7a 0%,#2980b9 100%)!important;',
       'color:#e8f4fd!important;font-size:14px!important;font-weight:700!important;',
       'padding:12px 16px 11px!important;margin:0!important;border-radius:9px 9px 0 0!important;',
@@ -1129,7 +1129,7 @@
     if (bar) {
       // Colocar al final de la barra pero anclado abajo,
       // a la misma altura visual que los controles del mapa
-      btn.style.cssText = 'margin-top:auto;margin-bottom:12px;flex-shrink:0;';
+      btn.style.cssText = 'margin-top:auto;margin-bottom:12px;flex-shrink:0;font-size:20px;font-weight:700;';
       bar.appendChild(btn);
     } else {
       document.body.appendChild(btn);

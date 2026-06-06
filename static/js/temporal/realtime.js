@@ -178,7 +178,10 @@ async function _abrirCapaCompartida() {
     // Solo usuarios registrados/admin
     const rol = window._userRol || 'invitado';
     if (rol === 'invitado') {
-        showNotification('Inicia sesión para acceder a la capa compartida', 'warning');
+        aviso(
+            'Esta función es solo para usuarios registrados.',
+            'Inicia sesión o crea una cuenta para acceder a las capas compartidas.'
+        );
         return;
     }
 

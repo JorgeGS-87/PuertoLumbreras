@@ -268,7 +268,7 @@
     width: 360px;
     max-width: 95vw;
     overflow: hidden;
-    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-family: var(--font-base);
 }
 
 .ev-header {

@@ -599,7 +599,7 @@ function _popupHTML(idx) {
     }).join('');
 
     return `
-        <div style="font-family:sans-serif;min-width:220px;text-align:center;">
+        <div style="font-family:var(--font-base,sans-serif);min-width:220px;text-align:center;">
             <strong>🚧 Obstáculo ${label}</strong><br>
             <div style="margin:8px 0 4px;font-size:12px;color:#555;">
                 Impacto actual: <strong style="color:${info.color};">${info.label} — ${info.desc}</strong>
@@ -2703,7 +2703,7 @@ function _poiPopupHTML(idx) {
     const cfg   = _poiConfig(poi.tipo);
     const label = poi.poiId ? `#${poi.poiId}` : `#${idx + 1}`;
     return `
-        <div style="font-family:sans-serif;min-width:180px;text-align:center;">
+        <div style="font-family:var(--font-base,sans-serif);min-width:180px;text-align:center;">
             <strong>${cfg.emoji} ${poi.nombre}</strong>
             <div style="font-size:11px;color:#777;margin:4px 0;">
                 Tipo: ${poi.tipo || 'otro'} &nbsp;·&nbsp; ${label}

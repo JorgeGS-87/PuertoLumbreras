@@ -21,7 +21,7 @@
 html, body {
     height: 100%;
     overflow: hidden;
-    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-family: var(--font-base);
     background: #e8e8e8;
     -webkit-tap-highlight-color: transparent;
 }
@@ -778,7 +778,7 @@ html, body {
     box-shadow: 0 8px 32px rgba(0,0,0,0.22);
     width: min(360px, 95vw);
     overflow: hidden;
-    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-family: var(--font-base);
     margin: 16px;
     max-height: 90vh;
     overflow-y: auto;

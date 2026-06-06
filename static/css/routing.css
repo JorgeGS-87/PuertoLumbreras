@@ -89,7 +89,7 @@
     width: 56px;
     background: #111;
     color: #fff;
-    z-index: 2500;
+    z-index: 9100;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -143,6 +143,8 @@
     box-shadow: 0 8px 18px rgba(0,0,0,0.28);
     white-space: nowrap;
     font-size: 13px;
+    font-family: var(--font-base, 'Segoe UI', system-ui, sans-serif);
+    font-weight: 500;
     opacity: 0;
     transition: opacity 0.12s ease, transform 0.12s ease;
     pointer-events: none;

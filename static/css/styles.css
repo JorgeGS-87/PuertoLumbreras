@@ -1,4 +1,11 @@
 /* ============================================
+   FUENTE GLOBAL
+   ============================================ */
+:root {
+    --font-base: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* ============================================
    ESTILOS GLOBALES
    ============================================ */
 * {
@@ -8,7 +15,7 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: var(--font-base);
     overflow: hidden;
 }
 
@@ -1464,7 +1471,7 @@ body.tabla-abierta .leaflet-bottom.leaflet-left {
     z-index: 1600;
     width: 320px;
     /* filter eliminado: no usar en ancestro de position:fixed */
-    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-family: var(--font-base);
 }
 
 .msw-bar {
@@ -1639,7 +1646,7 @@ body.tabla-abierta .leaflet-bottom.leaflet-left {
     z-index: 1600;
     width: 320px;
     /* filter eliminado: no usar en ancestro de position:fixed */
-    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-family: var(--font-base);
     transition: left 0.3s ease;
 }
 .msw-bar {
@@ -1982,7 +1989,7 @@ body.tabla-abierta .leaflet-bottom.leaflet-left {
     padding: 6px 4px !important;
     min-width: 190px !important;
     color: #2c3e50 !important;
-    font-family: 'Segoe UI', system-ui, sans-serif !important;
+    font-family: var(--font-base) !important;
     font-size: 13px !important;
 }
 

@@ -175,7 +175,7 @@ function cargarEnMapa(tipo) {
                             if (window._userRol === 'admin' && tablaAbierta) {
                                 L.DomEvent.stopPropagation(e);
                                 layer.bindPopup(`
-                                    <div style="font-family:sans-serif;min-width:160px;">
+                                    <div style="font-family:var(--font-base,sans-serif);min-width:160px;">
                                         <strong>${p.name || 'Sin nombre'}</strong><br>
                                         Tipo: ${p.highway || 'N/A'}<br>
                                         Vel. máx: ${p.maxspeed || 'N/A'} km/h<br>

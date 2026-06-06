@@ -61,7 +61,7 @@ function _crearCursorTooltip() {
         'background:rgba(30,20,40,0.82)',
         'color:#fff',
         'font-size:12px',
-        'font-family:Segoe UI,system-ui,sans-serif',
+        'font-family:var(--font-base)',
         'font-weight:500',
         'padding:5px 10px',
         'border-radius:6px',
@@ -673,7 +673,7 @@ function _popupEventoHTML(idx) {
     const _fmt  = d => d.toLocaleString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
 
     return `
-        <div style="font-family:sans-serif;min-width:200px;font-size:13px;">
+        <div style="font-family:var(--font-base,sans-serif);min-width:200px;font-size:13px;">
             <strong style="font-size:14px;">🎪 ${ev.nombre}</strong>
             <hr style="margin:6px 0;border:none;border-top:1px solid #eee;">
             <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#555;">

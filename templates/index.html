@@ -168,18 +168,18 @@
 
     <!-- Barra lateral Izquierda (Capas / Tablas / Momento) -->
     <nav class="column left" id="leftsideTabs">
-        <button id="side-toggle-left" class="side-bar-item active" data-title="Mostrar / Ocultar panel" onclick="toggleLeftPanel()">▶</button>
+        <button id="side-toggle-left" class="side-bar-item active" data-title="Mostrar / Ocultar panel" onclick="toggleLeftPanel()" style="margin-bottom:12px; font-size:20px; font-weight:700;">▶</button>
         <div style="height:8px"></div>
-        <button class="side-bar-item active" id="tab-capas" data-title="Capas" onclick="selectLeftTab('capas')" style="padding:0;display:flex;align-items:center;justify-content:center;">
+        <button class="side-bar-item active" id="tab-capas" data-title="Capas" onclick="selectLeftTab('capas')" style="margin-bottom:12px; font-size:20px; font-weight:700;">
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="12 2 2 7 12 12 22 7 12 2"/>
                 <polyline points="2 17 12 22 22 17"/>
                 <polyline points="2 12 12 17 22 12"/>
             </svg>
         </button>
-        <button class="side-bar-item"        id="tab-momento" data-title="Momento" onclick="selectLeftTab('momento')">⏱️</button>
+        <button class="side-bar-item" id="tab-momento" data-title="Momento" onclick="selectLeftTab('momento')" style="margin-bottom:12px; font-size:20px; font-weight:700;">⏱️</button>
         <div style="flex:1"></div>
-        <button class="side-bar-item" id="tab-info" data-title="Información / Créditos" onclick="selectLeftTab('info')" style="margin-bottom:12px; opacity:0.7; font-size:20px; font-weight:700; font-style:italic; font-family:Georgia,serif;">ℹ</button>
+        <button class="side-bar-item" id="tab-info" data-title="Información / Créditos" onclick="selectLeftTab('info')" style="margin-bottom:12px; font-size:20px; font-weight:700;">ℹ</button>
     </nav>
 
 
@@ -514,7 +514,7 @@
                         
                         <!-- Display de hora -->
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <span id="display-hora" style="font-size: 28px; font-weight: bold; color: #3498db; font-family: 'Courier New', monospace; transition: transform 0.15s ease-in-out;">
+                            <span id="display-hora" style="font-size: 28px; font-weight: bold; color: #3498db; font-family: var(--font-base, inherit); transition: transform 0.15s ease-in-out;">
                                 12:00
                             </span>
                             <button class="upload-btn" onclick="if(typeof establecerHoraActual === 'function') establecerHoraActual();" style="padding: 8px 12px; font-size: 12px; background: #95a5a6;">
@@ -805,7 +805,7 @@
     <div class="map-controls" id="map-controls">
         <button class="control-btnHome" onclick="resetView()" title="Vista inicial">🏠</button>
         <button class="control-btnHome" id="btn-capas-base" title="Capas base" onclick="toggleCapasBasePanel()">🗺️</button>
-        <button class="control-btnHome" id="btn-capa-compartida" title="Abrir capa de obstáculos compartida" onclick="window.toggleCapaCompartida && window.toggleCapaCompartida()">🚧</button>
+        <button class="control-btnHome" id="btn-capa-compartida" title="Abrir capa de obstáculos compartida" onclick="abrirCapaCompartida()">🚧</button>
     </div>
 
     <!-- Panel selector de capas base -->
@@ -1026,6 +1026,8 @@
     <!-- ui/ -->
     <script src="{{ url_for('static', filename='js/ui/ui-controls.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ui/table-manager.js') }}"></script>
+    <!--<script src="{{ url_for('static', filename='js/ui/loader.js') }}"></script>-->
+    <script src="{{ url_for('static', filename='js/ui/alert.js') }}"></script>
 
     <!-- punto de entrada -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
@@ -1796,9 +1798,11 @@
                 if (tabBtn) tabBtn.classList.add('active');
             } else {
                 if (typeof origSelectLeftTab === 'function') origSelectLeftTab(tab);
-                // Si se cambia de pestaña, ocultar info-section
+                // Si se cambia de pestaña, ocultar info-section y restaurar título
                 const infoSec = document.getElementById('info-section');
                 if (infoSec) infoSec.style.display = 'none';
+                const titulo = document.getElementById('left-panel-title');
+                if (titulo) titulo.textContent = '📚 Datos';
             }
         };
     });

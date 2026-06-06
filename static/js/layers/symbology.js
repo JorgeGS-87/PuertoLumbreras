@@ -105,7 +105,7 @@ function crearPopupPunto(properties) {
                    properties.denominacion || 'Sin nombre';
 
     return `
-        <div style="font-family:sans-serif;min-width:180px;">
+        <div style="font-family:var(--font-base,sans-serif);min-width:180px;">
             <div style="font-size:14px;font-weight:600;color:#2c3e50;
                         margin-bottom:6px;border-bottom:2px solid #3498db;padding-bottom:4px;">
                 📍 ${tipo}

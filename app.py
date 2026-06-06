@@ -773,6 +773,23 @@ def admin_listar_usuarios():
     docs = list(_col_usuarios.find({}, {'password_hash': 0}))
     return jsonify({'usuarios': [_usuario_a_dict(d) for d in docs]})
 
+@app.route('/api/admin/usuarios/online')
+@_requiere_admin
+def admin_usuarios_online():
+    """Lista usuarios con estado online aproximado (último acceso < 15 min)."""
+    docs = list(_col_usuarios.find({}, {'password_hash': 0}))
+    ahora = datetime.utcnow()
+    resultado = []
+    for d in docs:
+        ua = d.get('ultimo_acceso')
+        online = isinstance(ua, datetime) and (ahora - ua).total_seconds() < 900
+        resultado.append({
+            'username':      d.get('username', ''),
+            'rol':           d.get('rol', 'registrado'),
+            'online':        online,
+            'ultimo_acceso': ua.isoformat() if isinstance(ua, datetime) else None,
+        })
+    return jsonify({'usuarios': resultado})
 
 @app.route('/api/admin/usuarios', methods=['POST'])
 @_requiere_admin

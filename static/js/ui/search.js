@@ -334,7 +334,7 @@ function _zoomAPortal(portal) {
     window._portalPopupData = { lat: portal.lat, lon: portal.lon, label, numero: portal.numero || '' };
 
     _markerPortal.bindPopup(
-        `<div id="${popupId}" style="font-family:sans-serif;min-width:160px;">
+        `<div id="${popupId}" style="font-family:var(--font-base,sans-serif);min-width:160px;">
             <strong>📍 ${label}${numero}</strong><br>
             <span style="color:#7f8c8d;font-size:11px;">${portal.cod_postal || ''} ${portal.municipio || ''}</span><br>
             <button onclick="window._colocarObstaculoDesdePortal()"
