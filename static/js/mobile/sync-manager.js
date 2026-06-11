@@ -408,9 +408,9 @@ const SyncManager = (() => {
     };
 })();
 
-window.SyncManager = SyncManager;
+window.GeoRutaSyncManager = SyncManager;
 
 // Auto-inicializar en DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
-    SyncManager.inicializar();
+    GeoRutaSyncManager.inicializar();
 });

@@ -2984,14 +2984,13 @@ _COLOR_VIA = {
     'cycleway': '#5B75A7', 'track': '#A8987C',
     'path': '#A8987C',     'default': '#D6D6D6',
 }
-
-
+# Colores por tipo de POI (misma paleta que symbology.js) ──────────────────
 def _hex_to_rgb(h):
     h = h.lstrip('#')
     return tuple(int(h[i:i+2], 16) / 255 for i in (0, 2, 4))
 
 
-def _wms_capabilities_xml():
+def _wms_capabilities_xml(): 
     """Genera el XML de GetCapabilities para WMS 1.3.0."""
     layers_xml = ''
     capas = []
