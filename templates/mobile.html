@@ -21,6 +21,15 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/temporal.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
 
+    <!-- PWA: manifest e iconos -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="GeoRuta">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/icon-192.png') }}">
+    <meta name="theme-color" content="#2c3e50">
+
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/icono.png') }}">
 
@@ -770,6 +779,12 @@
     <div id="btn-tabla-obstaculos"       style="display:none;"></div>
 
     <!-- SCRIPTS -->
+    <!-- Módulos offline (cargar ANTES de leaflet para interceptar fetch) -->
+    <script src="{{ url_for('static', filename='js/mobile/offline-store.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/mobile/dijkstra-offline.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/mobile/sync-manager.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/mobile/offline-hooks.js') }}"></script>
+
     <script src="{{ url_for('static', filename='js/vendor/leaflet.js') }}"></script>
     <script src="{{ url_for('static', filename='js/vendor/proj4.js') }}"></script>
     <script src="{{ url_for('static', filename='js/vendor/chart.umd.min.js') }}"></script>
@@ -1219,5 +1234,19 @@
             <span class="m-nav-label">Obstáculos</span>
         </button>
     </nav>
+    <!-- Registro del Service Worker (PWA) -->
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('/sw.js')
+                .then(function(reg) {
+                    console.log('[GeoRuta] Service Worker registrado', reg.scope);
+                })
+                .catch(function(err) {
+                    console.warn('[GeoRuta] Service Worker error', err);
+                });
+        });
+    }
+    </script>
 </body>
 </html>

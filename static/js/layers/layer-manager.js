@@ -162,6 +162,7 @@ function cargarEnMapa(tipo) {
             if (tipo === 'vias') {
                 window.currentViasGeoJSON = geojson;
                 // Invalidar caché de pesos: nueva capa cargada
+                if (window.SyncManager) SyncManager.cachearGrafo(geojson); // Actualiza grafo en IndexedDB para offline
                 if (typeof window.invalidarPesosCache === 'function') window.invalidarPesosCache();
                 if (typeof procesarVias === 'function') procesarVias(geojson);
 

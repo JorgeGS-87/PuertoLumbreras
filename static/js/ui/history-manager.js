@@ -349,8 +349,13 @@ window.selectLeftTab = function(tab) {
 // ==================== ACCIONES PÚBLICAS ====================
 
 async function toggleHistorial() {
-    if (!['registrado', 'admin'].includes(window._userRol)) {
-        showNotification('El historial está disponible solo para usuarios registrados.', 'info');
+    // Solo usuarios registrados/admin
+    const rol = window._userRol || 'invitado';
+    if (rol === 'invitado') {
+        aviso(
+            'Esta función es solo para usuarios registrados.',
+            'Inicia sesión o crea una cuenta para acceder a las capas compartidas.'
+        );
         return;
     }
 

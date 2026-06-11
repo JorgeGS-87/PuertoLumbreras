@@ -624,6 +624,10 @@ def admin_usuarios_page():
         return redirect(url_for('login_page'))
     return render_template('admin_usuarios.html')
 
+@app.route('/mobile')
+def mobile():
+    return render_template('mobile.html')
+
 
 # ── Auth con MongoDB ─────────────────────────────────────────────────────────
 
@@ -3557,6 +3561,12 @@ def wfs_endpoint():
         f'<ows:ExceptionText>REQUEST no soportado: {req_type}</ows:ExceptionText>'
         f'</ows:Exception></ows:ExceptionReport>',
         mimetype='application/xml', status=400)
+
+# ==================== OFFLINE MOBILE APP (PWA) ====================
+
+@app.route('/sw.js')
+def service_worker():
+    return app.send_static_file('sw.js')
 
 
 # ==================== ERRORES ====================
