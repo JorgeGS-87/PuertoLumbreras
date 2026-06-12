@@ -2370,13 +2370,13 @@ def exportar_obstaculos_csv():
 def importar_obstaculos_csv():
     """
     Recibe un archivo CSV con obstáculos y devuelve las features como JSON al frontend.
-    Formato esperado: id, Nombre, coord_lat, coord_lon, Nivel, Cruce, Calles, Portal
-
+    Soporta múltiples formatos de nombres de columna:
+    - Latitud: coord_lat, lat, latitude
+    - Longitud: coord_lon, lng, longitude
+    - Nivel: Nivel, barrier_level, level
+    
     Portal es solo el número de portal (ej. "12").
-    La calle se toma de Calles, que debe contener un único elemento (sin ";").
-    La búsqueda se realiza combinando Calles + Portal, igual que el widget de búsqueda.
-    coord_lat/coord_lon pueden omitirse cuando Portal está presente; si se dan ambos,
-    Portal prevalece. Si Cruce=Sí (varios elementos en Calles), Portal se ignora con aviso.
+    coord_lat/coord_lon pueden omitirse si Portal está presente.
     """
     if 'file' not in request.files:
         return jsonify({'error': 'No se recibió ningún archivo'}), 400
@@ -2388,54 +2388,88 @@ def importar_obstaculos_csv():
 
     try:
         contenido = archivo.read().decode('utf-8')
-        reader = csv.DictReader(io.StringIO(contenido))
-
+        
+        # ── Detectar separador automáticamente ───────────────────────
+        sniffer = csv.Sniffer()
+        muestra = contenido[:1024]
+        try:
+            dialecto = sniffer.sniff(muestra, delimiters=',;\t')
+            separador = dialecto.delimiter
+        except:
+            separador = ',' if ',' in muestra else ';'
+        
+        reader = csv.DictReader(io.StringIO(contenido), delimiter=separador)
+        
+        if not reader.fieldnames:
+            return jsonify({'error': 'CSV vacío o formato inválido'}), 400
+        
+        # ── Mapear nombres de columna (normalizar) ───────────────────
+        fieldnames_lower = {f.lower().strip(): f for f in reader.fieldnames}
+        
+        def obtener_campo(row, posibles_nombres):
+            """Busca la primera columna que existe, probando variaciones de nombre."""
+            for nombre_var in posibles_nombres:
+                if nombre_var.lower() in fieldnames_lower:
+                    campo_real = fieldnames_lower[nombre_var.lower()]
+                    return row.get(campo_real, '').strip()
+            return ''
+        
         features       = []
         errores_portal = []
+        filas_saltadas = 0
 
-        for fila_num, row in enumerate(reader, start=2):  # fila 1 = cabecera
+        for fila_num, row in enumerate(reader, start=2):
             try:
-                if 'Nivel' in row and row['Nivel'].strip():
-                    try:   nivel = max(1, min(4, int(row['Nivel'].strip())))
-                    except: nivel = 2
-                elif 'Nivel' in row and row['Nivel'].strip():   # legacy
+                # ── Obtener Nivel/barrier_level ─────────────────────────
+                nivel_str = obtener_campo(row, ['Nivel', 'barrier_level', 'level'])
+                if nivel_str:
                     try:
-                        pct_raw = max(0, min(100, int(row['Nivel'].strip())))
-                        nivel = max(1, min(4, round(pct_raw / 25))) if pct_raw > 0 else 1
-                    except: nivel = 2
+                        nivel_int = int(float(nivel_str.replace(',', '.')))
+                        # Si está en rango 1-4, es nivel directo
+                        if 1 <= nivel_int <= 4:
+                            nivel = nivel_int
+                        # Si está en rango 0-100, probablemente sea porcentaje
+                        elif 0 <= nivel_int <= 100:
+                            nivel = max(1, min(4, round(nivel_int / 25))) if nivel_int > 0 else 1
+                        else:
+                            nivel = 2
+                    except:
+                        nivel = 2
                 else:
                     nivel = 2
 
-                obs_id = row.get('id', '').strip()
+                # ── Obtener ID ──────────────────────────────────────────
+                obs_id = obtener_campo(row, ['id', 'ID', 'obstacle_id'])
                 if not obs_id:
+                    filas_saltadas += 1
                     continue
 
-                nombre_obs = row.get('Nombre', '').strip() or obs_id
-                cruce      = row.get('Cruce',  'No').strip()
-                calles     = row.get('Calles', '').strip()
-                portal_raw = row.get('Portal', '').strip()
+                # ── Obtener Nombre ──────────────────────────────────────
+                nombre_obs = obtener_campo(row, ['Nombre', 'name', 'Name']) or obs_id
+                
+                # ── Obtener otros campos ─────────────────────────────────
+                cruce  = obtener_campo(row, ['Cruce', 'crossing', 'is_crossing']) or 'No'
+                calles = obtener_campo(row, ['Calles', 'street', 'Street'])
+                portal_raw = obtener_campo(row, ['Portal', 'portal_number', 'house_number'])
 
                 coord_lat = None
                 coord_lon = None
 
                 # ── Resolver Portal → coordenadas ──────────────────────────
                 if portal_raw:
-                    # Validar que Portal sea un número
                     if not portal_raw.isdigit():
                         errores_portal.append(
                             f"Fila {fila_num}: Portal debe ser un número (valor='{portal_raw}')")
-                    # Validar que Calles tenga un único elemento (sin cruce)
-                    elif ';' in calles or cruce.lower() == 'sí' or cruce.lower() == 'si':
+                    elif ';' in calles or cruce.lower() in ('sí', 'si', 'yes', 'true'):
                         errores_portal.append(
-                            f"Fila {fila_num}: Portal ignorado — Calles tiene varios elementos o Cruce=Sí ('{calles}')")
+                            f"Fila {fila_num}: Portal ignorado — Calles tiene varios elementos o Cruce=Sí")
                     elif not calles:
                         errores_portal.append(
-                            f"Fila {fila_num}: Portal='{portal_raw}' pero Calles está vacío — no se puede buscar")
+                            f"Fila {fila_num}: Portal='{portal_raw}' pero Calles está vacío")
                     elif portales_gdf is None:
                         errores_portal.append(
-                            f"Fila {fila_num}: capa de portales no cargada (Portal='{portal_raw}')")
+                            f"Fila {fila_num}: capa de portales no cargada")
                     else:
-                        # Buscar combinando Calles + Portal, igual que el widget
                         nombre_norm = _normalizar_nombre_via(calles)
                         numero_raw  = portal_raw
 
@@ -2445,7 +2479,6 @@ def importar_obstaculos_csv():
                         ]
 
                         if not df_p.empty:
-                            # Coincidencia exacta de número primero
                             mask_num = df_p['_numero_str'] == numero_raw
                             if not mask_num.any():
                                 mask_num = df_p['_numero_str'].str.lstrip('0') == numero_raw.lstrip('0')
@@ -2460,19 +2493,34 @@ def importar_obstaculos_csv():
                             coord_lat = float(hit.geometry.y)
                             coord_lon = float(hit.geometry.x)
                             cruce     = 'No'
-                            # Normalizar el nombre de calle con lo encontrado en portales
                             nombre_via_encontrada = (str(hit.get('tipo_vial', '')) + ' ' +
                                                      str(hit.get('nombre_via', ''))).strip()
                             if nombre_via_encontrada:
                                 calles = nombre_via_encontrada
 
-                # ── Coordenadas directas (fallback si no hay Portal) ───────
+                # ── Coordenadas directas (fallback) ──────────────────────
                 if coord_lat is None:
-                    try:
-                        coord_lat = float(row.get('coord_lat', ''))
-                        coord_lon = float(row.get('coord_lon', ''))
-                    except (ValueError, TypeError):
-                        continue  # Sin coordenadas ni portal válido → saltar
+                    lat_str = obtener_campo(row, ['coord_lat', 'lat', 'latitude'])
+                    lon_str = obtener_campo(row, ['coord_lon', 'lng', 'longitude', 'lon'])
+                    
+                    if lat_str and lon_str:
+                        try:
+                            # Normalizar separador decimal (coma a punto)
+                            lat_str = lat_str.replace(',', '.')
+                            lon_str = lon_str.replace(',', '.')
+                            coord_lat = float(lat_str)
+                            coord_lon = float(lon_str)
+                            
+                            # Validar que sean coordenadas geográficas razonables
+                            if not (-90 <= coord_lat <= 90 and -180 <= coord_lon <= 180):
+                                filas_saltadas += 1
+                                continue
+                        except (ValueError, TypeError):
+                            filas_saltadas += 1
+                            continue
+                    else:
+                        filas_saltadas += 1
+                        continue
 
                 features.append({
                     'lat':    coord_lat,
@@ -2485,11 +2533,13 @@ def importar_obstaculos_csv():
                     'portal': portal_raw,
                 })
 
-            except (ValueError, TypeError):
-                continue  # Saltar filas inválidas
+            except Exception as e:
+                print(f"Error procesando fila {fila_num}: {e}")
+                filas_saltadas += 1
+                continue
 
         if not features:
-            msg = 'No se pudieron leer obstáculos válidos del CSV'
+            msg = f'No se pudieron leer obstáculos válidos del CSV (saltadas {filas_saltadas} filas)'
             if errores_portal:
                 msg += '. Errores: ' + '; '.join(errores_portal[:3])
             return jsonify({'error': msg}), 400
@@ -2497,11 +2547,13 @@ def importar_obstaculos_csv():
         resp = {'obstaculos': features, 'total': len(features)}
         if errores_portal:
             resp['avisos'] = errores_portal
+        if filas_saltadas > 0:
+            resp['filas_saltadas'] = filas_saltadas
         return jsonify(resp)
 
     except Exception as e:
         import traceback; traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f'Error al procesar CSV: {str(e)}'}), 500
 
 
 # ==================== EVENTOS (EXPORTAR / IMPORTAR) ====================
