@@ -53,6 +53,12 @@ function _aplicarPermisos(rol, usuario) {
 
     // Actualizar cabecera del modal si está abierto
     _actualizarHeaderModal(rol, usuario);
+
+    // Recalcular pestañas y contenido del modal de cuenta según el nuevo rol.
+    // Sin esto, si el modal ya se había renderizado como "Mi cuenta" (registrado/admin)
+    // y luego se cierra sesión, el formulario de email/contraseña podía quedar
+    // visible para Invitado aunque la cabecera ya mostrara "Invitado".
+    if (typeof _renderizarTabsCuenta === 'function') _renderizarTabsCuenta();
 }
 
 
@@ -188,6 +194,7 @@ async function cmLogin() {
     }
 
     _aplicarPermisos(data.rol, data.usuario);
+    window._cuentaDatos = { nombre: data.usuario, email: email, rol: data.rol };
     cerrarModalCuenta();
     showNotification(`✅ Bienvenido, ${data.usuario}`, 'success');
 }
@@ -273,21 +280,30 @@ async function cmRegistrar() {
 
 // ── Pestaña: Mi cuenta ────────────────────────────────────────────────────────
 
+// Cache de datos del usuario actual (nombre, email, rol)
+window._cuentaDatos = window._cuentaDatos || { nombre: '', email: '', rol: '' };
+
 function _htmlCuenta() {
-    const nombre = document.getElementById('user-name')?.textContent || '';
+    const nombre = window._cuentaDatos.nombre || document.getElementById('user-name')?.textContent || '';
+    const email  = window._cuentaDatos.email  || '';
+
     return `
-        <div class="cm-section-title">✏️ Cambiar datos</div>
         <div id="cm-cuenta-msg" class="cm-msg"></div>
 
         <div class="cm-field">
-            <label class="cm-label">Nuevo nombre de usuario</label>
-            <input id="cm-nuevo-nombre" class="cm-input" type="text" placeholder="${nombre}" value="${nombre}">
+            <label class="cm-label">Nombre de usuario</label>
+            <input id="cm-nuevo-nombre" class="cm-input" type="text" value="${_esc(nombre)}" disabled>
         </div>
         <div class="cm-field">
-            <label class="cm-label">Nuevo email</label>
-            <input id="cm-nuevo-email" class="cm-input" type="email" placeholder="Nuevo email (opcional)">
+            <label class="cm-label">Email</label>
+            <input id="cm-nuevo-email" class="cm-input" type="email" value="${_esc(email)}" disabled>
         </div>
-        <button class="cm-btn cm-btn-primary" onclick="cmGuardarDatos()">💾 Guardar datos</button>
+
+        <div style="display:flex;gap:8px;margin-bottom:4px;">
+            <button id="cm-btn-editar" class="cm-btn cm-btn-ghost" onclick="_cmModoEditar(true)" style="flex:1;">Editar perfil</button>
+            <button id="cm-btn-guardar" class="cm-btn cm-btn-primary" onclick="cmGuardarDatos()" style="flex:1;display:none;">Guardar cambios</button>
+            <button id="cm-btn-cancelar" class="cm-btn cm-btn-ghost" onclick="_cmModoEditar(false)" style="flex:1;display:none;">Cancelar</button>
+        </div>
 
         <hr class="cm-sep">
         <div class="cm-section-title">🔒 Cambiar contraseña</div>
@@ -314,6 +330,24 @@ function _htmlCuenta() {
         <button class="cm-btn cm-btn-danger" onclick="cerrarSesion()">⏻ Cerrar sesión</button>`;
 }
 
+function _cmModoEditar(activar) {
+    const nombre    = document.getElementById('cm-nuevo-nombre');
+    const email     = document.getElementById('cm-nuevo-email');
+    const btnEditar  = document.getElementById('cm-btn-editar');
+    const btnGuardar = document.getElementById('cm-btn-guardar');
+    const btnCancel  = document.getElementById('cm-btn-cancelar');
+    if (!nombre) return;
+
+    nombre.disabled = !activar;
+    email.disabled  = !activar;
+
+    if (btnEditar)  btnEditar.style.display  = activar ? 'none' : '';
+    if (btnGuardar) btnGuardar.style.display = activar ? ''     : 'none';
+    if (btnCancel)  btnCancel.style.display  = activar ? ''     : 'none';
+
+    if (activar) nombre.focus();
+}
+
 async function cmGuardarDatos() {
     const nombre = document.getElementById('cm-nuevo-nombre')?.value.trim();
     const email  = document.getElementById('cm-nuevo-email')?.value.trim();
@@ -332,7 +366,9 @@ async function cmGuardarDatos() {
 
     if (!res.ok || data.error) { _cmMsg(msg, data.error || 'Error al guardar.', 'error'); return; }
     _cmMsg(msg, '✅ Datos actualizados correctamente.', 'success');
-    if (nombre) _aplicarPermisos(window._userRol, nombre);
+    if (nombre) { window._cuentaDatos.nombre = nombre; _aplicarPermisos(window._userRol, nombre); }
+    if (email)    window._cuentaDatos.email  = email;
+    setTimeout(() => { _cmModoEditar(false); }, 900);
 }
 
 async function cmCambiarPassword() {
@@ -384,18 +420,44 @@ async function _cargarAdminUsuarios() {
     const lista   = document.getElementById('cm-online-lista');
     if (!lista) return;
 
-    const usuarios = data.usuarios || [];
+    // Orden: 1) conectados, 2) desconectados (pero activos), 3) cuentas desactivadas
+    const usuarios = (data.usuarios || []).slice().sort(function (a, b) {
+        return _ordenUsuario(a) - _ordenUsuario(b);
+    });
     if (!usuarios.length) {
         lista.innerHTML = '<div style="text-align:center;color:#aab0b7;font-size:13px;">Sin usuarios registrados.</div>';
         return;
     }
 
     const iconosRol = { admin: '🔑', registrado: '🙋' };
-    lista.innerHTML = usuarios.map(u => `
+    lista.innerHTML = usuarios.map(u => {
+        const activo = u.activo !== false;
+
+        // Estado mostrado: Desactivado > En línea > Desconectado
+        let estadoLabel, estadoColor, estadoDot;
+        if (!activo) {
+            estadoLabel = 'Desactivado';
+            estadoColor = '#dc2626';
+            estadoDot   = '#f87171';
+        } else if (u.online) {
+            estadoLabel = 'En línea';
+            estadoColor = '#16a34a';
+            estadoDot   = '#22c55e';
+        } else {
+            estadoLabel = 'Desconectado';
+            estadoColor = '#9ca3af';
+            estadoDot   = '#d1d5db';
+        }
+
+        const fondo  = !activo ? '#fef2f2' : (u.online ? '#f0fdf4' : '#f8f9fa');
+        const borde  = !activo ? '#fecaca' : (u.online ? '#bbf7d0' : '#ecf0f1');
+
+        return `
         <div style="display:flex;align-items:center;gap:10px;
                     padding:9px 12px;border-radius:8px;margin-bottom:6px;
-                    background:${u.online ? '#f0fdf4' : '#f8f9fa'};
-                    border:1px solid ${u.online ? '#bbf7d0' : '#ecf0f1'};">
+                    background:${fondo};
+                    border:1px solid ${borde};
+                    ${!activo ? 'opacity:0.75;' : ''}">
             <span style="font-size:18px;">${iconosRol[u.rol] || '👤'}</span>
             <div style="flex:1;min-width:0;">
                 <div style="font-weight:600;font-size:13px;color:#2c3e50;
@@ -410,12 +472,19 @@ async function _cargarAdminUsuarios() {
                 </div>
             </div>
             <span style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
-                         color:${u.online ? '#16a34a' : '#9ca3af'};">
+                         color:${estadoColor};">
                 <span style="width:8px;height:8px;border-radius:50%;display:inline-block;
-                             background:${u.online ? '#22c55e' : '#d1d5db'};"></span>
-                ${u.online ? 'En línea' : 'Desconectado'}
+                             background:${estadoDot};"></span>
+                ${estadoLabel}
             </span>
-        </div>`).join('');
+        </div>`;
+    }).join('');
+}
+
+/** Orden de clasificación: conectados (0) < desconectados (1) < desactivados (2). */
+function _ordenUsuario(u) {
+    if (u.activo === false) return 2;
+    return u.online ? 0 : 1;
 }
 
 function _esc(s) {
@@ -463,6 +532,11 @@ async function cerrarSesion() {
 (async function init() {
     try {
         const me = await fetch('/api/auth/me').then(r => r.json());
+        window._cuentaDatos = {
+            nombre: me.usuario || 'Invitado',
+            email:  me.email   || '',
+            rol:    me.rol     || 'invitado',
+        };
         _aplicarPermisos(me.rol || 'invitado', me.usuario || 'Invitado');
     } catch (e) {
         _aplicarPermisos('invitado', 'Invitado');

@@ -27,6 +27,63 @@
     <style>
         .leaflet-container { background: #e8e8e8 !important; }
     </style>
+    <style>
+        /* ── Menú Editar: secciones y separador ─────────────────────── */
+        #edit-menu {
+            position: fixed;
+            z-index: 9999;
+            background: #fff;
+            border: 1px solid #dfe6e9;
+            border-radius: 8px;
+            box-shadow: 0 4px 18px rgba(0,0,0,.18);
+            min-width: 230px;
+            overflow: hidden;
+        }
+        .edit-menu-section {
+            padding: 6px 14px 3px;
+            font-size: 10px;
+            font-weight: 700;
+            color: #95a5a6;
+            letter-spacing: .6px;
+            text-transform: uppercase;
+            user-select: none;
+        }
+        .edit-menu-sep {
+            margin: 4px 0;
+            border: none;
+            border-top: 1px solid #f0f0f0;
+        }
+        .edit-menu-item {
+            display: block;
+            width: 100%;
+            padding: 8px 16px;
+            text-align: left;
+            background: none;
+            border: none;
+            font-size: 13px;
+            color: #2c3e50;
+            cursor: pointer;
+            transition: background .12s;
+        }
+        .edit-menu-item:hover { background: #f0f4f8; }
+        .edit-menu-item--danger { color: #e74c3c; }
+        .edit-menu-item--danger:hover { background: #fdecea; }
+
+        /* ── Columna de checkbox en tabla de atributos ──────────────── */
+        #table-header th:first-child,
+        #table-body  td:first-child {
+            width: 28px;
+            min-width: 28px;
+            max-width: 28px;
+            text-align: center;
+            padding: 4px 2px;
+            position: sticky;
+            left: 0;
+            background: inherit;
+            z-index: 1;
+        }
+        #table-body tr[data-feature-idx] { cursor: pointer; }
+    </style>
     <!-- Splash screen: cubre el index mientras carga para evitar ver el esqueleto -->
     <style>
         #georuta-splash {
@@ -132,6 +189,24 @@
                         status.textContent = data.vias_cargadas ? 'Red viaria lista' : 'Conectado';
                         pct = 92;
                         bar.style.width = '92%';
+
+                        // Estado inicial de los botones de Vías según el origen de la capa
+                        var btnCargar   = document.getElementById('btn-cargar-vias');
+                        var btnEliminar = document.getElementById('btn-eliminar-vias');
+                        var btnConfig   = document.getElementById('btn-config-campos');
+
+                        if (data.vias_personalizadas) {
+                            // Capa cargada por el usuario: permitir eliminar y configurar campos
+                            if (btnCargar)   btnCargar.style.display   = 'none';
+                            if (btnEliminar) btnEliminar.style.display = '';
+                            if (btnConfig)   btnConfig.style.display   = '';
+                        } else {
+                            // Capa por defecto (Vías_PuertoLumbreras): permitir cargar otra
+                            if (btnCargar)   btnCargar.style.display   = '';
+                            if (btnEliminar) btnEliminar.style.display = 'none';
+                            if (btnConfig)   btnConfig.style.display   = 'none';
+                        }
+
                         ocultarSplash();
                     })
                     .catch(function() { ocultarSplash(); });
@@ -216,6 +291,8 @@
                             <button class="upload-btn danger" id="btn-eliminar-vias" style="display:none;" onclick="eliminarCapa('vias')">
                                 ❌ Eliminar
                             </button>
+                        </div>
+                        <div class="btn-group-row">
                             <button class="upload-btn" id="btn-config-campos" style="background:#8e44ad;display:none;" onclick="abrirConfigCamposRuta()">
                                 ⚙️ Config. Campos
                             </button>
@@ -374,6 +451,9 @@
                                 <td>Universidad Politécnica de Madrid</td>
                             </tr>
                         </table>
+                        <br><br><br><p style="font-size:12px; line-height:1.6;">Parte de este TFG se ha desarrollado en el marco del proyecto Twin-ER: Gemelo Digital Piloto de Riesgo Sísmico (PID2023-149468NB-I00). El proyecto Twin-ER corresponde a la convocatoria de Proyectos de Generación de Conocimiento 2023 del Plan Estatal de Investigación Científica, Técnica y de Innovación 2021-2023 de España, con financiación del Ministerio de Ciencia, Innovación y Universidades -Agencia Estatal de Investigación- y del Fondo Europeo de Desarrollo Regional (MCIU/AEI/10.13039/501100011033/FEDER, UE).</p><br>
+                        <div><img src="/static/img/Twin-ER.png" alt="Twin-ER" style="width: 290px; height: auto;"></div>
+                        <div><img src="/static/img/Gobierno.png" alt="Gobierno" style="width: 290px; height: auto;"></div>
                     </div>
                     
                     <div id="info-panel-documentacion" style="display:none; font-size:12px; color:#ecf0f1; line-height:1.6;">
@@ -686,7 +766,7 @@
                     <button id="msw-btn-camion" class="msw-vehiculo"        onclick="seleccionarVehiculo('camion')">🚛 Veh. Pesado</button>
                     <button id="msw-btn-emergencia"
                         onclick="toggleEmergencia()"
-                        title="Emergencia — velocidad +20 km/h"
+                        title="Modo Emergencia"
                         style="border:1px solid #e74c3c;border-radius:6px;background:none;
                                color:#e74c3c;cursor:pointer;font-size:16px;padding:3px 7px;
                                line-height:1;flex-shrink:0;transition:background 0.15s,color 0.15s;">🚨</button>
@@ -704,19 +784,19 @@
                         <input type="checkbox" id="emerg-chk-velocidad" checked
                             onchange="toggleEmergenciaOpcion('velocidad')"
                             style="accent-color:#e74c3c;width:14px;height:14px;cursor:pointer;">
-                        <span><strong>Velocidad máx.</strong> <span style="color:#7f8c8d;font-size:11px;">— si no: +20 km/h</span></span>
+                        <span><strong>Velocidad máx.</strong> <span style="color:#7f8c8d;font-size:11px;"> /+20 km/h</span></span>
                     </label>
                     <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer;color:#2c3e50;">
                         <input type="checkbox" id="emerg-chk-giros" checked
                             onchange="toggleEmergenciaOpcion('giros')"
                             style="accent-color:#e74c3c;width:14px;height:14px;cursor:pointer;">
-                        <span><strong>Giros</strong> <span style="color:#7f8c8d;font-size:11px;">— si no: giros libres</span></span>
+                        <span><strong>Giros</strong> <span style="color:#7f8c8d;font-size:11px;"> /giros libres</span></span>
                     </label>
                     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#2c3e50;">
                         <input type="checkbox" id="emerg-chk-sentido" checked
                             onchange="toggleEmergenciaOpcion('sentido')"
                             style="accent-color:#e74c3c;width:14px;height:14px;cursor:pointer;">
-                        <span><strong>Sentido</strong> <span style="color:#7f8c8d;font-size:11px;">— si no: contramano en urbano</span></span>
+                        <span><strong>Sentido</strong> <span style="color:#7f8c8d;font-size:11px;"> /contramano en urbano</span></span>
                     </label>
                 </div>
                 <div class="msw-puntos" style="position:relative;">
@@ -817,7 +897,7 @@
                             <button onclick="seleccionarModoTiempo('salir')"
                                 class="salir-dropdown-item" id="sdrop-salir">📅 Salir a las</button>
                             <button onclick="seleccionarModoTiempo('llegar')"
-                                class="salir-dropdown-item" id="sdrop-llegar">🏁 Llegar antes de las</button>
+                                class="salir-dropdown-item" id="sdrop-llegar">🎯 Llegar antes de las</button>
                         </div>
                     </div>
 
@@ -860,194 +940,8 @@
          position:fixed no quede atrapado en el stacking context del mapa -->
     <div class="map-controls" id="map-controls">
         <button class="control-btnHome" onclick="resetView()" title="Vista inicial">🏠</button>
-        <button class="control-btnHome" id="btn-capas-base" title="Capas base" onclick="toggleCapasBasePanel()">🗺️</button>
         <button class="control-btnHome" id="btn-capa-compartida" title="Abrir capa de obstáculos compartida" onclick="abrirCapaCompartida()">🚧</button>
     </div>
-
-    <!-- Panel selector de capas base -->
-    <div id="capas-base-panel" style="
-        display: none;
-        position: fixed;
-        bottom: 80px;
-        right: 16px;
-        background: #fff;
-        border-radius: 12px;
-        box-shadow: 0 6px 24px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10);
-        z-index: 2000;
-        min-width: 210px;
-        font-family: 'Segoe UI', system-ui, sans-serif;
-        overflow: hidden;
-        border: 1px solid #e0e0e0;">
-        <div style="padding: 10px 14px 8px; border-bottom: 1px solid #f0f0f0;
-                    font-size: 12px; font-weight: 700; color: #2c3e50;
-                    letter-spacing: 0.05em; text-transform: uppercase;">
-            🗺️ Capa base
-        </div>
-        <div id="capas-base-lista" style="padding: 6px 0;">
-            <!-- Las opciones se generan con JS -->
-        </div>
-    </div>
-
-    <script>
-    // ── Definición de capas base disponibles ─────────────────────────────────
-    var CAPAS_BASE = [
-        {
-            id:    'osm',
-            label: '🗺️ OpenStreetMap',
-            url:   'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            attr:  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 19
-        },
-        {
-            id:    'topo',
-            label: '🏔️ OpenTopoMap',
-            url:   'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-            attr:  '© <a href="https://opentopomap.org">OpenTopoMap</a> contributors',
-            maxZoom: 17
-        },
-        {
-            id:    'satellite',
-            label: '🛰️ Satélite (ESRI)',
-            url:   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            attr:  'Tiles © Esri — Source: Esri, USGS, NOAA',
-            maxZoom: 19
-        },
-        {
-            id:    'hybrid',
-            label: '🛰️ Híbrido (ESRI)',
-            url:   'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-            attr:  'Tiles © Esri',
-            maxZoom: 19,
-            overlay: true  // se superpone sobre satélite
-        },
-        {
-            id:    'carto-light',
-            label: '☀️ CartoDB Claro',
-            url:   'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-            attr:  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
-            maxZoom: 19
-        },
-        {
-            id:    'carto-dark',
-            label: '🌑 CartoDB Oscuro',
-            url:   'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-            attr:  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
-            maxZoom: 19
-        },
-        {
-            id:    'stamen-terrain',
-            label: '🌿 Stamen Terrain',
-            url:   'https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png',
-            attr:  '© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://stamen.com/">Stamen Design</a>',
-            maxZoom: 18
-        },
-        {
-            id:    'watercolor',
-            label: '🎨 Stamen Acuarela',
-            url:   'https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg',
-            attr:  '© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://stamen.com/">Stamen Design</a>',
-            maxZoom: 16
-        },
-        {
-            id:    'cycle',
-            label: '🚴 OpenCycleMap',
-            url:   'https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png',
-            attr:  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 17
-        },
-        {
-            id:    'none',
-            label: '⬜ Sin capa base',
-            url:   null,
-            attr:  '',
-            maxZoom: 22
-        }
-    ];
-
-    var capaBaseActual = null;   // referencia a la capa Leaflet activa
-    var capaBaseId     = 'osm';  // ID de la seleccionada
-
-    // Renderiza los botones del panel
-    function renderCapasBase() {
-        var lista = document.getElementById('capas-base-lista');
-        if (!lista) return;
-        lista.innerHTML = CAPAS_BASE.map(function(c) {
-            var activa = c.id === capaBaseId;
-            return '<button onclick="seleccionarCapaBase(\'' + c.id + '\')" style="\
-                display:block;width:100%;text-align:left;border:none;background:' +
-                (activa ? '#eaf3fb' : 'transparent') + ';\
-                padding:8px 16px;font-size:13px;color:' + (activa ? '#2980b9' : '#2c3e50') + ';\
-                font-weight:' + (activa ? '700' : '400') + ';\
-                cursor:pointer;transition:background 0.1s;\
-                border-left:3px solid ' + (activa ? '#3498db' : 'transparent') + ';\
-                " onmouseover="if(\'' + c.id + '\'!==_capaBaseId)this.style.background=\'#f5f7fa\'" \
-                   onmouseout="if(\'' + c.id + '\'!==_capaBaseId)this.style.background=\'transparent\'">\
-                ' + c.label + '</button>';
-        }).join('');
-    }
-
-    // Abre/cierra el panel
-    function toggleCapasBasePanel() {
-        var panel = document.getElementById('capas-base-panel');
-        if (!panel) return;
-        var visible = panel.style.display !== 'none';
-        panel.style.display = visible ? 'none' : 'block';
-        if (!visible) renderCapasBase();
-    }
-
-    // Cierra el panel al hacer clic fuera de él
-    document.addEventListener('click', function(e) {
-        var panel = document.getElementById('capas-base-panel');
-        var btn   = document.getElementById('btn-capas-base');
-        if (panel && panel.style.display !== 'none') {
-            if (!panel.contains(e.target) && e.target !== btn) {
-                panel.style.display = 'none';
-            }
-        }
-    });
-
-    // Cambia la capa base en el mapa Leaflet
-    function seleccionarCapaBase(id) {
-        capaBaseId = id;
-        renderCapasBase();
-
-        // Esperar a que window.map esté disponible (definido en map-config.js)
-        var intentos = 0;
-        function aplicar() {
-            if (!window.map) {
-                if  (intentos++ < 40) setTimeout (aplicar, 250);
-                return;
-            }
-            // Eliminar capa base anterior
-            if  (capaBaseActual) {
-                window.map.removeLayer (capaBaseActual);
-                capaBaseActual = null;
-            }
-            var def = CAPAS_BASE.find(function(c) { return c.id === id; });
-            if (!def || !def.url) return; // "Sin capa base"
-
-            capaBaseActual = L.tileLayer(def.url, {
-                attribution: def.attr,
-                maxZoom:     def.maxZoom || 19,
-                subdomains:  'abc'
-            }).addTo(window.map);
-
-            // Asegurarse de que quede por debajo de las capas vectoriales
-            capaBaseActual.setZIndex(0);
-        }
-        aplicar();
-        document.getElementById('capas-base-panel').style.display = 'none';
-    }
-
-    // Hook: cuando map-config.js crea el mapa, reemplazar su capa base inicial
-    // por la seleccionada aquí (por defecto OSM, igual que antes).
-    // Si map-config.js ya usa OSM no hay conflicto; si usa otra, esta la gestiona.
-    window.addEventListener('load', function() {
-        setTimeout(function() {
-            if (window.map && capaBaseId) seleccionarCapaBase (capaBaseId);
-        }, 800);
-    });
-    </script>
 
     <div id="notification" class="notification" style="display:none;"></div>
 
@@ -1082,7 +976,7 @@
     <!-- ui/ -->
     <script src="{{ url_for('static', filename='js/ui/ui-controls.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ui/table-manager.js') }}"></script>
-    <!--<script src="{{ url_for('static', filename='js/ui/loader.js') }}"></script>-->
+    <script src="{{ url_for('static', filename='js/ui/loader.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ui/alert.js') }}"></script>
 
     <!-- punto de entrada -->
@@ -1117,9 +1011,17 @@
 
     <!-- Menú flotante opciones editar tabla -->
     <div id="edit-menu" style="display:none;">
+        <div class="edit-menu-section">Columnas</div>
         <button class="edit-menu-item" onclick="abrirModalAnadir()">➕ Añadir columna</button>
-        <button class="edit-menu-item" onclick="activarModoEliminarDesdeMenu()">🗑️ Eliminar columna</button>
-        <button class="edit-menu-item" onclick="abrirModalEditarValores()">✏️ Editar valores</button>
+        <button class="edit-menu-item" onclick="abrirModalRenombrarColumna()">🔤 Renombrar columna</button>
+        <button class="edit-menu-item" onclick="abrirModalEliminarColumna()">🗑️ Eliminar columna…</button>
+        <button class="edit-menu-item" onclick="activarModoEliminarDesdeMenu()">✕ Eliminar columnas (visual)</button>
+        <button class="edit-menu-item" onclick="abrirModalEditarValores()">✏️ Editar valores…</button>
+        <div class="edit-menu-sep"></div>
+        <div class="edit-menu-section">Filas</div>
+        <button class="edit-menu-item" onclick="abrirModalAnadirFila()">➕ Añadir fila</button>
+        <button class="edit-menu-item" onclick="duplicarFilasSeleccionadas()">📋 Duplicar seleccionadas</button>
+        <button class="edit-menu-item edit-menu-item--danger" onclick="eliminarFilasSeleccionadas()">🗑️ Eliminar seleccionadas</button>
     </div>
 
     <!-- Modal genérico de edición -->
@@ -1258,19 +1160,33 @@
                     <label>⏱️ Duración estimada (horas)</label>
                     <input id="ev-duracion" type="number" min="0.5" max="72" step="0.5" value="2" placeholder="Ej: 3">
                 </div>
-                <!-- Afluencia -->
+                <!-- Nivel de impacto (barrera) -->
                 <div class="ev-field">
-                    <label>👥 Afluencia esperada
-                        <span id="ev-afluencia-label" style="color:#8e44ad;font-weight:700;margin-left:6px;">50%</span>
-                    </label>
-                    <div class="ev-slider-wrap">
-                        <span style="font-size:12px;color:#aab0b7;">Baja</span>
-                        <input id="ev-afluencia" type="range" min="0" max="100" value="50"
-                            oninput="const v=this.value,c=v<33?'#2980b9':v<66?'#f39c12':'#e74c3c';document.getElementById('ev-afluencia-label').textContent=v+'%';document.getElementById('ev-afluencia-label').style.color=c;this.style.accentColor=c;">
-                        <span style="font-size:12px;color:#aab0b7;">Alta</span>
+                    <label>🚦 Nivel de impacto en la vía</label>
+                    <!-- Input oculto que guarda el nivel (1-3) -->
+                    <input type="hidden" id="ev-nivel-value" value="1">
+                    <div style="display:flex;gap:6px;margin-top:6px;">
+                        <button id="ev-nivel-btn-1" type="button" onclick="_seleccionarNivelEvento(1)"
+                            style="flex:1;padding:8px 4px;font-size:12px;border-radius:6px;
+                                   border:2px solid #f1c40f;background:#f1c40f;color:#333;cursor:pointer;
+                                   font-weight:700;transition:all 0.15s;">
+                            <strong>🟡 Amarillo</strong><br><span style="font-size:10px;">Precaución (+1)</span>
+                        </button>
+                        <button id="ev-nivel-btn-2" type="button" onclick="_seleccionarNivelEvento(2)"
+                            style="flex:1;padding:8px 4px;font-size:12px;border-radius:6px;
+                                   border:2px solid #e2e8f0;background:#f1f5f9;color:#374151;cursor:pointer;
+                                   font-weight:500;transition:all 0.15s;">
+                            <strong>🟠 Naranja</strong><br><span style="font-size:10px;">Peligro (+2)</span>
+                        </button>
+                        <button id="ev-nivel-btn-3" type="button" onclick="_seleccionarNivelEvento(3)"
+                            style="flex:1;padding:8px 4px;font-size:12px;border-radius:6px;
+                                   border:2px solid #e2e8f0;background:#f1f5f9;color:#374151;cursor:pointer;
+                                   font-weight:500;transition:all 0.15s;">
+                            <strong>🔴 Rojo</strong><br><span style="font-size:10px;">Bloqueado (+3)</span>
+                        </button>
                     </div>
-                    <div style="display:flex;justify-content:space-between;font-size:10px;color:#bdc3c7;margin-top:3px;">
-                        <span>×1.0 sin penalización</span><span>×2.5 media</span><span>×4.0 máx</span>
+                    <div id="ev-nivel-desc" style="font-size:11px;margin-top:6px;color:#f1c40f;font-weight:600;text-align:center;">
+                        Nivel Amarillo — Precaución  (factor x1.5)
                     </div>
                 </div>
             </div>
@@ -1522,49 +1438,75 @@
 
     <!-- Modal de creación de POI -->
     <div id="poi-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;">
-        <div class="obstaculo-box">
+        <div class="obstaculo-box" style="width:360px;max-width:95vw;">
             <div class="obstaculo-titulo" style="cursor:default;">🪧 Nuevo punto de interés</div>
-            <div class="obstaculo-hint">Rellena los datos del POI. Solo el nombre es obligatorio.</div>
-
-            <!-- Nombre -->
-            <div class="obstaculo-field" style="margin-bottom:12px;">
+            <div class="obstaculo-hint">Nombre y Tipo son obligatorios. Dirección y CP se rellenan automáticamente.</div>
+ 
+            <!-- Nombre (obligatorio) -->
+            <div class="obstaculo-field" style="margin-bottom:10px;">
                 <label class="obstaculo-label">Nombre <span style="color:#e74c3c;">*</span></label>
                 <input id="poi-nombre-input" type="text" placeholder="Ej: Colegio San José"
                     style="width:100%;padding:7px 10px;border:1px solid #ccc;border-radius:6px;
                            font-size:13px;box-sizing:border-box;margin-top:4px;"
-                    onkeydown="if(event.key==='Enter')confirmarPoi();if(event.key==='Escape')cerrarPoiModal();">
+                    onkeydown="if(event.key==='Escape')cerrarPoiModal();">
             </div>
-
-            <!-- Tipo -->
-            <div class="obstaculo-field" style="margin-bottom:12px;">
-                <label class="obstaculo-label">Tipo</label>
-                <select id="poi-tipo-select"
+ 
+            <!-- Tipo (obligatorio, editable + datalist) -->
+            <div class="obstaculo-field" style="margin-bottom:10px;">
+                <label class="obstaculo-label">Tipo <span style="color:#e74c3c;">*</span></label>
+                <input id="poi-tipo-input" type="text" list="poi-tipo-datalist"
+                    placeholder="Escribe o elige un tipo…"
                     style="width:100%;padding:7px 10px;border:1px solid #ccc;border-radius:6px;
-                           font-size:13px;margin-top:4px;background:#fff;">
-                    <option value="colegio">🏫 Colegio</option>
-                    <option value="iglesia">⛪ Iglesia / templo</option>
-                    <option value="oficina">🏢 Oficina / servicio público</option>
-                    <option value="ocio">🎭 Ocio / restauración</option>
-                    <option value="otro" selected>📍 Otro</option>
-                </select>
+                           font-size:13px;box-sizing:border-box;margin-top:4px;background:#fff;"
+                    onkeydown="if(event.key==='Escape')cerrarPoiModal();">
+                <datalist id="poi-tipo-datalist"></datalist>
             </div>
-
-            <!-- ID opcional -->
+ 
+            <!-- Pedanía (opcional) -->
+            <div class="obstaculo-field" style="margin-bottom:10px;">
+                <label class="obstaculo-label">Pedanía <span style="font-weight:400;color:#95a5a6;">(opcional)</span></label>
+                <input id="poi-pedania-input" type="text" placeholder="Ej: Puerto Lumbreras"
+                    style="width:100%;padding:7px 10px;border:1px solid #ccc;border-radius:6px;
+                           font-size:13px;box-sizing:border-box;margin-top:4px;">
+            </div>
+ 
+            <!-- Teléfono (opcional) -->
+            <div class="obstaculo-field" style="margin-bottom:10px;">
+                <label class="obstaculo-label">Teléfono <span style="font-weight:400;color:#95a5a6;">(opcional)</span></label>
+                <input id="poi-telefono-input" type="tel" placeholder="Ej: 968400000"
+                    style="width:100%;padding:7px 10px;border:1px solid #ccc;border-radius:6px;
+                           font-size:13px;box-sizing:border-box;margin-top:4px;">
+            </div>
+ 
+            <!-- Email (opcional) -->
+            <div class="obstaculo-field" style="margin-bottom:10px;">
+                <label class="obstaculo-label">Email <span style="font-weight:400;color:#95a5a6;">(opcional)</span></label>
+                <input id="poi-email-input" type="email" placeholder="Ej: info@ejemplo.es"
+                    style="width:100%;padding:7px 10px;border:1px solid #ccc;border-radius:6px;
+                           font-size:13px;box-sizing:border-box;margin-top:4px;">
+            </div>
+ 
+            <!-- URL (opcional) -->
             <div class="obstaculo-field" style="margin-bottom:4px;">
-                <label class="obstaculo-label">ID (opcional)</label>
-                <input id="poi-id-input" type="text" placeholder="Ej: colegio-01"
+                <label class="obstaculo-label">URL <span style="font-weight:400;color:#95a5a6;">(opcional)</span></label>
+                <input id="poi-url-input" type="url" placeholder="Ej: www.ejemplo.es"
                     style="width:100%;padding:7px 10px;border:1px solid #ccc;border-radius:6px;
-                           font-size:13px;box-sizing:border-box;margin-top:4px;"
-                    onkeydown="if(event.key==='Enter')confirmarPoi();if(event.key==='Escape')cerrarPoiModal();">
+                           font-size:13px;box-sizing:border-box;margin-top:4px;">
             </div>
-            <div id="poi-id-error"
-                style="display:none;font-size:12px;color:#e74c3c;
-                       background:rgba(231,76,60,0.12);border-radius:4px;
-                       padding:5px 8px;margin-bottom:8px;"></div>
-
+ 
+            <!-- Info dirección automática -->
+            <div id="poi-direccion-info" style="display:none;margin-top:8px;padding:6px 10px;
+                background:#eaf3fb;border-radius:5px;font-size:11px;color:#2980b9;border:1px solid #bee3f8;">
+                📍 <span id="poi-direccion-texto"></span>
+            </div>
+ 
+            <div id="poi-error" style="display:none;font-size:12px;color:#e74c3c;
+                   background:rgba(231,76,60,0.12);border-radius:4px;
+                   padding:5px 8px;margin-top:8px;"></div>
+ 
             <div class="obstaculo-footer" style="margin-top:14px;">
                 <button class="obstaculo-btn-cancel" onclick="cerrarPoiModal()">Cancelar</button>
-                <button class="obstaculo-btn-ok"     onclick="confirmarPoi()">✅ Colocar</button>
+                <button class="obstaculo-btn-ok"     onclick="confirmarPoi()">✅ Guardar POI</button>
             </div>
         </div>
     </div>
@@ -1611,7 +1553,8 @@
                 🚧 Nuevo obstáculo
             </div>
             <div class="obstaculo-hint">
-                Selecciona el nivel de impacto en la vía.<br>Dijkstra decidirá si merece la pena rodearlo.
+                Selecciona el color de la barrera. Cada barrera <strong>sube el nivel</strong> de la vía:<br>
+                🟡 Amarillo +1 · 🟠 Naranja +2 · 🔴 Rojo +3 niveles (Verde→Amarillo→Naranja→Rojo)
             </div>
             <div id="obstaculo-id-hint"
                  style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(52,152,219,0.8);margin-bottom:14px;
@@ -1626,32 +1569,27 @@
                         padding:5px 8px;margin-bottom:10px;">
             </div>
 
-            <!-- Input oculto que guarda el nivel seleccionado (1-4) -->
-            <input type="hidden" id="obs-nivel-value" value="2">
+            <!-- Input oculto que guarda el nivel seleccionado (1-3) -->
+            <input type="hidden" id="obs-nivel-value" value="1">
 
             <div class="obstaculo-field">
                 <label class="obstaculo-label">Nivel de impacto</label>
                 <div style="display:flex;gap:6px;margin-top:4px;">
                     <button id="obs-nivel-btn-1" type="button" onclick="_seleccionarNivelObs(1)"
                         style="flex:1;padding:8px 4px;font-size:12px;border-radius:6px;
-                            border:2px solid #ddd;background:#f8f9fa;color:#555;cursor:pointer;transition:all 0.15s;">
-                        <strong>Nivel 1</strong><br><span style="font-size:10px;">Leve</span>
+                            border:2px solid #f1c40f;background:#f1c40f;color:#333;cursor:pointer;
+                            font-weight:700;transition:all 0.15s;">
+                        <strong>🟡 Amarillo</strong><br><span style="font-size:10px;">Precaución (+1)</span>
                     </button>
                     <button id="obs-nivel-btn-2" type="button" onclick="_seleccionarNivelObs(2)"
                         style="flex:1;padding:8px 4px;font-size:12px;border-radius:6px;
-                            border:2px solid #f39c12;background:#f39c12;color:#fff;cursor:pointer;
-                            font-weight:700;transition:all 0.15s;">
-                        <strong>Nivel 2</strong><br><span style="font-size:10px;">Moderado</span>
+                            border:2px solid #ddd;background:#f8f9fa;color:#555;cursor:pointer;transition:all 0.15s;">
+                        <strong>🟠 Naranja</strong><br><span style="font-size:10px;">Peligro (+2)</span>
                     </button>
                     <button id="obs-nivel-btn-3" type="button" onclick="_seleccionarNivelObs(3)"
                         style="flex:1;padding:8px 4px;font-size:12px;border-radius:6px;
                             border:2px solid #ddd;background:#f8f9fa;color:#555;cursor:pointer;transition:all 0.15s;">
-                        <strong>Nivel 3</strong><br><span style="font-size:10px;">Alto</span>
-                    </button>
-                    <button id="obs-nivel-btn-4" type="button" onclick="_seleccionarNivelObs(4)"
-                        style="flex:1;padding:8px 4px;font-size:12px;border-radius:6px;
-                            border:2px solid #ddd;background:#f8f9fa;color:#555;cursor:pointer;transition:all 0.15s;">
-                        <strong>Nivel 4</strong><br><span style="font-size:10px;">Máximo</span>
+                        <strong>🔴 Rojo</strong><br><span style="font-size:10px;">Bloqueado (+3)</span>
                     </button>
                 </div>
             </div>
@@ -1863,6 +1801,8 @@
         };
     });
     </script>
+
+    <script src="{{ url_for('static', filename='js/ui/poi-manager.js') }}"></script>
 
 </body>
 </html>

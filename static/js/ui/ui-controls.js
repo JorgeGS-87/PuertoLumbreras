@@ -175,7 +175,7 @@ function _actualizarControlesMapa() {
 // Todos los módulos (table-manager, map-widgets, ui-controls) subscriben aquí
 // sus callbacks en vez de crear observadores propios sobre el mismo elemento.
 // Esto evita que tres observadores independientes disparen en cascada en cada
-// frame de la transición CSS del panel (300-350 ms × 60fps ≈ 18-21 disparos
+// frame de la transición CSS del panel (300-350 ms x 60fps ≈ 18-21 disparos
 // por transición, multiplicados por 3 = hasta 63 disparos simultáneos).
 
 (function _initLayoutHub() {

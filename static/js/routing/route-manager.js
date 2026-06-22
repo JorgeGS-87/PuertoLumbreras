@@ -418,31 +418,47 @@ function _actualizarLabelsMsw() {
 // ==================== NIVELES DE OBSTÁCULO ====================
 
 /**
- * Tabla de 4 niveles de impacto para obstáculos.
- * obstruccion es el valor interno (0-1) usado en la fórmula de penalización:
- *   factor = 1 / (1 - obstruccion * 0.99)
- *   Nivel 1 → obstruccion=0.25 → factor ≈ ×1.33  (Leve)
- *   Nivel 2 → obstruccion=0.50 → factor ≈ ×2.02  (Moderado)
- *   Nivel 3 → obstruccion=0.75 → factor ≈ ×4.03  (Alto)
- *   Nivel 4 → obstruccion=0.99 → factor ≈ ×100   (Máximo — prácticamente bloqueado)
+ * Sistema de 3 niveles de barrera (delta sobre el estado de la vía).
  *
- * Los eventos usan la misma fórmula → factores idénticos por nivel.
+ * Las barreras actúan como INCREMENTOS sobre el estado base de la vía:
+ *   Estado de vía: Verde(0) → Amarillo(1) → Naranja(2) → Rojo(3)
+ *   Barrera Amarilla (delta=1): sube 1 nivel  → Verde→Amarillo, Amarillo→Naranja, ...
+ *   Barrera Naranja  (delta=2): sube 2 niveles → Verde→Naranja, Amarillo→Rojo, ...
+ *   Barrera Roja     (delta=3): sube 3 niveles → Verde→Rojo (siempre Rojo)
+ *
+ * Si varios obstáculos afectan el mismo segmento, sus deltas se acumulan:
+ *   estado_final = min(3, sum(deltas))
+ *
+ * Tabla de estados de vía (resultado final) → obstruccion:
+ *   Verde    (0) → 0.00  → factor x1.0   (sin efecto)
+ *   Amarillo (1) → 0.33  → factor ≈x1.49 (reducción moderada)
+ *   Naranja  (2) → 0.67  → factor ≈x3.0  (reducción severa)
+ *   Rojo     (3) → 0.99  → factor ≈x100  (prácticamente bloqueado)
+ *
+ * El campo `nivel` (1-3) almacenado en cada obstáculo ES el delta.
  */
 const NIVELES_OBS = {
-    1: { obstruccion: 0.25, color: '#27ae60', label: 'Nivel 1', desc: 'Leve'     },
-    2: { obstruccion: 0.50, color: '#f39c12', label: 'Nivel 2', desc: 'Moderado' },
-    3: { obstruccion: 0.75, color: '#e67e22', label: 'Nivel 3', desc: 'Alto'     },
-    4: { obstruccion: 0.99, color: '#e74c3c', label: 'Nivel 4', desc: 'Máximo'   },
+    1: { obstruccion: 0.33, color: '#f1c40f', label: 'Nivel Amarillo', desc: 'Precaución'  },
+    2: { obstruccion: 0.67, color: '#e67e22', label: 'Nivel Naranja',  desc: 'Peligro'     },
+    3: { obstruccion: 0.99, color: '#e74c3c', label: 'Nivel Rojo',     desc: 'Bloqueado'   },
 };
 
-/** Convierte un nivel (1-4) a su valor de obstrucción. */
+/**
+ * Tabla de estado de vía (0-3) → obstruccion (0-1).
+ * Usada por el backend y por la acumulación de deltas en el frontend.
+ */
+const _ESTADO_VIA_OBS = [0.00, 0.33, 0.67, 0.99];
+
+/** Convierte un nivel-delta (1-3) a su valor de obstrucción directo
+ *  (asume vía en estado base Verde=0). */
 function _obstruccionDeNivel(nivel) {
-    return (NIVELES_OBS[nivel] ?? NIVELES_OBS[2]).obstruccion;
+    nivel = Math.max(1, Math.min(3, nivel));
+    return NIVELES_OBS[nivel].obstruccion;
 }
 
-/** Convierte obstruccion (0-1) al nivel 1-4 más cercano. */
+/** Convierte obstruccion (0-1) al nivel-delta 1-3 más cercano. */
 function _nivelObs(obstruccion) {
-    const ob = obstruccion ?? 0.5;
+    const ob = obstruccion ?? 0.33;
     let mejor = 1, mejorDist = Infinity;
     for (const [n, cfg] of Object.entries(NIVELES_OBS)) {
         const d = Math.abs(cfg.obstruccion - ob);
@@ -451,7 +467,7 @@ function _nivelObs(obstruccion) {
     return mejor;
 }
 
-/** Devuelve el color del nivel correspondiente a la obstruccion dada. */
+/** Devuelve el color del nivel-delta correspondiente a la obstruccion dada. */
 function _colorObs(v) {
     return NIVELES_OBS[_nivelObs(v)].color;
 }
@@ -586,7 +602,7 @@ function _popupHTML(idx) {
     const numFila = activos.indexOf(obs) + 1;
     const label   = obs.obsId !== null ? `#${obs.obsId}` : `#${numFila}`;
 
-    const botonesNivel = [1,2,3,4].map(n => {
+    const botonesNivel = [1,2,3].map(n => {
         const ni = NIVELES_OBS[n];
         const sel = n === nivel;
         return `<button onclick="cambiarNivelObstaculo(${idx},${n})"
@@ -622,7 +638,7 @@ function _popupHTML(idx) {
 function cambiarNivelObstaculo(idx, nivel) {
     const obs = obstaculos[idx];
     if (!obs) return;
-    nivel = Math.max(1, Math.min(4, nivel));
+    nivel = Math.max(1, Math.min(3, nivel));
     const nuevaObs = _obstruccionDeNivel(nivel);
     if (nuevaObs === obs.obstruccion) return;  // sin cambio: no repintar ni notificar
     obs.obstruccion = nuevaObs;
@@ -638,7 +654,7 @@ function cambiarNivelObstaculo(idx, nivel) {
     if (window._capaCompartidaActiva && obs._bdId && window._rt?.emit) {
         window._rt.emit('obs_compartido_mover', {
             id: obs._bdId, lat: obs.latlng.lat, lng: obs.latlng.lng,
-            porcentaje: Math.round(nuevaObs * 100), portal: obs.portal || '',
+            nivel: _nivelObs(nuevaObs), portal: obs.portal || '',
         });
     }
     showNotification(`Obstáculo → ${info.label} (${info.desc})`, 'info');
@@ -649,13 +665,13 @@ function _aplicarPctPopup(idx) {
     // No hace nada: la lógica se gestiona vía cambiarNivelObstaculo
 }
 
-// ==================== MODAL % AL CREAR OBSTÁCULO ====================
+// ==================== MODAL DE NIVEL AL CREAR OBSTÁCULO ====================
 
 let _latlngPendiente   = null;
 let _moverObstaculoIdx = null;
 
-/** Resetea el modal al nivel 2 (Moderado) y lo muestra */
-function _pedirPorcentajeObstaculo(latlng) {
+/** Resetea el modal al nivel 1 (Amarillo) y lo muestra */
+function _pedirNivelObstaculo(latlng) {
     _latlngPendiente = latlng;
 
     const titulo  = document.getElementById('obstaculo-titulo');
@@ -674,8 +690,8 @@ function _pedirPorcentajeObstaculo(latlng) {
     if (hint)  hint.style.display  = '';
     if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
 
-    // Seleccionar nivel 2 por defecto
-    _seleccionarNivelObs(2);
+    // Seleccionar nivel 1 (Amarillo) por defecto
+    _seleccionarNivelObs(1);
 
     document.getElementById('obstaculo-modal').style.display = 'flex';
 }
@@ -685,13 +701,13 @@ function _seleccionarNivelObs(nivel) {
     window._nivelObstaculoPendiente = nivel;
     const input = document.getElementById('obs-nivel-value');
     if (input) input.value = nivel;
-    for (let n = 1; n <= 4; n++) {
+    for (let n = 1; n <= 3; n++) {
         const btn = document.getElementById(`obs-nivel-btn-${n}`);
         if (!btn) continue;
         const info = NIVELES_OBS[n];
         const sel  = n === nivel;
         btn.style.background  = sel ? info.color : '#f8f8f8';
-        btn.style.color       = sel ? '#fff'      : '#555';
+        btn.style.color       = sel ? (n === 1 ? '#333' : '#fff') : '#555';
         btn.style.borderColor = sel ? info.color  : '#ddd';
         btn.style.fontWeight  = sel ? '700' : '400';
         btn.style.transform   = sel ? 'scale(1.06)' : 'scale(1)';
@@ -699,7 +715,7 @@ function _seleccionarNivelObs(nivel) {
     const desc = document.getElementById('obs-nivel-desc');
     if (desc) {
         const info = NIVELES_OBS[nivel];
-        desc.textContent  = `${info.label} — ${info.desc}  (factor ×${(1/(1-info.obstruccion*0.99)).toFixed(1)})`;
+        desc.textContent  = `${info.label} — ${info.desc}  (factor x${(1/(1-info.obstruccion*0.99)).toFixed(1)})`;
         desc.style.color  = info.color;
     }
 }
@@ -784,7 +800,7 @@ function cerrarObstaculoModal() {
 
 function confirmarObstaculo() {
     const nivelInput = document.getElementById('obs-nivel-value');
-    const nivel  = Math.max(1, Math.min(4, parseInt(nivelInput?.value ?? window._nivelObstaculoPendiente ?? 2, 10) || 2));
+    const nivel  = Math.max(1, Math.min(3, parseInt(nivelInput?.value ?? window._nivelObstaculoPendiente ?? 2, 10) || 2));
     const titulo = document.getElementById('obstaculo-titulo');
     const errEl  = document.getElementById('obstaculo-id-error');
 
@@ -813,9 +829,15 @@ function iniciarMoverObstaculo(idx) {
     document.getElementById('map').style.cursor = 'crosshair';
 }
 
+// ── Radio de influencia de un obstáculo (metros) ──────────────────────────────
+// Debe ser coherente con el valor enviado al backend en el payload de calcular-ruta.
+// 20 m permite capturar la calzada aunque el clic caiga en la acera, sin alcanzar
+// vías paralelas en calles estrechas típicas de Puerto Lumbreras.
+const RADIO_OBSTACULO_M = 7;
+
 // ── Helper compartido: encuentra segmentos de vía dentro de un radio ─────────
 // Usa aritmética pura en grados evitando la creación de objetos L.LatLng en
-// el bucle interno. 5 muestras por segmento son suficientes para radios ≤ 10 m.
+// el bucle interno. 10 muestras por segmento son suficientes para radios ≤ 25 m.
 function _segmentosViasEnRadio(latlng, radioMetros) {
     const segs   = [];
     if (!viasLayer) return segs;
@@ -831,8 +853,8 @@ function _segmentosViasEnRadio(latlng, radioMetros) {
         for (let i = 0; i < coords.length - 1; i++) {
             const ax = coords[i][0],   ay = coords[i][1];
             const bx = coords[i+1][0], by = coords[i+1][1];
-            for (let j = 0; j <= 4; j++) {
-                const t    = j / 4;
+            for (let j = 0; j <= 10; j++) {
+                const t    = j / 10;
                 const dLat = (ay + t * (by - ay)) - oLat;
                 const dLon = (ax + t * (bx - ax)) - oLon;
                 if (dLat * dLat + dLon * dLon <= rDeg2) {
@@ -859,7 +881,7 @@ function _moverObstaculoA(idx, nuevaLatlng) {
     obs.segmentosBloqueados = [];
 
     const color = _colorObs(obs.obstruccion ?? 0.5);
-    _segmentosViasEnRadio(nuevaLatlng, 5).forEach(({ p1, p2 }) => {
+    _segmentosViasEnRadio(nuevaLatlng, RADIO_OBSTACULO_M).forEach(({ p1, p2 }) => {
         obs.segmentosBloqueados.push(
             L.polyline([p1, p2], {
                 color, weight: 6, opacity: 1,
@@ -907,9 +929,9 @@ map.on('click', function (e) {
         if (typeof desactivarModoEvento === 'function' && window._modoEvento) desactivarModoEvento();
     }
 
-    // Nuevo obstáculo: pedir porcentaje primero (solo si NO estamos esperando origen/destino)
+    // Nuevo obstáculo: pedir nivel primero (solo si NO estamos esperando origen/destino)
     if (modoObstaculo && !window._esperandoOrigen && !window._esperandoDestino) {
-        _pedirPorcentajeObstaculo(e.latlng);
+        _pedirNivelObstaculo(e.latlng);
         return;
     }
 
@@ -991,7 +1013,7 @@ function calcularRuta(forzar = false) {
     // Si sigue sin estar configurado y el usuario puede hacerlo, abrir modal
     if (!window.camposRutaConfigurados && window._userRol !== 'invitado') {
         showNotification('⚙️ Configura los atributos de ruta antes de calcular', 'warning');
-        abrirConfigCamposRuta();
+        abrirConfigCamposRuta(true);
         return;
     }
 
@@ -1003,8 +1025,9 @@ function calcularRuta(forzar = false) {
     const obstaculosActivos = obstaculos.filter(Boolean).map(obs => ({
         lat:         obs.latlng.lat,
         lon:         obs.latlng.lng,
-        radio:       5,
-        obstruccion: obs.obstruccion ?? 0.5
+        radio:       RADIO_OBSTACULO_M,
+        nivel:       _nivelObs(obs.obstruccion ?? 0.33),   // delta 1-3 (Amarillo/Naranja/Rojo)
+        obstruccion: obs.obstruccion ?? 0.33
     }));
 
     // Calcular pesos — puede lanzar error si los campos configurados son inválidos
@@ -1366,11 +1389,11 @@ function crearObstaculo(latlng, obstruccion = 0.5, obsId = null, portal = '') {
     }).addTo(map);
 
     const circulo = L.circle(latlng, {
-        radius: 5, color, fillColor: color, fillOpacity: 0.25, weight: 2
+        radius: RADIO_OBSTACULO_M, color, fillColor: color, fillOpacity: 0.25, weight: 2
     }).addTo(map);
 
     // Usar el helper optimizado (sin L.latLng en el bucle interno)
-    const segmentosBloqueados = _segmentosViasEnRadio(latlng, 5).map(({ p1, p2 }) =>
+    const segmentosBloqueados = _segmentosViasEnRadio(latlng, RADIO_OBSTACULO_M).map(({ p1, p2 }) =>
         L.polyline([p1, p2], {
             color, weight: 6, opacity: 1,
             dashArray: '10, 10', className: 'via-bloqueada'
@@ -1429,8 +1452,8 @@ async function exportarObstaculos(options = {}) {
         lat:            obs.latlng.lat,
         lon:            obs.latlng.lng,
         id:             obs.obsId !== null ? obs.obsId : (i + 1),
-        nivel:          _nivelObs(obs.obstruccion ?? 0.5),
-        pct:            Math.round((obs.obstruccion ?? 0.5) * 100),
+        nivel:          _nivelObs(obs.obstruccion ?? 0.33),
+        nivel_label:    NIVELES_OBS[_nivelObs(obs.obstruccion ?? 0.33)].label,
         vias_afectadas: _nombresViasAfectadas(obs).join(', '),
         fecha_creacion: new Date().toISOString().slice(0, 19).replace('T', ' '),
     }));
@@ -1494,14 +1517,14 @@ async function exportarObstaculosCSV(options = {}) {
     const payload = activos.map((obs, i) => {
         const viasAfectadas = _nombresViasAfectadas(obs);
         const escruce = viasAfectadas.length > 1;
-        const nivel   = _nivelObs(obs.obstruccion ?? 0.5);
+        const nivel   = _nivelObs(obs.obstruccion ?? 0.33);
         return {
             id:           i + 1,
             Nombre:       obs.obsId !== null ? obs.obsId : `${i + 1}`,
             coord_lat:    obs.latlng.lat,
             coord_lon:    obs.latlng.lng,
             Nivel:        nivel,
-            Porcentaje:   Math.round((obs.obstruccion ?? 0.5) * 100),
+            Nivel_label:  NIVELES_OBS[nivel].label,
             Cruce:        escruce ? 'Sí' : 'No',
             Calles:       viasAfectadas.join('; '),
             Portal:       obs.portal ?? ''
@@ -1708,15 +1731,18 @@ function importarObstaculosCSV(input) {
 function _resolverImportacion(obsArray) {
     // Normalizar: cada elemento tendrá { lat, lon, obstruccion, id, nombre }
     const pendientes = obsArray.map(o => {
-        // Acepta nivel directo (1-4), pct legacy (0-100) o obstruccion (0-1)
+        // Acepta nivel directo (1-3) o valor de obstruccion (0-1) directo.
+        // Archivos legacy con campo 'pct' (sistema antiguo de porcentajes) se mapean
+        // al nivel más cercano para mantener compatibilidad de importación.
         let obstruccion;
         if (o.nivel !== undefined && o.nivel !== null) {
-            const nivel = Math.max(1, Math.min(4, parseInt(o.nivel, 10) || 2));
+            const nivel = Math.max(1, Math.min(3, parseInt(o.nivel, 10) || 1));
             obstruccion = _obstruccionDeNivel(nivel);
-        } else if (o.pct !== undefined && o.pct !== null) {
-            obstruccion = parseInt(o.pct, 10) / 100;
+        } else if (o.obstruccion !== undefined && o.obstruccion !== null) {
+            // Valor directo 0-1: snapear al nivel más cercano
+            obstruccion = _obstruccionDeNivel(_nivelObs(parseFloat(o.obstruccion)));
         } else {
-            obstruccion = 0.5;
+            obstruccion = 0.33; // Amarillo por defecto
         }
         return {
             lat: o.lat,
@@ -1792,7 +1818,7 @@ function _mostrarModalConflictoId(obs, pendientes, idx, resueltos) {
             <div id="conflict-id-error" style="color:#e74c3c;font-size:12px;margin-top:4px;display:none;"></div>
         </div>
         <div class="mbox-row" style="font-size:12px;color:#7f8c8d;">
-            Obstáculo: ${NIVELES_OBS[_nivelObs(obs.obstruccion ?? 0.5)]?.label ?? 'Nivel 2'} · (${obs.lat.toFixed(5)}, ${obs.lon.toFixed(5)})
+            Obstáculo: ${NIVELES_OBS[_nivelObs(obs.obstruccion ?? 0.33)]?.label ?? 'Nivel Amarillo'} · (${obs.lat.toFixed(5)}, ${obs.lon.toFixed(5)})
         </div>
     `;
 
@@ -1896,7 +1922,7 @@ function autodetectarCamposRuta(geojson) {
 }
 
 
-function abrirConfigCamposRuta() {
+function abrirConfigCamposRuta(desdeFlujoRuta = false) {
     if (window._userRol === 'invitado') {
         showNotification('Regístrate para configurar los campos de ruta', 'warning');
         return;
@@ -1927,12 +1953,23 @@ function abrirConfigCamposRuta() {
         sel.value = window.camposRuta[campo] || '';
     });
 
+    // Recordar si el modal se abrió dentro del flujo de "Cómo llegar" para,
+    // al cerrarlo, retomar (o no) el cursor de selección de origen/destino
+    window._configCamposDesdeFlujoRuta = !!desdeFlujoRuta;
+
     document.getElementById('campos-ruta-modal').style.display = 'flex';
 }
 
 function cerrarConfigCamposRuta() {
     document.getElementById('campos-ruta-modal').style.display = 'none';
-    mostrarInstruccionOrigen();
+
+    // Solo retomar el cursor de "elegir origen" si el modal se abrió desde
+    // el flujo de cálculo de ruta; si se abrió desde el panel de capas, no
+    // hay ninguna selección de punto en curso que retomar.
+    if (window._configCamposDesdeFlujoRuta) {
+        mostrarInstruccionOrigen();
+    }
+
     if (!window.camposRutaConfigurados) {
         // No había config previa: usar defaults silenciosamente
         window.camposRuta = { velocidad: null, carriles: null, tipo: null };
@@ -1988,7 +2025,13 @@ function guardarConfigCamposRuta() {
     // Invalidar caché de pesos: la configuración de campos ha cambiado
     _invalidarPesosCache();
     showNotification('✅ Configuración guardada: ' + resumen, 'success');
-    mostrarInstruccionOrigen();
+
+    // Solo retomar el cursor de "elegir origen" si el modal se abrió desde
+    // el flujo de cálculo de ruta; si se abrió desde el panel de capas, no
+    // hay ninguna selección de punto en curso que retomar.
+    if (window._configCamposDesdeFlujoRuta) {
+        mostrarInstruccionOrigen();
+    }
 }
 
 
@@ -2355,7 +2398,7 @@ function _mostrarInfoTemporal(tiempoMinutos) {
                 <span style="background:${info.color};color:#fff;border-radius:4px;padding:1px 7px;font-weight:700;">
                     ${info.emoji} ${info.tipoLabel}
                 </span>
-                <span style="color:#555;">${info.franjaLabel} · ×${coef.toFixed(2)}</span>
+                <span style="color:#555;">${info.franjaLabel} · x${coef.toFixed(2)}</span>
             </div>
             <div style="margin-top:5px;color:#2c3e50;">
                 🚀 Salida: <strong>${_fmt(fecha)}</strong> &nbsp;
@@ -2373,7 +2416,7 @@ function _mostrarInfoTemporal(tiempoMinutos) {
                 <span style="background:${info.color};color:#fff;border-radius:4px;padding:1px 7px;font-weight:700;">
                     ${info.emoji} ${info.tipoLabel}
                 </span>
-                <span style="color:#555;">${info.franjaLabel} · ×${coef.toFixed(2)}</span>
+                <span style="color:#555;">${info.franjaLabel} · x${coef.toFixed(2)}</span>
             </div>
             <div style="margin-top:5px;color:#2c3e50;">
                 📅 Salida: <strong>${_fmt(fecha)} ${_fmtFecha(fecha)}</strong><br>
@@ -2393,7 +2436,7 @@ function _mostrarInfoTemporal(tiempoMinutos) {
                 <span style="background:${info.color};color:#fff;border-radius:4px;padding:1px 7px;font-weight:700;">
                     ${info.emoji} ${info.tipoLabel}
                 </span>
-                <span style="color:#555;">${info.franjaLabel} · ×${coef.toFixed(2)}</span>
+                <span style="color:#555;">${info.franjaLabel} · x${coef.toFixed(2)}</span>
             </div>
             <div style="margin-top:5px;color:#2c3e50;">
                 🏁 Quieres llegar: <strong>${_fmt(fecha)} ${_fmtFecha(fecha)}</strong><br>
@@ -2439,13 +2482,10 @@ function _mostrarInfoEventosEnRuta(coordsRuta, props) {
     const tiempoBase = typeof props?.tiempo_minutos_base === 'number'
         ? props.tiempo_minutos_base
         : props?.tiempo_minutos ?? 0;
-    const tiempoReal = props?.tiempo_minutos ?? 0;
+    const tiempoReal  = props?.tiempo_minutos ?? 0;
     const tiempoExtra = (typeof props?.tiempo_extra_eventos === 'number')
         ? _fmtTiempo(props.tiempo_extra_eventos)
         : _fmtTiempo(Math.max(0, tiempoReal - tiempoBase) / 60);
-    const pct = tiempoBase > 0
-        ? Math.round((tiempoReal / tiempoBase - 1) * 100)
-        : Math.round((factorMax - 1) * 100);
     const color = factorMax >= 3.5 ? '#e74c3c' : factorMax >= 2 ? '#f39c12' : '#8e44ad';
 
     const evDiv = document.createElement('div');
@@ -2457,11 +2497,11 @@ function _mostrarInfoEventosEnRuta(coordsRuta, props) {
             <span style="background:${color};color:#fff;border-radius:4px;padding:1px 7px;font-weight:700;">
                 🎪 Evento activo
             </span>
-            <span style="color:${color};font-weight:700;">+${pct}% tiempo (+${tiempoExtra})</span>
+            <span style="color:${color};font-weight:700;">x${factorMax.toFixed(1)} tráfico (+${tiempoExtra})</span>
         </div>
         <div style="color:#555;">
             ${eventosAfectantes} tramo(s) de la ruta atraviesan una zona de evento.<br>
-            Factor máximo: ×${factorMax.toFixed(2)} · +${tiempoExtra}
+            Factor de impacto: x${factorMax.toFixed(2)} · +${tiempoExtra}
         </div>`;
     infoEl.insertAdjacentElement('afterend', evDiv);
 }
@@ -2484,7 +2524,7 @@ function _mostrarInfoObstaculosEnRuta(coordsRuta, props) {
     const obsPrep = activos.map(obs => ({
         lat:         obs.latlng.lat,
         lon:         obs.latlng.lng,
-        rDeg2:       Math.pow((obs.radio || 5) / 111000, 2),
+        rDeg2:       Math.pow((obs.radio || RADIO_OBSTACULO_M) / 111000, 2),
         obstruccion: Math.min(obs.obstruccion || 1.0, 0.99),
     }));
 
@@ -2506,12 +2546,14 @@ function _mostrarInfoObstaculosEnRuta(coordsRuta, props) {
 
     if (factorMax <= 1.0) return;
 
-    const tiempoBase = props?.tiempo_minutos ?? 0;
+    const tiempoBase  = props?.tiempo_minutos ?? 0;
     const tiempoExtra = (typeof props?.tiempo_extra_obstaculos === 'number')
         ? _fmtTiempo(props.tiempo_extra_obstaculos)
         : _fmtTiempo(tiempoBase * (factorMax - 1) / factorMax / 60);
-    const pct   = Math.round((factorMax - 1) * 100);
-    const color = factorMax >= 5 ? '#e74c3c' : factorMax >= 2 ? '#f39c12' : '#8e44ad';
+    // Derivar el nivel de color del factor máximo encontrado
+    const nivelMax  = factorMax >= 50 ? 3 : factorMax >= 2.5 ? 2 : 1;
+    const nivelInfo = NIVELES_OBS[nivelMax];
+    const color     = nivelInfo.color;
 
     const obsDiv = document.createElement('div');
     obsDiv.id = 'ruta-obstaculo-info';
@@ -2519,14 +2561,14 @@ function _mostrarInfoObstaculosEnRuta(coordsRuta, props) {
         background:${color}18;border:1px solid ${color};`;
     obsDiv.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-            <span style="background:${color};color:#fff;border-radius:4px;padding:1px 7px;font-weight:700;">
-                🚧 Obstáculo
+            <span style="background:${color};color:${nivelMax === 1 ? '#333' : '#fff'};border-radius:4px;padding:1px 7px;font-weight:700;">
+                🚧 ${nivelInfo.label}
             </span>
-            <span style="color:${color};font-weight:700;">+${pct}% tiempo (+${tiempoExtra})</span>
+            <span style="color:${color};font-weight:700;">x${factorMax.toFixed(1)} (+${tiempoExtra})</span>
         </div>
         <div style="color:#555;">
             ${obstaculosAfectantes} tramo(s) de la ruta atraviesan una zona de obstáculo.<br>
-            Factor máximo: ×${factorMax.toFixed(2)}
+            Factor de impacto: x${factorMax.toFixed(2)}
         </div>`;
     infoEl.insertAdjacentElement('afterend', obsDiv);
 }

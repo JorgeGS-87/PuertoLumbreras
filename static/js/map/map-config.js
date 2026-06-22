@@ -6,7 +6,7 @@
 // Variables globales
 const mapOptions = {
     center: [37.55980075138512, -1.8103973775466737],
-    zoom: 15,
+    zoom: 18,
     minZoom: 9,
     maxBounds: [
         [37.35, -2.35],   // SW — esquina suroeste de Murcia
@@ -42,6 +42,52 @@ const capaPNOA = L.tileLayer(
     {
         attribution: '© Instituto Geográfico Nacional de España',
         maxZoom: 19
+    }
+);
+
+// Mapa Topográfico Nacional (IGN)
+const capaIGNTopo = L.tileLayer(
+    'https://www.ign.es/wmts/mapa-raster?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0' +
+    '&LAYER=MTN&STYLE=default&TILEMATRIXSET=GoogleMapsCompatible' +
+    '&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/jpeg',
+    {
+        attribution: '© Instituto Geográfico Nacional de España — MTN',
+        maxZoom: 18
+    }
+);
+
+// OpenTopoMap (relieve / curvas de nivel)
+const capaTopo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenTopoMap contributors',
+    maxZoom: 17,
+    subdomains: 'abc'
+});
+
+// ESRI World Topo Map
+const capaEsriTopo = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Tiles © Esri — Source: Esri, USGS, NOAA', maxZoom: 19 }
+);
+
+// ESRI World Street Map
+const capaEsriCalles = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Tiles © Esri — Source: Esri, HERE, Garmin', maxZoom: 19 }
+);
+
+// ESRI World Imagery (satélite)
+const capaEsriSatelite = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics', maxZoom: 19 }
+);
+
+// CartoDB Voyager
+const capaCartoVoyager = L.tileLayer(
+    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    {
+        attribution: '© OpenStreetMap contributors © CARTO',
+        maxZoom: 19,
+        subdomains: 'abcd'
     }
 );
 
@@ -114,8 +160,14 @@ capaOSM.on('tileerror', function () {
 // Posición 'topleft' para que Leaflet lo añada con los controles de zoom;
 // map-widgets.js lo mueve después a #map-controls.
 const capasBase = {
-    '🗺️ OpenStreetMap': capaOSM,
-    '🛰️ PNOA (IGN)':    capaPNOA,
+    '🗺️ OpenStreetMap':     capaOSM,
+    '🛰️ PNOA (IGN)':        capaPNOA,
+    '🗺️ Mapa Topo. (IGN)':  capaIGNTopo,
+    '🏔️ OpenTopoMap':       capaTopo,
+    '🏞️ Topográfico (ESRI)': capaEsriTopo,
+    '🛣️ Calles (ESRI)':     capaEsriCalles,
+    '🛰️ Satélite (ESRI)':   capaEsriSatelite,
+    '🧭 CartoDB Voyager':    capaCartoVoyager,
 };
 const controlCapas = L.control.layers(capasBase, null, { position: 'topleft', collapsed: false });
 controlCapas.addTo(map);
@@ -126,9 +178,9 @@ map.zoomControl.setPosition('bottomleft');
 
 function obtenerTamanoIcono() {
     const zoom       = map.getZoom();
-    const tamanoBase = 32;
-    const factor     = Math.pow(1.4, zoom - 13);
-    const tamano     = Math.max(20, Math.min(60, tamanoBase * factor));
+    const tamanoBase = 18;
+    const factor     = Math.pow(1.25, zoom - 13);
+    const tamano     = Math.max(12, Math.min(32, tamanoBase * factor));
     return Math.round(tamano);
 }
 
@@ -136,7 +188,7 @@ function crearIconoMarcador(emoji) {
     const tamano = obtenerTamanoIcono();
     return L.divIcon({
         className:  'marker-custom',
-        html:       '<div style="font-size:' + tamano + 'px;text-shadow:2px 2px 6px rgba(0,0,0,0.7);">' + emoji + '</div>',
+        html:       '<div style="font-size:' + tamano + 'px;line-height:1;">' + emoji + '</div>',
         iconSize:   [tamano, tamano],
         iconAnchor: [tamano / 2, tamano]
     });
@@ -166,7 +218,8 @@ fetch('/api/status')
             if (textoEstado)    textoEstado.textContent          = 'ONLINE';
             if (puntoEstado)   puntoEstado.style.background    = 'rgba(255,255,255,0.8)';
         }
-        showNotification('Servidor conectado correctamente', 'success');
+        if (typeof showNotification === 'function')
+            showNotification('Servidor conectado correctamente', 'success');
     })
     .catch(function (error) {
         var indicadorEstado = document.querySelector('.status-badge');
@@ -175,6 +228,7 @@ fetch('/api/status')
         if (indicadorEstado) indicadorEstado.style.background = '#e74c3c';
         if (textoEstado)    textoEstado.textContent          = 'ERROR';
         if (puntoEstado)   puntoEstado.style.background    = 'rgba(255,255,255,0.8)';
-        showNotification('Error al conectar con el servidor', 'error');
+        if (typeof showNotification === 'function')
+            showNotification('Error al conectar con el servidor', 'error');
         console.error('Error al comprobar /api/status:', error);
     });

@@ -32,6 +32,23 @@ function cargarArchivo(tipo, input) {
     const btnConfig   = document.getElementById('btn-config-campos');
     if (btnCargar) { btnCargar.textContent = '⏳ Cargando...'; btnCargar.disabled = true; }
 
+    if (tipo === 'vias' && window.GeoLoader) {
+        window.GeoLoader.show('Cargando capa de Vías', file.name);
+        window.GeoLoader.progress(15);
+    }
+
+    // Ocultar "Config. Campos" mientras se procesa la nueva capa: la
+    // configuración anterior ya no es válida para los nuevos atributos
+    if (btnConfig) btnConfig.style.display = 'none';
+    window.camposRutaConfigurados = false;
+
+    // Resetear cualquier modo de selección de origen/destino activo
+    // (evita dejar el cursor en modo "elegir punto" tras cargar la capa)
+    window._esperandoOrigen  = false;
+    window._esperandoDestino = false;
+    document.getElementById('map')?.classList.remove('cursor-origen', 'cursor-destino');
+    if (typeof ocultarInstruccion === 'function') ocultarInstruccion();
+
     fetch(endpoint, { method: 'POST', body: formData })
         .then(r => {
             if (!r.ok) return r.text().then(t => Promise.reject(new Error('HTTP ' + r.status + ': ' + t)));
@@ -39,9 +56,15 @@ function cargarArchivo(tipo, input) {
         })
         .then(data => {
             if (data.error) {
-                showNotification('❌ ' + data.error, 'error');
+                window.aviso(data.error, '', 'Error al cargar la capa');
                 if (btnCargar) { btnCargar.textContent = '📂 Cargar Vías'; btnCargar.disabled = false; }
+                if (tipo === 'vias' && window.GeoLoader) window.GeoLoader.hide();
                 return;
+            }
+
+            if (tipo === 'vias' && window.GeoLoader) {
+                window.GeoLoader.status('Construyendo el grafo de rutas…');
+                window.GeoLoader.progress(55);
             }
 
             // Actualizar item de capa en el panel
@@ -61,17 +84,21 @@ function cargarArchivo(tipo, input) {
             // Mostrar Eliminar, ocultar Cargar
             if (btnCargar)   { btnCargar.textContent = '📂 Cargar Vías'; btnCargar.disabled = false; btnCargar.style.display = 'none'; }
             if (btnEliminar) { btnEliminar.style.display = ''; }
+            if (btnConfig)   { btnConfig.style.display   = ''; }
 
-            showNotification(data.mensaje || 'Capa cargada', 'success');
-            cargarEnMapa(tipo);
+            window.aviso(data.mensaje || 'Capa cargada', '', 'Capa cargada');
+
+            if (tipo === 'vias' && window.GeoLoader) window.GeoLoader.status('Dibujando la capa en el mapa…');
+            cargarEnMapa(tipo, tipo === 'vias');
 
             if (Array.isArray(data.bounds) && data.bounds.length === 4) {
                 map.fitBounds([[data.bounds[1], data.bounds[0]], [data.bounds[3], data.bounds[2]]]);
             }
         })
         .catch(err => {
-            showNotification('Error al cargar: ' + err.message, 'error');
+            window.aviso('No se pudo cargar la capa', err.message, 'Error');
             if (btnCargar) { btnCargar.textContent = '📂 Cargar Vías'; btnCargar.disabled = false; }
+            if (tipo === 'vias' && window.GeoLoader) window.GeoLoader.hide();
             console.error('cargarArchivo error:', err);
         });
 }
@@ -82,66 +109,84 @@ function eliminarCapa(tipo) {
     const labels    = { vias: 'Vías', puntos: 'Puntos de Interés' };
     const endpoints = { vias: '/api/eliminar-vias', puntos: '/api/eliminar-puntos-interes' };
 
-    if (!confirm(`¿Eliminar la capa "${labels[tipo]}"?`)) return;
+    const ejecutarEliminacion = () => {
+        fetch(endpoints[tipo], { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (tipo === 'vias') {
+                    // Limpiar capa actual del mapa
+                    if (viasLayer && map.hasLayer(viasLayer)) map.removeLayer(viasLayer);
+                    viasLayer = null;
+                    window.currentViasGeoJSON = null;
+                    window.camposRutaConfigurados = false;
 
-    fetch(endpoints[tipo], { method: 'POST' })
-        .then(r => r.json())
-        .then(data => {
-            if (tipo === 'vias') {
-                // Limpiar capa actual del mapa
-                if (viasLayer && map.hasLayer(viasLayer)) map.removeLayer(viasLayer);
-                viasLayer = null;
-                window.currentViasGeoJSON = null;
-                window.camposRutaConfigurados = false;
+                    // Resetear cualquier modo de selección de origen/destino activo
+                    // (evita dejar el cursor en modo "elegir punto" tras eliminar la capa)
+                    window._esperandoOrigen  = false;
+                    window._esperandoDestino = false;
+                    document.getElementById('map')?.classList.remove('cursor-origen', 'cursor-destino');
+                    if (typeof ocultarInstruccion === 'function') ocultarInstruccion();
 
-                const ul  = document.getElementById('legend-list');     if (ul)  ul.innerHTML  = '';
-                const chk = document.getElementById('check-vias');      if (chk) chk.checked   = false;
-                const fi  = document.getElementById('file-vias');       if (fi)  fi.value       = '';
+                    const ul  = document.getElementById('legend-list');     if (ul)  ul.innerHTML  = '';
+                    const chk = document.getElementById('check-vias');      if (chk) chk.checked   = false;
+                    const fi  = document.getElementById('file-vias');       if (fi)  fi.value       = '';
 
-                const btnCargar   = document.getElementById('btn-cargar-vias');
-                const btnEliminar = document.getElementById('btn-eliminar-vias');
-                const btnConfig   = document.getElementById('btn-config-campos');
-                if (btnEliminar) btnEliminar.style.display = 'none';
-                if (btnConfig)   btnConfig.style.display   = 'none';
+                    const btnCargar   = document.getElementById('btn-cargar-vias');
+                    const btnEliminar = document.getElementById('btn-eliminar-vias');
+                    const btnConfig   = document.getElementById('btn-config-campos');
+                    if (btnEliminar) btnEliminar.style.display = 'none';
+                    if (btnConfig)   btnConfig.style.display   = 'none';
 
-                if (data.osm_restaurada) {
-                    // El servidor ya recargó la OSM — solo actualizar el mapa visual
-                    const sv = document.getElementById('stat-vias');  if (sv) sv.textContent = data.total_vias  ?? 0;
-                    const sn = document.getElementById('stat-nodos'); if (sn) sn.textContent = data.nodos_grafo ?? 0;
-                    _resetLayerItem('layer-vias', `${data.total_vias ?? 0} vías OSM`);
-                    if (btnCargar) btnCargar.style.display = 'none';   // sigue sin capa personalizada
-                    cargarEnMapa('vias');
-                    showNotification('Capa eliminada — vías OSM restauradas ✅', 'success');
-                } else {
-                    const sv = document.getElementById('stat-vias');  if (sv) sv.textContent = '0';
-                    const sn = document.getElementById('stat-nodos'); if (sn) sn.textContent = '0';
-                    _resetLayerItem('layer-vias', 'Sin cargar');
-                    if (btnCargar) { btnCargar.style.display = ''; btnCargar.textContent = '📂 Cargar Vías'; }
-                    showNotification('Capa eliminada. No hay vías OSM de respaldo.', 'warning');
+                    if (data.osm_restaurada) {
+                        // El servidor ya recargó la capa por defecto (Vías_PuertoLumbreras)
+                        // — actualizar estadísticas y recargarla en el mapa
+                        const sv = document.getElementById('stat-vias');  if (sv) sv.textContent = data.total_vias  ?? 0;
+                        const sn = document.getElementById('stat-nodos'); if (sn) sn.textContent = data.nodos_grafo ?? 0;
+                        _resetLayerItem('layer-vias', `${data.total_vias ?? 0} vías (por defecto)`);
+                        if (btnCargar) { btnCargar.style.display = ''; btnCargar.textContent = '📂 Cargar Vías'; }
+                        cargarEnMapa('vias');
+                        window.aviso('Capa eliminada — vías por defecto restauradas', '', 'Capa eliminada');
+                    } else {
+                        // Sin restauración por defecto: intentar igualmente recargar
+                        // lo que el servidor tenga disponible para no dejar el mapa vacío
+                        const sv = document.getElementById('stat-vias');  if (sv) sv.textContent = '0';
+                        const sn = document.getElementById('stat-nodos'); if (sn) sn.textContent = '0';
+                        _resetLayerItem('layer-vias', 'Sin cargar');
+                        if (btnCargar) { btnCargar.style.display = ''; btnCargar.textContent = '📂 Cargar Vías'; }
+                        cargarEnMapa('vias');
+                        window.aviso('No hay capa de vías por defecto disponible', '', 'Capa eliminada');
+                    }
+
+                } else if (tipo === 'puntos') {
+                    if (puntosInteresLayerGroup && map.hasLayer(puntosInteresLayerGroup)) map.removeLayer(puntosInteresLayerGroup);
+                    puntosInteresLayerGroup = null;
+                    window.currentPuntosGeoJSON = null;
+                    const chk = document.getElementById('check-puntos'); if (chk) chk.checked   = false;
+                    const sp  = document.getElementById('stat-puntos');  if (sp)  sp.textContent = '0';
+                    const _nManuales = (typeof poisManuales !== 'undefined') ? poisManuales.filter(Boolean).length : 0;
+                    _resetLayerItem('layer-puntos', _nManuales > 0 ? `${_nManuales} POI(s) manual(es)` : 'Sin añadir');
+                    window.aviso('Capa eliminada', '', 'Capa eliminada');
                 }
 
-            } else if (tipo === 'puntos') {
-                if (puntosInteresLayerGroup && map.hasLayer(puntosInteresLayerGroup)) map.removeLayer(puntosInteresLayerGroup);
-                puntosInteresLayerGroup = null;
-                window.currentPuntosGeoJSON = null;
-                const chk = document.getElementById('check-puntos'); if (chk) chk.checked   = false;
-                const sp  = document.getElementById('stat-puntos');  if (sp)  sp.textContent = '0';
-                const _nManuales = (typeof poisManuales !== 'undefined') ? poisManuales.filter(Boolean).length : 0;
-                _resetLayerItem('layer-puntos', _nManuales > 0 ? `${_nManuales} POI(s) manual(es)` : 'Sin añadir');
-                showNotification('Capa eliminada', 'info');
-            }
+                populateTableLayerSelect();
+            })
+            .catch(err => {
+                window.aviso('No se pudo eliminar la capa', err.message, 'Error');
+                console.error('eliminarCapa error:', err);
+            });
+    };
 
-            populateTableLayerSelect();
-        })
-        .catch(err => {
-            showNotification('Error eliminando: ' + err.message, 'error');
-            console.error('eliminarCapa error:', err);
-        });
+    window.confirmarAviso(
+        `¿Eliminar la capa "${labels[tipo]}"?`,
+        (confirmado) => { if (confirmado) ejecutarEliminacion(); },
+        'Eliminar capa',
+        'Eliminar'
+    );
 }
 
 // ==================== CARGAR EN MAPA ====================
 
-function cargarEnMapa(tipo) {
+function cargarEnMapa(tipo, mostrarLoader = false) {
     const endpoints = { vias: '/api/obtener-vias', puntos: '/api/obtener-puntos-interes' };
     const endpoint  = endpoints[tipo];
     if (!endpoint) return;
@@ -152,7 +197,11 @@ function cargarEnMapa(tipo) {
             return r.json();
         })
         .then(geojson => {
-            if (!geojson || !geojson.type) { showNotification('GeoJSON inválido', 'error'); return; }
+            if (!geojson || !geojson.type) {
+                window.aviso('GeoJSON inválido', '', 'Error');
+                if (mostrarLoader && window.GeoLoader) window.GeoLoader.hide();
+                return;
+            }
 
             // Reproyectar en cliente si el servidor devuelve coordenadas UTM
             try {
@@ -194,10 +243,13 @@ function cargarEnMapa(tipo) {
                 populateTableLayerSelect();
                 const btnTablaVias = document.getElementById('btn-tabla-vias'); if (btnTablaVias) btnTablaVias.disabled = false;
 
-                // Autodetectar campos de ruta y mostrar Config. Campos
+                if (mostrarLoader && window.GeoLoader) window.GeoLoader.progress(90);
+
+                // Autodetectar campos de ruta a partir de la capa cargada.
+                // La visibilidad de "Config. Campos" la gestionan directamente
+                // cargarArchivo() (al cargar) y eliminarCapa() (al eliminar).
                 if (typeof autodetectarCamposRuta === 'function') autodetectarCamposRuta(geojson);
-                const btnConfig = document.getElementById('btn-config-campos');
-                if (btnConfig) btnConfig.style.display = '';
+                if (mostrarLoader && window.GeoLoader) window.GeoLoader.hide();
 
             } else if (tipo === 'puntos') {
                 if (puntosInteresLayerGroup) map.removeLayer(puntosInteresLayerGroup);
@@ -238,7 +290,8 @@ function cargarEnMapa(tipo) {
             }
         })
         .catch(err => {
-            showNotification('Error al obtener capa: ' + err.message, 'error');
+            window.aviso('No se pudo obtener la capa', err.message, 'Error');
+            if (mostrarLoader && window.GeoLoader) window.GeoLoader.hide();
             console.error('cargarEnMapa error:', err);
         });
 }

@@ -7,7 +7,6 @@ import geopandas as gpd
 import pandas as pd
 import networkx as nx
 from shapely.geometry import Point, LineString, Polygon as ShapelyPolygon
-import numpy as np
 from math import radians, degrees, sin, cos, sqrt, atan2, acos
 import re
 import socket
@@ -171,7 +170,7 @@ class ObstaculoCompartido(db.Model):
     obs_id        = db.Column(db.String(64),  nullable=True)
     lat           = db.Column(db.Float,       nullable=False)
     lng           = db.Column(db.Float,       nullable=False)
-    nivel_val     = db.Column(db.Integer,     nullable=False, default=2)
+    nivel_val     = db.Column(db.Integer,     nullable=False, default=1)
     portal        = db.Column(db.String(256), nullable=True,  default='')
     autor         = db.Column(db.String(64),  nullable=False)
     creado_en     = db.Column(db.DateTime,    default=datetime.utcnow)
@@ -279,9 +278,14 @@ def _requiere_admin(f):
 os.makedirs('static/data', exist_ok=True) 
 os.makedirs('templates', exist_ok=True)
 
+# ── Lock para escrituras concurrentes al shapefile de POIs ───────────────────
+import threading as _threading
+_pois_shp_lock = _threading.Lock()
+
 # Variables globales
 vias_gdf            = None # GeoDataFrame de las vías cargadas ya limpias
 grafo_vias          = None # Grafo de NetworkX construido a partir de vias_gdf
+vias_es_personalizada = False # True si vias_gdf proviene de una capa subida por el usuario
 PuntosDinteres_dic  = {}
 portales_gdf        = None # GeoDataFrame de portales (Num_portal.geojson)
 
@@ -307,44 +311,48 @@ def _normalizar_nombre_via(nombre):
     return s.strip()
 
 
+def _resolver_ruta_vias_defecto():
+    """
+    Devuelve la ruta al archivo de vías por defecto:
+      static/data/Vias_PuertoLumbreras.zip  (shapefile comprimido, ya recortado)
+    Devuelve (ruta, etiqueta) o (None, None) si no existe.
+    """
+    zip_path = os.path.join('static', 'data', 'Vías_PuertoLumbreras.zip')
+
+    if os.path.exists(zip_path):
+        return zip_path, 'Vías_PuertoLumbreras.zip'
+    return None, None
+
+
+def _cargar_vias_defecto():
+    """
+    Carga la capa de vías por defecto (ya recortada al perímetro de
+    Puerto Lumbreras) y normaliza sus atributos.
+    Devuelve (gdf, grafo) o lanza excepción si no hay fuente disponible.
+    """
+    ruta, etiqueta = _resolver_ruta_vias_defecto()
+    if ruta is None:
+        raise FileNotFoundError("No se encontró ninguna capa de vías por defecto.")
+
+    gdf = EPSG4326(ruta)
+    gdf['lanes']    = gdf['lanes'].apply(normalizar_lanes)       if 'lanes'    in gdf.columns else 1
+    gdf['maxspeed'] = gdf['maxspeed'].apply(normalizar_maxspeed) if 'maxspeed' in gdf.columns else 50
+
+    grafo = crear_grafo(gdf)
+    print(f"✅ Vías cargadas desde '{etiqueta}': {len(gdf)} | Grafo: {grafo.number_of_nodes()} nodos")
+    return gdf, grafo
+
+
 def capasDarranque():
-    """Carga automática de Vías.geojson, PuntosDinteres.zip y Num_portal.geojson."""
+    """Carga automática de Vías (SHP o GeoJSON), PuntosDinteres.zip y Num_portal.geojson."""
     global vias_gdf, grafo_vias, PuntosDinteres_dic, portales_gdf
 
-    vias_path   = os.path.join('static', 'data', 'Vías.geojson')
     puntos_path = os.path.join('static', 'data', 'PuntosDinteres.zip')
 
-    if os.path.exists(vias_path):
-        try:
-            gdf = EPSG4326(vias_path)
-            gdf['lanes']    = gdf['lanes'].apply(normalizar_lanes)       if 'lanes'    in gdf.columns else 1
-            gdf['maxspeed'] = gdf['maxspeed'].apply(normalizar_maxspeed) if 'maxspeed' in gdf.columns else 50
-
-            # Recorte automático con el perímetro de Puerto Lumbreras
-            clip_path = os.path.join('static', 'data', 'PuertoLumbreras.zip')
-            if os.path.exists(clip_path):
-                try:
-                    clip_dir = tempfile.mkdtemp(prefix='clip_init_')
-                    with zipfile.ZipFile(clip_path) as z:
-                        z.extractall(clip_dir)
-                    shp = next((os.path.join(r, f)
-                                for r, _, fs in os.walk(clip_dir)
-                                for f in fs if f.endswith('.shp')), None)
-                    if shp:
-                        clip_gdf = EPSG4326(shp)
-                        poligono = clip_gdf.unary_union
-                        antes = len(gdf)
-                        gdf = gdf[gdf.intersects(poligono)].reset_index(drop=True)
-                        print(f"✂️  Recorte aplicado: {len(gdf)} de {antes} vías dentro del perímetro")
-                    shutil.rmtree(clip_dir, ignore_errors=True)
-                except Exception as e:
-                    print(f"⚠️  No se pudo aplicar el recorte: {e}")
-
-            vias_gdf   = gdf
-            grafo_vias = crear_grafo(gdf)
-            print(f"✅ Vías cargadas automáticamente: {len(gdf)} | Grafo: {grafo_vias.number_of_nodes()} nodos")
-        except Exception as e:
-            print(f"⚠️  No se pudo cargar Vías.geojson: {e}")
+    try:
+        vias_gdf, grafo_vias = _cargar_vias_defecto()
+    except Exception as e:
+        print(f"⚠️  No se pudieron cargar las vías por defecto: {e}")
 
     if os.path.exists(puntos_path):
         try:
@@ -359,12 +367,19 @@ def capasDarranque():
                 try:
                     gdf = EPSG4326(shp)
                     gdf = gdf[gdf.geometry.geom_type == 'Point']
-                    if not gdf.empty:
+                    if gdf.empty:
+                        continue
+                    # Si el shapefile tiene columna 'tipo', dividir en subcapas por tipo
+                    if 'tipo' in gdf.columns:
+                        for tipo_val, subgdf in gdf.groupby('tipo'):
+                            clave = str(tipo_val).strip() or nombre
+                            PuntosDinteres_dic[clave] = subgdf.reset_index(drop=True)
+                    else:
                         PuntosDinteres_dic[nombre] = gdf
                 except Exception as e:
                     print(f"  ⚠️ Error en {nombre}: {e}")
             shutil.rmtree(extract_dir, ignore_errors=True)
-            print(f"✅ Puntos de interés cargados: {len(PuntosDinteres_dic)} capas")
+            print(f"✅ Puntos de interés cargados: {len(PuntosDinteres_dic)} capas  -> {sum(len(v) for v in PuntosDinteres_dic.values())} POIs")
         except Exception as e:
             print(f"⚠️  No se pudo cargar PuntosDinteres.zip: {e}")
 
@@ -791,6 +806,7 @@ def admin_usuarios_online():
             'username':      d.get('username', ''),
             'rol':           d.get('rol', 'registrado'),
             'online':        online,
+            'activo':        d.get('activo', True),
             'ultimo_acceso': ua.isoformat() if isinstance(ua, datetime) else None,
         })
     return jsonify({'usuarios': resultado})
@@ -887,6 +903,7 @@ def status():
     info = {
         'status': 'online',
         'vias_cargadas': vias_gdf is not None,
+        'vias_personalizadas': vias_es_personalizada,
         'grafo_listo':   grafo_vias is not None,
         'puntos_capas':  list(PuntosDinteres_dic.keys()),
     }
@@ -899,7 +916,7 @@ def status():
 
 @app.route('/api/cargar-vias', methods=['POST'])
 def cargar_vias():
-    global vias_gdf, grafo_vias
+    global vias_gdf, grafo_vias, vias_es_personalizada
 
     if 'file' not in request.files or request.files['file'].filename == '':
         return jsonify({'error': 'No se envió ningún archivo'}), 400
@@ -940,6 +957,7 @@ def cargar_vias():
 
         vias_gdf   = gdf
         grafo_vias = crear_grafo(gdf)
+        vias_es_personalizada = True
 
         print(f"✅ Vías: {len(gdf)} | Grafo: {grafo_vias.number_of_nodes()} nodos, {grafo_vias.number_of_edges()} aristas")
 
@@ -951,6 +969,7 @@ def cargar_vias():
             'columnas':      list(gdf.columns),
             'bounds':        b.tolist(),
             'crs':           str(gdf.crs),
+            'vias_personalizadas': True,
         })
 
     except Exception as e:
@@ -970,44 +989,23 @@ def obtener_vias():
 
 @app.route('/api/eliminar-vias', methods=['POST'])
 def eliminar_vias():
-    global vias_gdf, grafo_vias
+    global vias_gdf, grafo_vias, vias_es_personalizada
     vias_gdf = grafo_vias = None
+    vias_es_personalizada = False
 
-    # Intentar restaurar la capa OSM por defecto (Vías.geojson)
-    vias_path = os.path.join('static', 'data', 'Vías.geojson')
-    if os.path.exists(vias_path):
-        try:
-            gdf = EPSG4326(vias_path)
-            gdf['lanes']    = gdf['lanes'].apply(normalizar_lanes)       if 'lanes'    in gdf.columns else 1
-            gdf['maxspeed'] = gdf['maxspeed'].apply(normalizar_maxspeed) if 'maxspeed' in gdf.columns else 50
-
-            clip_path = os.path.join('static', 'data', 'PuertoLumbreras.zip')
-            if os.path.exists(clip_path):
-                try:
-                    clip_dir = tempfile.mkdtemp(prefix='clip_restore_')
-                    with zipfile.ZipFile(clip_path) as z:
-                        z.extractall(clip_dir)
-                    shp = next((os.path.join(r, f)
-                                for r, _, fs in os.walk(clip_dir)
-                                for f in fs if f.endswith('.shp')), None)
-                    if shp:
-                        clip_gdf = EPSG4326(shp)
-                        gdf = gdf[gdf.intersects(clip_gdf.unary_union)].reset_index(drop=True)
-                    shutil.rmtree(clip_dir, ignore_errors=True)
-                except Exception:
-                    pass
-
-            vias_gdf   = gdf
-            grafo_vias = crear_grafo(gdf)
-            print(f'[eliminar-vias] OSM restaurada: {len(gdf)} vias')
-            return jsonify({
-                'mensaje':        'Capa eliminada — vías OSM restauradas',
-                'osm_restaurada': True,
-                'total_vias':     len(gdf),
-                'nodos_grafo':    grafo_vias.number_of_nodes(),
-            })
-        except Exception as e:
-            print(f'[eliminar-vias] No se pudo restaurar OSM: {e}')
+    # Restaurar la capa de vías por defecto (Vias_PuertoLumbreras)
+    try:
+        vias_gdf, grafo_vias = _cargar_vias_defecto()
+        print(f'[eliminar-vias] Capa por defecto restaurada: {len(vias_gdf)} vías')
+        return jsonify({
+            'mensaje':            'Capa eliminada — vías por defecto restauradas',
+            'osm_restaurada':     True,
+            'vias_personalizadas': False,
+            'total_vias':         len(vias_gdf),
+            'nodos_grafo':        grafo_vias.number_of_nodes(),
+        })
+    except Exception as e:
+        print(f'[eliminar-vias] No se pudo restaurar capa por defecto: {e}')
 
     return jsonify({'mensaje': 'Vias eliminadas', 'osm_restaurada': False})
 
@@ -1100,8 +1098,15 @@ def cargar_puntos_interes():
                     gdf = gdf[gdf.geometry.geom_type == 'Point']
                     if gdf.empty:
                         continue
-                    PuntosDinteres_dic[nombre] = gdf
-                    total_puntos += len(gdf)
+                    # Si el shapefile tiene columna 'tipo', dividir en subcapas por tipo
+                    if 'tipo' in gdf.columns:
+                        for tipo_val, subgdf in gdf.groupby('tipo'):
+                            clave = str(tipo_val).strip() or nombre
+                            PuntosDinteres_dic[clave] = subgdf.reset_index(drop=True)
+                            total_puntos += len(subgdf)
+                    else:
+                        PuntosDinteres_dic[nombre] = gdf
+                        total_puntos += len(gdf)
                 except Exception as e:
                     print(f"  ⚠️ Error en {nombre}: {e}")
 
@@ -1125,6 +1130,37 @@ def cargar_puntos_interes():
 
 @app.route('/api/obtener-puntos-interes')
 def obtener_puntos_interes():
+    # Si el diccionario está vacío, intentar recarga desde disco antes de fallar
+    if not PuntosDinteres_dic:
+        puntos_path = os.path.join('static', 'data', 'PuntosDinteres.zip')
+        if os.path.exists(puntos_path):
+            try:
+                extract_dir = tempfile.mkdtemp(prefix='puntos_reload_')
+                with zipfile.ZipFile(puntos_path) as z:
+                    z.extractall(extract_dir)
+                shp_files = [os.path.join(r, f)
+                             for r, _, fs in os.walk(extract_dir)
+                             for f in fs if f.lower().endswith('.shp')]
+                for shp in shp_files:
+                    nombre = os.path.splitext(os.path.basename(shp))[0]
+                    try:
+                        gdf = EPSG4326(shp)
+                        gdf = gdf[gdf.geometry.geom_type == 'Point']
+                        if gdf.empty:
+                            continue
+                        if 'tipo' in gdf.columns:
+                            for tipo_val, subgdf in gdf.groupby('tipo'):
+                                clave = str(tipo_val).strip() or nombre
+                                PuntosDinteres_dic[clave] = subgdf.reset_index(drop=True)
+                        else:
+                            PuntosDinteres_dic[nombre] = gdf
+                    except Exception as e:
+                        print(f"  ⚠️ Error recargando {nombre}: {e}")
+                shutil.rmtree(extract_dir, ignore_errors=True)
+                print(f"🔄 Puntos recargados automáticamente: {len(PuntosDinteres_dic)} capas")
+            except Exception as e:
+                print(f"⚠️  No se pudo recargar PuntosDinteres.zip: {e}")
+
     if not PuntosDinteres_dic:
         return jsonify({'error': 'No hay puntos cargados'}), 404
     try:
@@ -1166,10 +1202,6 @@ def _asegurar_capa_manual():
             geometry='geometry',
             crs='EPSG:4326'
         )
-
-def _total_pois_manuales():
-    capa = PuntosDinteres_dic.get(_MANUAL_LAYER)
-    return 0 if capa is None else len(capa)
 
 
 @app.route('/api/añadir-poi', methods=['POST'])
@@ -1459,11 +1491,12 @@ TIPOS_PROHIBIDOS_CAMION = TIPOS_PROHIBIDOS_VEHICULOS
 
 # Ancho mínimo cómodo para un camión (2.55 m de vehículo + margen)
 ANCHO_COMODO_CAMION  = 3.5   # por debajo → penalizar, no eliminar
-ANCHO_MINIMO_CAMION  = 2.8   # por debajo → penalizar fuerte (×20), pero no eliminar
+ANCHO_MINIMO_CAMION  = 2.8   # por debajo → penalizar fuerte (x20), pero no eliminar
 
 # Ángulos de giro: solo penalizar, nunca eliminar aristas
 MAX_ANGULO_PENALIZAR = 120   # giros > 80° empiezan a penalizarse
-MAX_ANGULO_FUERTE    = 120  # giros > 120° penalización máxima (×10)
+MAX_ANGULO_FUERTE    = 120  # giros > 120° penalización máxima (x10)
+FACTOR_ROTONDA_CURVA = 0.5   # reducir penalización de giro en tramos de rotonda
 
 
 def _angulo_giro(nodo_prev, nodo_actual, nodo_next):
@@ -1631,7 +1664,11 @@ def crear_grafo(gdf):
         lines = [geom] if geom.geom_type == 'LineString' else list(geom.geoms)
 
         for line in lines:
-            coords = list(line.coords)
+            # Forzamos 2D (lon, lat): si la geometría trae componente Z
+            # (altura), line.coords devolvería tuplas de 3 valores y los
+            # nodos del grafo quedarían como (lon, lat, z), rompiendo el
+            # desempaquetado "for lon, lat in ruta" más adelante.
+            coords = [(c[0], c[1]) for c in line.coords]
             n = len(coords)
             for i in range(n - 1):
                 s, e    = coords[i], coords[i+1]
@@ -1646,6 +1683,8 @@ def crear_grafo(gdf):
                 if i > 0:
                     angulo = _angulo_giro(coords[i-1], coords[i], coords[i+1])
                     t_curva = _tiempo_curva_minutos(angulo, maxspeed)
+                    if junction is not None and str(junction).strip().lower() == 'roundabout':
+                        t_curva *= FACTOR_ROTONDA_CURVA
 
                 tiempo_total = tiempo + t_curva
                 peso         = tiempo_total * factor * f_lanes
@@ -1755,33 +1794,39 @@ def calcular_ruta():
 
             print(f"   ✅ Aplicados {pesos_aplicados} pesos personalizados de {len(pesos_input)} segmentos")
 
-        # --- Penalizar segmentos dentro de obstáculos según % de obstrucción ---
-        # El factor refleja la reducción de velocidad real, no un bloqueo forzado.
-        # Dijkstra decide libremente si merece la pena pasar o buscar alternativa.
+        # --- Penalizar segmentos dentro de obstáculos (sistema de deltas de nivel) ---
+        # Las barreras actúan como INCREMENTOS sobre el estado base Verde (0) de la vía.
+        # Los deltas de todas las barreras que afectan un segmento se ACUMULAN:
+        #   estado_final = min(3, sum(deltas))
         #
-        # Fórmula: factor = 1 / (1 - obstruccion * 0.99)
-        #   0%  → factor 1.0   (sin efecto)
-        #   50% → factor ~2.0  (la mitad de velocidad → doble de tiempo)
-        #   90% → factor ~10.0 (10% de velocidad → diez veces más tiempo)
-        #   99% → factor ~100  (casi bloqueado pero Dijkstra aún puede elegir pasar)
-        penalizados = {}
-        for u, v in G.edges():           # Cada segmento de vía (u=inicio, v=fin)
-            for obs in obstaculos:        # Cada obstáculo en el mapa
-                obs_ll      = (obs['lat'], obs['lon'])                    # Centro del obstáculo
-                radio       = obs.get('radio', 5)                         # Radio en metros (defecto 5m)
-                obstruccion = min(float(obs.get('obstruccion', 1.0)), 0.99)  # % de bloqueo (máx 99%)
-                for j in range(21):  # Divide el segmento en 20 partes (j=0,1,2,...,20)
-                    t  = j / 20      # Valor entre 0.0 y 1.0
-                    pt = (u[1] + t*(v[1]-u[1]), u[0] + t*(v[0]-u[0])) # Fórmula de interpolación lineal: pt=u+t(v−u); Calcula pt, un punto intermedio en la línea del segmento
-                    if distanciaLatLon(obs_ll, pt) <= radio: # Si el punto intermedio pt está dentro del radio del obstáculo
-                        factor = 1.0 / (1.0 - obstruccion * 0.99) # Calcula el factor de penalización basado en el nivel de obstrucción. Cuanto mayor sea la obstrucción, mayor será el factor (más tiempo).
-                        prev   = penalizados.get((u, v), 1.0) # Si el segmento ya tiene un factor de penalización por otro obstáculo, se toma el máximo para reflejar el efecto acumulativo
-                        penalizados[(u, v)] = max(prev, factor) # Guarda el factor de penalización para el segmento (u, v) en el diccionario penalizados. Si el segmento ya tiene un factor, se actualiza al máximo entre el existente y el nuevo.
+        # Tabla estado → obstruccion → factor:
+        #   Verde    (0) → 0.00 → x1.0    (sin efecto)
+        #   Amarillo (1) → 0.33 → x1.49   (reducción moderada)
+        #   Naranja  (2) → 0.67 → x3.03   (reducción severa)
+        #   Rojo     (3) → 0.99 → x100    (prácticamente bloqueado)
+        #
+        # Dijkstra decide libremente si merece la pena pasar o buscar alternativa.
+        _ESTADO_OBS = [0.00, 0.33, 0.67, 0.99]  # índice = estado 0-3
+
+        delta_acum = {}  # (u, v) → suma de deltas de barreras que lo afectan
+        for u, v in G.edges():
+            for obs in obstaculos:
+                obs_ll = (obs['lat'], obs['lon'])
+                radio  = obs.get('radio', 7)  # metros; el frontend envía RADIO_OBSTACULO_M=7
+                delta  = max(1, min(3, int(obs.get('nivel', 1))))  # delta 1-3 de la barrera
+                for j in range(21):
+                    t  = j / 20
+                    pt = (u[1] + t*(v[1]-u[1]), u[0] + t*(v[0]-u[0]))
+                    if distanciaLatLon(obs_ll, pt) <= radio:
+                        delta_acum[(u, v)] = delta_acum.get((u, v), 0) + delta
                         break
 
-        for (u, v), factor in penalizados.items(): # Aplica el factor de penalización a las aristas afectadas
+        for (u, v), delta_total in delta_acum.items():
             if G.has_edge(u, v):
-                G[u][v]['weight'] *= factor 
+                estado_final = min(3, delta_total)           # estado vía resultante (0-3)
+                obstruccion  = _ESTADO_OBS[estado_final]
+                factor       = 1.0 / (1.0 - obstruccion * 0.99)
+                G[u][v]['weight'] *= factor
 
         # --- Momento: penalización temporal por POI/hora (solo si activo) ---
         # Si Momento está activo, se buscan POIs activos en este día/hora y se
@@ -1902,7 +1947,7 @@ def calcular_ruta():
         # Si emerg_sentido=False, se añaden aristas inversas para las vías de
         # sentido único urbanas. Las vías de alta capacidad (motorway/trunk) y
         # las rotondas se excluyen: circular en contramano en ellas es inviable.
-        # Las aristas inversas tienen un factor ×3 de penalización para que
+        # Las aristas inversas tienen un factor x3 de penalización para que
         # Dijkstra solo las use si realmente acortan el tiempo.
         TIPOS_CONTRAMANO_EXCLUIDOS = {'motorway', 'motorway_link', 'trunk', 'trunk_link'}
         if emergencia and not emerg_sentido:
@@ -1913,7 +1958,7 @@ def calcular_ruta():
                 hw = d.get('highway', '')
                 if hw in TIPOS_CONTRAMANO_EXCLUIDOS:
                     continue   # no añadir contramano en autopistas/troncos
-                # Añadir dirección inversa con penalización ×3
+                # Añadir dirección inversa con penalización x3
                 attrs_inv = dict(d)
                 attrs_inv['weight']         = d.get('weight', 1.0)         * 3.0
                 attrs_inv['tiempo_minutos'] = d.get('tiempo_minutos', 0.0) * 3.0
@@ -2049,7 +2094,11 @@ def calcular_ruta():
                     tiempo_base += t_base # Suma el tiempo base del segmento al tiempo base total (sin factores)   
 
                     event_factor = event_factors.get((u, v), 1.0) # Factor de evento aplicado al segmento
-                    obst_factor  = penalizados.get((u, v), 1.0) # Factor de obstáculo aplicado al segmento
+                    # delta_acum guarda la suma de deltas de barreras (1-3); convertir a factor
+                    _ESTADO_OBS_STATS = [0.00, 0.33, 0.67, 0.99]
+                    _delta = delta_acum.get((u, v), 0)
+                    _obs   = _ESTADO_OBS_STATS[min(3, _delta)] if _delta > 0 else 0.0
+                    obst_factor  = 1.0 / (1.0 - _obs * 0.99) if _delta > 0 else 1.0
                     temporal_factor = coef_temporal if coef_temporal != 1.0 else 1.0 # Factor temporal aplicado a todos los segmentos
 
                     if event_factor > 1.0: 
@@ -2072,13 +2121,14 @@ def calcular_ruta():
 
         vel            = round(dist_km / (tiempo_base / 60), 2) if tiempo_base > 0 else 0 # Velocidad promedio real en km/h (sin factores de penalización)
         tipo_principal = max(tipos_vias, key=tipos_vias.get) if tipos_vias else 'unclassified' # Tipo de vía más frecuente en la ruta
+
         usa_obstaculos = any( # Verifica si la ruta atraviesa algún segmento penalizado por obstáculos
-            (ruta[i], ruta[i+1]) in penalizados or (ruta[i+1], ruta[i]) in penalizados
+            (ruta[i], ruta[i+1]) in delta_acum or (ruta[i+1], ruta[i]) in delta_acum
             for i in range(len(ruta)-1)
         )
         segs_penalizados = sum( # Cuenta cuántos segmentos de la ruta están penalizados por obstáculos
             1 for i in range(len(ruta)-1)
-            if (ruta[i], ruta[i+1]) in penalizados or (ruta[i+1], ruta[i]) in penalizados # Verifica ambos sentidos por si la vía es bidireccional y el obstáculo afecta en una dirección pero no en la otra
+            if (ruta[i], ruta[i+1]) in delta_acum or (ruta[i+1], ruta[i]) in delta_acum
         )
 
         ruta_geojson = { 
@@ -2104,14 +2154,14 @@ def calcular_ruta():
             }
         }
 
-        # Solo los segmentos penalizados que la ruta realmente atraviesa
+        # Solo los segmentos con obstáculos que la ruta realmente atraviesa
         ruta_edges = set()
         for i in range(len(ruta) - 1):
             ruta_edges.add((ruta[i], ruta[i+1]))
             ruta_edges.add((ruta[i+1], ruta[i]))
         segs_coords = [
             {'start': {'lat': u[1], 'lon': u[0]}, 'end': {'lat': v[1], 'lon': v[0]}}
-            for u, v in penalizados
+            for u, v in delta_acum
             if (u, v) in ruta_edges or (v, u) in ruta_edges
         ]
 
@@ -2175,7 +2225,7 @@ def exportar_obstaculos():
         for obs in features:
             try:
                 nivel_val = int(obs.get('nivel', 2))
-                nivel_val = max(1, min(4, nivel_val))
+                nivel_val = max(1, min(3, nivel_val))
             except (ValueError, TypeError):
                 nivel_val = 2
             registros.append({
@@ -2272,15 +2322,10 @@ def importar_obstaculos():
         features = []
         for _, row in gdf.iterrows():
             if 'nivel' in row and row['nivel'] is not None:
-                try:   nivel_val = max(1, min(4, int(row['nivel'])))
-                except: nivel_val = 2
-            elif 'pct' in row and row['pct'] is not None:   # legacy
-                try:
-                    pct_raw = int(row['pct'])
-                    nivel_val = max(1, min(4, round(pct_raw / 25))) if pct_raw > 0 else 1
-                except: nivel_val = 2
+                try:   nivel_val = max(1, min(3, int(row['nivel'])))
+                except: nivel_val = 1
             else:
-                nivel_val = 2
+                nivel_val = 1  # Amarillo por defecto
 
             features.append({
                 'lat':            row.geometry.y,
@@ -2323,7 +2368,7 @@ def exportar_obstaculos_csv():
         # Escribir datos
         for obs in features:
             try:
-                nivel_val = max(1, min(4, int(obs.get('Nivel', obs.get('nivel', 2)))))
+                nivel_val = max(1, min(3, int(obs.get('Nivel', obs.get('nivel', 1)))))
             except (ValueError, TypeError):
                 nivel_val = 2
             
@@ -2918,9 +2963,9 @@ def api_sesion_confirmar():
 # ==================== SOCKETIO ====================
 
 def _obs_a_dict(obs):
-    # Tabla nivel (1-4) → obstruccion (0-1), igual que NIVELES_OBS en route-manager.js
-    _NIVEL_A_OBS = {1: 0.25, 2: 0.50, 3: 0.75, 4: 0.99}
-    nivel = max(1, min(4, obs.nivel_val or 2))
+    # Tabla nivel-delta (1-3) → obstruccion (0-1), igual que NIVELES_OBS en route-manager.js
+    _NIVEL_A_OBS = {1: 0.33, 2: 0.67, 3: 0.99}
+    nivel = max(1, min(3, obs.nivel_val or 1))
     return {
         'id':          obs.id,
         'obs_id':      obs.obs_id,
@@ -2959,7 +3004,7 @@ def ws_obs_crear(data):
         obs_id     = data.get('obs_id') or None,
         lat        = float(data['lat']),
         lng        = float(data['lng']),
-        nivel_val  = int(data.get('nivel', 2)),
+        nivel_val  = int(data.get('nivel', 1)),
         portal     = data.get('portal', ''),
         autor      = session.get('usuario'),
     )

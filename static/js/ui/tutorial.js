@@ -154,8 +154,9 @@
       var desc = document.querySelector('.driver-popover-description');
       if (!desc) return;
       var b = desc.querySelector('.tut-badge');
+      if (!txt) { if (b) b.remove(); return; }
       if (!b) { b = document.createElement('div'); b.className = 'tut-badge'; desc.appendChild(b); }
-      b.textContent = txt || ''; b.style.display = txt ? 'inline-flex' : 'none';
+      b.textContent = txt;
     });
   }
 
@@ -286,13 +287,19 @@
     // reintenta cada 50 ms hasta un máximo de 20 veces (~1 s)
     var intentos = 0;
     function intentar() {
-      if (document.getElementById('tut-skip-btn')) return;
       var f = document.querySelector('.driver-popover-footer');
       if (!f) {
         if (intentos++ < 20) setTimeout(intentar, 50);
         return;
       }
-      var b = document.createElement('button');
+      var b = document.getElementById('tut-skip-btn');
+      if (b) {
+        // Driver.js puede recrear el popover (y su footer) entre pasos.
+        // Si el botón quedó huérfano en un footer antiguo, reanclarlo al actual.
+        if (b.parentElement !== f) f.appendChild(b);
+        return;
+      }
+      b = document.createElement('button');
       b.id = 'tut-skip-btn';
       b.textContent = '✕  Salir del tutorial';
       b.addEventListener('click', destroyFn);
@@ -514,7 +521,13 @@
     }
   }
 
-  function crearObstaculo(lat, lng, pct) {
+  /**
+   * Crea un obstáculo en (lat,lng) con el NIVEL indicado (1-3):
+   *   1 = 🟡 Amarillo (Precaución), 2 = 🟠 Naranja (Peligro), 3 = 🔴 Rojo (Bloqueado)
+   * El modal actual usa 3 botones discretos (#obs-nivel-btn-N), no un slider.
+   */
+  function crearObstaculo(lat, lng, nivel) {
+    nivel = Math.min(3, Math.max(1, nivel || 2));
     if (typeof modoObstaculo === 'undefined' || !modoObstaculo) {
       if (typeof activarModoObstaculo === 'function') activarModoObstaculo();
     }
@@ -530,23 +543,15 @@
     }).then(function() {
       return wait(800);
     }).then(function() {
-      // Animar el slider progresivamente hacia el valor objetivo
-      var sl = document.getElementById('obstaculo-pct');
-      if (!sl) return Promise.resolve();
-      var inicio = parseInt(sl.value) || 0;
-      var fin = pct;
-      var pasos = 18;
-      var idx = 0;
-      function animarSlider() {
-        if (idx > pasos) return Promise.resolve();
-        sl.value = Math.round(inicio + (fin - inicio) * (idx / pasos));
-        sl.dispatchEvent(new Event('input', { bubbles: true }));
-        idx++;
-        return wait(55).then(animarSlider);
-      }
-      return animarSlider();
+      // Pulsar el botón del nivel deseado (#obs-nivel-btn-1..3)
+      var btnNivel = document.getElementById('obs-nivel-btn-' + nivel);
+      if (!btnNivel) return Promise.resolve();
+      return click(btnNivel).then(function() {
+        if (typeof _seleccionarNivelObs === 'function') _seleccionarNivelObs(nivel);
+        else btnNivel.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
     }).then(function() {
-      // Pausa para que el usuario vea el valor final del slider
+      // Pausa para que el usuario vea el nivel seleccionado resaltado
       return wait(1000);
     }).then(function() {
       // Restaurar overlay y mover cursor al botón Colocar
@@ -732,7 +737,16 @@
           description: 'Abre el panel de routing. El tutorial lo pulsará ahora.' },
         accion: function(next) {
           badge('Abriendo panel de routing…');
-          abrirMswPanel().then(function() { badge(''); wait(1200).then(next); });
+          // Cerrar el popup de Leaflet del portal seleccionado en el paso anterior
+          try {
+            var mapa = window.map || window.myMap || window.leafletMap;
+            if (mapa && typeof mapa.closePopup === 'function') mapa.closePopup();
+            var btnCerrarPopup = document.querySelector('.leaflet-popup-close-button');
+            if (btnCerrarPopup) btnCerrarPopup.click();
+          } catch(e) {}
+          wait(300).then(function() {
+            return abrirMswPanel();
+          }).then(function() { badge(''); wait(1200).then(next); });
         },
       },
 
@@ -838,10 +852,10 @@
       {
         element: '#map',
         popover: { title: '🖱️ Creando obstáculo en el mapa', side: 'over', align: 'center',
-          description: 'El tutorial centra el mapa en una vía, hace clic, ajusta el nivel de obstrucción a <strong>nivel medio-alto</strong> y pulsa <strong>Colocar</strong>.' },
+          description: 'El tutorial centra el mapa en una vía, hace clic, selecciona el <strong>Nivel 🔴 Rojo (Bloqueado)</strong> de impacto y pulsa <strong>Colocar</strong>.' },
         accion: function(next) {
-          badge('Creando obstáculo — nivel medio-alto…');
-          crearObstaculo(C.obs1.lat, C.obs1.lng, 65).then(function() {
+          badge('Creando obstáculo — 🔴 Rojo (Bloqueado)…');
+          crearObstaculo(C.obs1.lat, C.obs1.lng, 3) /* nivel 3 = Rojo (Bloqueado) */.then(function() {
             badge('');
             // Spotlight sobre el marcador del obstáculo en el mapa
             var r = rectMarker(C.obs1.lat, C.obs1.lng, 110);
@@ -865,10 +879,10 @@
       {
         element: '#obstaculos-panel-flotante',
         popover: { title: '🗑️ Crear y eliminar obstáculo', side: 'left', align: 'start',
-          description: 'El tutorial crea un segundo obstáculo con <strong>nivel bajo</strong> de obstrucción y luego lo elimina con el botón <strong>✕</strong> del panel.' },
+          description: 'El tutorial crea un segundo obstáculo con <strong>Nivel 🟡 Amarillo (Precaución)</strong> de impacto y luego lo elimina con el botón <strong>✕</strong> del panel.' },
         accion: function(next) {
-          badge('Creando obstáculo — nivel bajo…');
-          crearObstaculo(C.obs2.lat, C.obs2.lng, 30).then(function() {
+          badge('Creando obstáculo — 🟡 Amarillo (Precaución)…');
+          crearObstaculo(C.obs2.lat, C.obs2.lng, 1) /* nivel 1 = Amarillo (Precaución) */.then(function() {
             badge('Eliminando obstáculo con ✕…');
             return wait(800);
           }).then(function() {
@@ -876,7 +890,7 @@
             var btns = lista ? lista.querySelectorAll('button') : [];
             var btnX = null;
             btns.forEach(function(b) {
-              if (b.classList.contains('obs-item-remove') || /limin/i.test(b.title || '') || b.textContent.trim() === '✕' || b.textContent.trim() === '×') btnX = b;
+              if (b.classList.contains('obs-item-remove') || /limin/i.test(b.title || '') || b.textContent.trim() === '✕' || b.textContent.trim() === 'x') btnX = b;
             });
             if (!btnX && btns.length) btnX = btns[btns.length - 1];
             return btnX ? click(btnX).then(function() { btnX.dispatchEvent(new MouseEvent('click', { bubbles: true })); return wait(500); }) : Promise.resolve();
@@ -887,7 +901,7 @@
       /* 18 — Editar obstáculo (informativo) */
       {
         popover: { title: '🔄 Editar un obstáculo', side: 'over', align: 'center',
-          description: 'Haz clic en el marcador 🚧 del mapa para abrir su popup:<br>• <strong>📍 Mover</strong> — el siguiente clic lo reubica<br>• <strong>Slider</strong> — cambia el nivel de obstrucción al cerrar' },
+          description: 'Haz clic en el marcador 🚧 del mapa para abrir su popup:<br>• <strong>📍 Mover</strong> — el siguiente clic lo reubica<br>• <strong>Niveles 🟡🟠🔴</strong> — cambia el nivel de impacto al cerrar' },
         accion: function(next) {
           try {
             var mapa = window.map || window.myMap;
@@ -972,7 +986,7 @@
       {
         element: '#btn-salir-ahora-msw',
         popover: { title: '🕐 Tiempo de salida', side: 'left', align: 'start',
-          description: 'Selecciona cuándo calcular:<br>• <strong>🕐 Salir ahora</strong><br>• <strong>📅 Salir a las</strong> — elige fecha y hora<br>• <strong>🏁 Llegar antes de las</strong> — calcula cuándo partir' },
+          description: 'Selecciona cuándo calcular:<br>• <strong>🕐 Salir ahora</strong><br>• <strong>📅 Salir a las</strong> — elige fecha y hora<br>• <strong>🎯 Llegar antes de las</strong> — calcula cuándo partir' },
         accion: function(next) {
           abrirMswPanel().then(function() {
             var btn = document.getElementById('btn-salir-ahora-msw');
@@ -1110,6 +1124,30 @@
         }
       }
     } catch(e) { console.warn('[tutorial cleanup] Panel Cómo llegar:', e); }
+
+    // 6. Cerrar el widget de información de clic en el mapa, si quedó abierto
+    try {
+      var ciw = document.getElementById('click-info-widget');
+      if (ciw && ciw.style.display !== 'none') {
+        if (typeof cerrarClickWidget === 'function') cerrarClickWidget();
+        else ciw.style.display = 'none';
+      }
+    } catch(e) { console.warn('[tutorial cleanup] Click widget:', e); }
+
+    // 7. Cerrar cualquier popup de Leaflet abierto (p.ej. el del portal buscado)
+    try {
+      var mapa = window.map || window.myMap || window.leafletMap;
+      if (mapa && typeof mapa.closePopup === 'function') mapa.closePopup();
+    } catch(e) { console.warn('[tutorial cleanup] Popup Leaflet:', e); }
+
+    // 8. Quitar cualquier spotlight residual
+    try {
+      if (spotEl) { spotEl.style.display = 'none'; spotEl.style.boxShadow = '0 0 0 0 rgba(0,0,0,0)'; }
+      var ov = document.getElementById('driver-overlay') ||
+               document.querySelector('.driver-overlay') ||
+               document.querySelector('[class*="driver-overlay"]');
+      if (ov) { ov.style.opacity = ''; ov.style.pointerEvents = ''; }
+    } catch(e) { console.warn('[tutorial cleanup] Spotlight:', e); }
   }
 
   /* ═══════════════════════════════════════════════════════════════

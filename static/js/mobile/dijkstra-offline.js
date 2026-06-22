@@ -13,7 +13,7 @@
  *   ✅ Penalización de obstáculos: factor = 1 / (1 - p * 0.99)
  *   ✅ Tipos de vía prohibidos (peatonal/ciclista)
  *   ✅ Modo emergencia: velocidad +20 km/h
- *   ✅ Modo emergencia: contramano (×3 penalización)
+ *   ✅ Modo emergencia: contramano (x3 penalización)
  *   ✅ Tipo de vehículo: restricción de ángulo de giro para camión
  *   ⚠️  Modo Momento (POIs temporales): omitido — requiere datos de POIs en caché
  *       (se añadirá en fase 2 si se cachean los POIs)
@@ -164,6 +164,9 @@ const DijkstraOffline = (() => {
                         const prev  = coords[i - 1];
                         const ang   = anguloGiro(prev, s, e);
                         tCurva = tiempoCurva(ang, maxspeed);
+                        if (junction === 'roundabout') {
+                            tCurva *= 0.5;
+                        }
                     }
 
                     const tiempoTotal = tiempo + tCurva;
@@ -383,7 +386,7 @@ const DijkstraOffline = (() => {
             }
         }
 
-        // Contramano: añadir aristas inversas con ×3 de penalización
+        // Contramano: añadir aristas inversas con x3 de penalización
         if (!opciones.emerg_sentido) {
             const nuevas = [];
             for (const [ks, vecinos] of grafo) {

@@ -7,7 +7,7 @@
  *   1. Admin pulsa "Crear evento" → modo dibujo activo
  *   2. Clicks en el mapa añaden vértices (preview en tiempo real)
  *   3. Click derecho cierra el polígono
- *   4. Modal pide: nombre, fecha/hora inicio, afluencia (0-100%), duración (h)
+ *   4. Modal pide: nombre, fecha/hora inicio, nivel de impacto (Amarillo/Naranja/Rojo), duración (h)
  *   5. El polígono queda guardado en `eventos[]`
  *
  * Integración con calcularRuta (route-manager.js):
@@ -208,23 +208,21 @@ function _ocultarBotonCrearEventoMovil() {
  * Tabla de 4 niveles de impacto para eventos.
  * Usa la MISMA fórmula de penalización que los obstáculos:
  *   factor = 1 / (1 - obstruccion * 0.99)
- *   Nivel 1 → obstruccion=0.25 → factor ≈ ×1.33  (Leve)
- *   Nivel 2 → obstruccion=0.50 → factor ≈ ×2.02  (Moderado)
- *   Nivel 3 → obstruccion=0.75 → factor ≈ ×4.03  (Alto)
- *   Nivel 4 → obstruccion=0.99 → factor ≈ ×100   (Máximo)
+ *   Nivel Amarillo → obstruccion=0.33 → factor ≈ x1.49  (Precaución)
+ *   Nivel Naranja  → obstruccion=0.67 → factor ≈ x3.03  (Peligro)
+ *   Nivel Rojo     → obstruccion=0.99 → factor ≈ x100   (Bloqueado)
  */
 const NIVELES_EVENTO = {
-    1: { obstruccion: 0.25, color: '#2980b9', label: 'Nivel 1', desc: 'Leve' },
-    2: { obstruccion: 0.50, color: '#f39c12', label: 'Nivel 2', desc: 'Moderado' },
-    3: { obstruccion: 0.75, color: '#e67e22', label: 'Nivel 3', desc: 'Alto' },
-    4: { obstruccion: 0.99, color: '#e74c3c', label: 'Nivel 4', desc: 'Máximo' },
+    1: { obstruccion: 0.33, color: '#f1c40f', label: 'Nivel Amarillo', desc: 'Precaución' },
+    2: { obstruccion: 0.67, color: '#e67e22', label: 'Nivel Naranja',  desc: 'Peligro'    },
+    3: { obstruccion: 0.99, color: '#e74c3c', label: 'Nivel Rojo',     desc: 'Bloqueado'  },
 };
 
 /**
  * Devuelve el nivel (1-4) dado un valor de afluencia (0-1).
  */
 function _nivelAfluencia(afluencia) {
-    const ob = afluencia ?? 0.5;
+    const ob = afluencia ?? 0.33;
     let mejor = 1, mejorDist = Infinity;
     for (const [n, cfg] of Object.entries(NIVELES_EVENTO)) {
         const d = Math.abs(cfg.obstruccion - ob);
@@ -462,7 +460,7 @@ let _verticesPendientes = null;
 /**
  * Marca visualmente el nivel seleccionado en el modal y guarda el valor
  * en el input oculto #ev-nivel-value.
- * @param {number} nivel  1-4
+ * @param {number} nivel  1-3
  */
 function _seleccionarNivelEvento(nivel) {
     const info = NIVELES_EVENTO[nivel];
@@ -473,12 +471,12 @@ function _seleccionarNivelEvento(nivel) {
     if (hidden) hidden.value = nivel;
 
     // Actualizar botones
-    for (let n = 1; n <= 4; n++) {
+    for (let n = 1; n <= 3; n++) {
         const btn = document.getElementById(`ev-nivel-btn-${n}`);
         if (!btn) continue;
         const activo = (n === nivel);
         btn.style.background   = activo ? NIVELES_EVENTO[n].color : '#f1f5f9';
-        btn.style.color        = activo ? '#fff' : '#374151';
+        btn.style.color        = activo ? (n === 1 ? '#333' : '#fff') : '#374151';
         btn.style.borderColor  = activo ? NIVELES_EVENTO[n].color : '#e2e8f0';
         btn.style.fontWeight   = activo ? '700' : '500';
         btn.style.transform    = activo ? 'scale(1.05)' : 'scale(1)';
@@ -487,7 +485,7 @@ function _seleccionarNivelEvento(nivel) {
     // Actualizar descripción
     const desc = document.getElementById('ev-nivel-desc');
     if (desc) {
-        desc.textContent  = `${info.label} — ${info.desc}  (factor ×${(1/(1-info.obstruccion*0.99)).toFixed(1)})`;
+        desc.textContent  = `${info.label} — ${info.desc}  (factor x${(1/(1-info.obstruccion*0.99)).toFixed(1)})`;
         desc.style.color  = info.color;
     }
 }
@@ -526,8 +524,8 @@ function _abrirModalEvento(vertices) {
     if (elNombre)   elNombre.value   = '';
     if (elDuracion) elDuracion.value = 2;
 
-    // Seleccionar nivel 2 por defecto
-    _seleccionarNivelEvento(2);
+    // Seleccionar nivel 1 (Amarillo) por defecto
+    _seleccionarNivelEvento(1);
 
     document.getElementById('evento-modal').style.display = 'flex';
 }
@@ -546,8 +544,8 @@ function confirmarEvento() {
     const nombre    = document.getElementById('ev-nombre')?.value.trim();
     const fechaStr  = document.getElementById('ev-fecha')?.value;
     const horaStr   = document.getElementById('ev-hora')?.value   || '00:00';
-    const nivel     = parseInt(document.getElementById('ev-nivel-value')?.value ?? 2, 10);
-    const afluencia = NIVELES_EVENTO[nivel]?.obstruccion ?? 0.5;
+    const nivel     = parseInt(document.getElementById('ev-nivel-value')?.value ?? 1, 10);
+    const afluencia = NIVELES_EVENTO[nivel]?.obstruccion ?? 0.33;
     const duracion  = parseFloat(document.getElementById('ev-duracion')?.value ?? 2);
 
     // Helper: marca un campo en rojo, muestra notificación y hace foco
@@ -627,7 +625,7 @@ function _crearEvento(vertices, nombre, fechaInicio, afluencia, duracion) {
         icon: L.divIcon({
             className: '',
             html: `<div style="
-                background:${color};color:#fff;border-radius:6px;
+                background:${color};color:${afluencia < 0.5 ? '#333' : '#fff'};border-radius:6px;
                 padding:3px 8px;font-size:12px;font-weight:700;
                 box-shadow:0 2px 6px rgba(0,0,0,.35);white-space:nowrap;
                 pointer-events:none;">
@@ -1032,10 +1030,9 @@ function importarEventos(input) {
  *
  * Factor de penalización:
  *   factor = 1 / (1 - afluencia * 0.99)   — idéntica a la fórmula de obstáculos en app.py
- *   → Nivel 1 (25%) → ×1.49
- *   → Nivel 2 (50%) → ×2.02
- *   → Nivel 3 (75%) → ×4.03
- *   → Nivel 4 (100%) → ×100  (prácticamente bloqueado, igual que un obstáculo al 100%)
+ *   → Nivel Amarillo (0.33) → x1.49
+ *   → Nivel Naranja  (0.67) → x3.03
+ *   → Nivel Rojo     (0.99) → x100  (prácticamente bloqueado)
  *
  * Se expone como window.obtenerPenalizacionEventos para ser llamada desde
  * _calcularPesosAristas() en route-manager.js.

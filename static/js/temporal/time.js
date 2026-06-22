@@ -120,8 +120,45 @@ const PERIODOS_CRITICOS = {
             { inicio: 12, fin: 15, intensidad: 'media' },
         ],
         tipos:     ['restaurant', 'bar', 'pub', 'cafe', 'cinema', 'theatre', 'restaurante', 'cafetería'],
+        capas:     ['Restaurantes'],
         color:     '#E74C3C',
-        radioVias: 60,   // radio pequeño, solo la calle inmediata
+        radioVias: 60,
+        modoVias:  'urbano',
+    },
+    farmacias: {
+        dias: [1, 2, 3, 4, 5, 6],
+        horarios: [
+            { inicio: 9,  fin: 10,  intensidad: 'media' },  // Apertura
+            { inicio: 17, fin: 19,  intensidad: 'media' },  // Tarde
+        ],
+        tipos:     ['farmacia', 'pharmacy', 'chemist'],
+        capas:     ['farmaciasED5030'],
+        color:     '#27AE60',
+        radioVias: 40,
+        modoVias:  'urbano',
+    },
+    gasolineras: {
+        dias: [1, 2, 3, 4, 5, 6, 7],
+        horarios: [
+            { inicio: 7,  fin: 9,   intensidad: 'alta'  },  // Hora punta mañana
+            { inicio: 17, fin: 19,  intensidad: 'alta'  },  // Hora punta tarde
+        ],
+        tipos:     ['gasolinera', 'fuel', 'gas_station', 'petrol'],
+        capas:     ['rt_gasolineras'],
+        color:     '#F39C12',
+        radioVias: 80,
+        modoVias:  'acceso',
+    },
+    monumentos: {
+        dias: [6, 7],
+        horarios: [
+            { inicio: 10, fin: 14, intensidad: 'media' },
+            { inicio: 16, fin: 19, intensidad: 'baja'  },
+        ],
+        tipos:     ['monumento', 'monument', 'tourism', 'historic', 'attraction'],
+        capas:     ['Monumentos'],
+        color:     '#8E44AD',
+        radioVias: 50,
         modoVias:  'urbano',
     },
 };
@@ -166,10 +203,10 @@ function aplicarSimulacionTemporal() {
             );
             if (!horarioActivo) continue;
 
-            const puntos = encontrarPuntosDeInteresPorTipo(config.tipos);
+            const puntos = encontrarPuntosDeInteresPorTipo(config.tipos, config.capas || []);
             puntos.forEach(punto => {
                 puntosResaltar.push({ punto, config, horario: horarioActivo });
-                const viasProximas = encontrarViasProximas(punto.latlng, config.radioVias);
+                const viasProximas = encontrarViasProximas(punto.latlng, config.radioVias, config.modoVias);
                 viasProximas.forEach(via => {
                     const factor = _factorInterno(horarioActivo.intensidad);
                     const prev   = factorPorVia.get(via.layer);
@@ -192,7 +229,7 @@ function aplicarSimulacionTemporal() {
         // en factorPorVia y les asignamos un factor atenuado por distancia.
         // Radio de propagación = radioVias * 1.5 del POI más influyente.
         // Factor propagado = factor_origen * (1 - dist/radio_propagacion) * 0.6
-        // → el vecino más cercano puede llegar a ×(factor*0.6), el más lejano a ×1.0
+        // → el vecino más cercano puede llegar a x(factor*0.6), el más lejano a x1.0
         const RADIO_PROPAGACION_MULTIPLIER = 1.8;  // radio extra respecto al del POI
         const ATENUACION_VECINO            = 0.55; // qué fracción del factor llega al vecino
 
@@ -310,7 +347,7 @@ function aplicarSimulacionTemporal() {
                 const fuentes  = info.fuentes.map(f => `${f.nombre} (${f.tipo})`).join(', ');
                 layer.bindTooltip(
                     `<strong style="color:${color}">● ${etiqueta}</strong><br>` +
-                    `Factor: ×${factor.toFixed(2)}<br>` +
+                    `Factor: x${factor.toFixed(2)}<br>` +
                     `<span style="color:#555;font-size:11px;">${fuentes}</span>`
                 );
             });
@@ -423,10 +460,10 @@ function _actualizarLeyendaTrafico() {
     leyenda.innerHTML = `
         <div style="font-weight:700;margin-bottom:6px;color:#2c3e50;">🎨 Leyenda de tráfico</div>
         ${[
-            ['#27ae60', 'Fluido (×1.0)'],
-            ['#f1c40f', 'Moderado (×1.25)'],
-            ['#e67e22', 'Denso (×1.45)'],
-            ['#e74c3c', 'Congestionado (×1.55+)'],
+            ['#27ae60', 'Fluido (x1.0)'],
+            ['#f1c40f', 'Moderado (x1.25)'],
+            ['#e67e22', 'Denso (x1.45)'],
+            ['#e74c3c', 'Congestionado (x1.55+)'],
         ].map(([c, l]) => `
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
                 <div style="width:28px;height:5px;background:${c};border-radius:3px;"></div>
@@ -463,7 +500,16 @@ function desactivarSimulacionTemporal() {
 
 // ==================== BÚSQUEDA EN CAPAS ====================
 
-function encontrarPuntosDeInteresPorTipo(tipos) {
+// Mapeo de nombre de capa shapefile → tipo normalizado para PERIODOS_CRITICOS
+const _CAPA_A_TIPO = {
+    'centrosescolaresPuertoLumbreras': 'colegio',
+    'farmaciasED5030':                 'farmacia',
+    'rt_gasolineras':                  'gasolinera',
+    'Restaurantes':                    'restaurante',
+    'Monumentos':                      'monumento',
+};
+
+function encontrarPuntosDeInteresPorTipo(tipos, capas = []) {
     const encontrados = [];
     if (!window.puntosLayer) return encontrados;
 
@@ -471,7 +517,8 @@ function encontrarPuntosDeInteresPorTipo(tipos) {
         if (!layer.feature?.properties) return;
         const props = layer.feature.properties;
 
-        const tipoPunto = (
+        // Tipo explícito desde campos semánticos del shapefile
+        const tipoExplicito = (
             props.tipo       ||
             props.amenity    ||
             props.building   ||
@@ -480,20 +527,35 @@ function encontrarPuntosDeInteresPorTipo(tipos) {
             ''
         ).toLowerCase();
 
-        const coincide = tipos.some(t => {
+        // Tipo derivado del nombre de la capa shapefile (_capa se asigna en app.py)
+        const tipoCapa = _CAPA_A_TIPO[props._capa] || '';
+
+        // Tipo combinado: cualquiera de los dos
+        const tipoPunto = tipoExplicito || tipoCapa;
+
+        // Coincidencia 1: por nombre de capa (match exacto y rápido)
+        const coincideCapa = capas.length > 0 && capas.includes(props._capa);
+
+        // Coincidencia 2: por tipos semánticos (con aliases para campos legacy)
+        const coincideTipo = tipos.some(t => {
             const tb = t.toLowerCase();
             return tipoPunto.includes(tb)
-                || (tipoPunto.includes('colegio')  && tb === 'school')
-                || (tipoPunto.includes('iglesia')  && tb === 'church')
-                || (tipoPunto.includes('oficina')  && tb === 'office');
+                || (tipoPunto.includes('colegio')    && tb === 'school')
+                || (tipoPunto.includes('iglesia')    && tb === 'church')
+                || (tipoPunto.includes('oficina')    && tb === 'office')
+                || (tipoPunto.includes('farmacia')   && tb === 'pharmacy')
+                || (tipoPunto.includes('gasolinera') && tb === 'fuel')
+                || (tipoPunto.includes('restaurante')&& tb === 'restaurant');
         });
 
-        if (coincide) {
+        if (coincideCapa || coincideTipo) {
             encontrados.push({
                 layer:      layer,
                 latlng:     layer.getLatLng(),
-                tipo:       tipoPunto,
-                nombre:     props.denLarga || props.name || props.nombre || props.denominacion || 'Sin nombre',
+                tipo:       tipoPunto || props._capa || 'poi',
+                nombre:     props.Nombre   || props.nombre   ||
+                            props.denLarga || props.name     ||
+                            props.denominacion || 'Sin nombre',
                 properties: props,
             });
         }
@@ -511,7 +573,7 @@ function encontrarViasProximas(centro, radioMetros, modoVias) {
     const cLat  = centro.lat;
     const cLon  = centro.lng;
     const rDeg  = radioMetros / 111000;
-    const rDeg2 = rDeg * rDeg; // comparar dist² evita sqrt en el caso más frecuente
+    const rDeg2 = rDeg * rDeg; // comparar dist^2 evita sqrt en el caso más frecuente
 
     viasLayer.eachLayer(layer => {
         const props   = layer.feature?.properties || {};
@@ -640,12 +702,32 @@ function actualizarContextoMomento() {
     contextoDiv.classList.remove('madrugada', 'manana', 'tarde', 'noche');
     contextoDiv.classList.add(periodo.clase);
 
-    const iconos = { colegios: '🏫', iglesias: '⛪', oficinas: '🏢', ocio: '🍽️' };
+    const iconos = {
+        colegios:    '🏫',
+        iglesias:    '⛪',
+        oficinas:    '🏢',
+        ocio:        '🍽️',
+        farmacias:   '💊',
+        gasolineras: '⛽',
+        monumentos:  '🏛️',
+    };
+    const etiquetas = {
+        colegios:    'Colegios con alta ocupación',
+        iglesias:    'Iglesias (domingo)',
+        oficinas:    'Oficinas — hora punta',
+        ocio:        'Ocio y restauración',
+        farmacias:   'Farmacias activas',
+        gasolineras: 'Gasolineras — hora punta',
+        monumentos:  'Monumentos (fin de semana)',
+    };
     const descripciones = {
-        colegios: 'Colegios con alta ocupación',
-        iglesias: 'Misas dominicales en curso',
-        oficinas: 'Actividad en oficinas',
-        ocio:     'Zonas de ocio activas',
+        colegios:    'Colegios con alta ocupación',
+        iglesias:    'Misas dominicales en curso',
+        oficinas:    'Actividad en oficinas',
+        ocio:        'Zonas de ocio activas',
+        farmacias:   'Farmacias con alta afluencia',
+        gasolineras: 'Gasolineras en hora punta',
+        monumentos:  'Monumentos con visitantes',
     };
 
     const activas = [];
