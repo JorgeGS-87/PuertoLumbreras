@@ -132,3 +132,23 @@ NOTAS
 - Si cambias la capa de vias, vuelve a configurar los atributos de ruta
 - La base de datos MongoDB se llama "georuta" (coleccion: "usuarios")
 - Para hacer copia de seguridad de usuarios: mongodump --db georuta
+
+INSTALACIÓN EN WINDOWS (NOTAS)
+--------------------------------
+- `geopandas` y sus dependencias binarios funcionan mejor instalándolos
+   desde conda (conda-forge). Recomendado:
+      1) Instala Miniconda/Anaconda
+      2) Crea un entorno: `conda create -n georuta python=3.10`
+      3) Activa: `conda activate georuta`
+      4) Instala geopandas y dependencias: `conda install -c conda-forge geopandas`
+   Alternativamente, en entornos `venv` pueden ser necesarios ruedas precompiladas.
+
+- Si quieres exponer la aplicación a tu móvil para pruebas, usa Cloudflare Tunnel
+   (`cloudflared`). Descarga `cloudflared.exe` desde:
+      https://github.com/cloudflare/cloudflared/releases/latest
+   Renómbralo a `cloudflared.exe` y colócalo en la carpeta del proyecto.
+   Usa `start_mobile.bat` para arrancar el servidor y el túnel.
+
+- `setup.bat` instala `wheel` para facilitar la instalación de paquetes con
+   componentes binarios. Si la instalación de dependencias falla por paquetes
+   geoespaciales en Windows, considera usar conda para esos paquetes.

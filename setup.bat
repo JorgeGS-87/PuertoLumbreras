@@ -51,6 +51,10 @@ if errorlevel 1 (
     exit /b 1
 )
 echo.
+REM Asegurar la disponibilidad de herramientas de compilacion simples
+echo Instalando 'wheel' por si fuese necesario para paquetes binarios...
+pip install wheel --quiet
+echo.
 
 REM Descargar librerias JS para modo offline
 echo [6/6] Descargando librerias JavaScript...
@@ -69,6 +73,14 @@ powershell -Command "Invoke-WebRequest 'https://cdnjs.cloudflare.com/ajax/libs/j
 
 echo Librerias JS descargadas.
 echo.
+if not exist cloudflared.exe (
+    echo AVISO: no se ha encontrado 'cloudflared.exe' en la carpeta del proyecto.
+    echo Si quieres exponer el servidor para pruebas en movil, descarga:
+    echo   https://github.com/cloudflare/cloudflared/releases/latest
+    echo y coloca el ejecutable renombrado a cloudflared.exe en la carpeta del proyecto.
+    echo.
+)
+
 echo ================================================
 echo   INSTALACION COMPLETADA
 echo ================================================

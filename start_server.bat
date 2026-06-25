@@ -12,8 +12,9 @@ if not exist venv (
     exit /b 1
 )
 
-REM Verificar que Flask está instalado en el venv
-if not exist venv\Lib\site-packages\flask (
+REM Verificar que Flask está instalado en el venv ejecutando un import simple
+venv\Scripts\python.exe -c "import flask" 2>nul
+if errorlevel 1 (
     echo ERROR: Flask no esta instalado en el entorno virtual
     echo Ejecuta setup.bat para reinstalar las dependencias
     pause
