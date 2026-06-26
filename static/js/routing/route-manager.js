@@ -1,4 +1,4 @@
-/**
+﻿/**
  * route-manager.js
  * Gestión de rutas, obstáculos y cálculo de caminos
  */
@@ -344,7 +344,7 @@ function pedirDestino() {
 }
 
 /** Llamada desde el label MSW de origen: desactiva modos incompatibles inmediatamente. */
-function iniciarSeleccionOrigen() {
+window.iniciarSeleccionOrigen = function() {
     if (modoObstaculo) desactivarModoObstaculo();
     if (typeof desactivarModoEvento === 'function' && window._modoEvento) desactivarModoEvento();
     modoActual = 'ruta';
@@ -352,10 +352,10 @@ function iniciarSeleccionOrigen() {
     window._esperandoDestino = false;
     mostrarInstruccionOrigen();
     showNotification('Haz clic en el mapa para colocar el ORIGEN', 'info');
-}
+};
 
 /** Llamada desde el label MSW de destino: desactiva modos incompatibles inmediatamente. */
-function iniciarSeleccionDestino() {
+window.iniciarSeleccionDestino = function() {
     if (modoObstaculo) desactivarModoObstaculo();
     if (typeof desactivarModoEvento === 'function' && window._modoEvento) desactivarModoEvento();
     modoActual = 'ruta';
@@ -363,7 +363,7 @@ function iniciarSeleccionDestino() {
     window._esperandoOrigen  = false;
     mostrarInstruccionDestino();
     showNotification('Haz clic en el mapa para colocar el DESTINO', 'info');
-}
+};
 
 function _actualizarLabels() {
     const origenEl  = document.getElementById('rp-origen-label');
@@ -941,7 +941,7 @@ map.on('click', function (e) {
         return;
     }
 
-    if (modoActual !== 'ruta') return;
+    if (modoActual !== 'ruta' && !window._esperandoOrigen && !window._esperandoDestino) return;
 
     if (window._esperandoOrigen) {
         window._esperandoOrigen = false;
@@ -1033,7 +1033,7 @@ function calcularRuta(forzar = false) {
     // Calcular pesos — puede lanzar error si los campos configurados son inválidos
     let pesos;
     try {
-        pesos = _calcularPesosAristas();
+        pesos = window._calcularPesosAristas();
     } catch (err) {
         ocultarProgreso();
         showNotification('❌ ' + err.message, 'error');
@@ -1049,31 +1049,44 @@ function calcularRuta(forzar = false) {
         : 1.0;
 
     // Construir el array de pesos a enviar al backend.
-    // OPTIMIZACIÓN: el backend ya tiene los pesos base del grafo calculados en Python.
-    // Solo enviamos los segmentos que se desvían del valor base:
-    //   - Momento activo → todos los segmentos con factor > 1.0
-    //   - Sin Momento    → array vacío (el backend usa sus propios pesos base)
-    // Los obstáculos se envían por separado y el backend los penaliza en su propio grafo.
+    // Solo enviamos segmentos Momento (factor temporal por hora/día).
+    // Los eventos se envían como factor_eventos_global: el backend lo aplica al tiempo total.
     let pesosEnvio = [];
-    if (window.estadoTemporal?.activo && Array.isArray(pesos)) {
-        // Solo los segmentos cuyo peso difiere del base por el factor Momento
+    if (Array.isArray(pesos) && window.estadoTemporal?.activo) {
         pesosEnvio = pesos.filter(p => p.peso !== p.pesoBase);
     }
-    // Si hay eventos activos (penalizados por event-manager), incluirlos también
-    if (Array.isArray(pesos)) {
-        const conEvento = pesos.filter(p => p.factor_evento && p.factor_evento > 1.0);
-        if (conEvento.length) {
-            const setS = new Set(pesosEnvio.map(p => `${p.s}`));
-            conEvento.forEach(p => { if (!setS.has(`${p.s}`)) pesosEnvio.push(p); });
+
+    // Calcular factor de evento global: factor máximo sobre todos los segmentos de la capa de vías.
+    // obtenerPenalizacionEventos() usa geometría de polígonos → no depende de coordenadas exactas del grafo.
+    let factorEventosGlobal = 1.0;
+    if (typeof window.obtenerPenalizacionEventos === 'function') {
+        const fechaEv = (typeof obtenerFechaEfectiva === 'function') ? obtenerFechaEfectiva() : new Date();
+        const geo = window.currentViasGeoJSON;
+        if (geo?.features?.length) {
+            outer: for (const feat of geo.features) {
+                const lines = feat.geometry?.type === 'MultiLineString'
+                    ? feat.geometry.coordinates
+                    : [feat.geometry?.coordinates || []];
+                for (const line of lines) {
+                    for (let i = 0; i < line.length - 1; i++) {
+                        const f = window.obtenerPenalizacionEventos(line[i], line[i + 1], fechaEv);
+                        if (f > factorEventosGlobal) {
+                            factorEventosGlobal = f;
+                            if (f >= 100) break outer; // cap suficiente
+                        }
+                    }
+                }
+            }
         }
     }
 
     const payload = {
         origen:          { lat: puntoOrigen.lat,  lon: puntoOrigen.lng  },
         destino:         { lat: puntoDestino.lat, lon: puntoDestino.lng },
-        obstaculos:      forzar ? [] : obstaculosActivos,
-        pesos:           pesosEnvio,
-        coef_temporal:   coefTemporal,
+        obstaculos:            obstaculosActivos,
+        pesos:                 pesosEnvio,
+        factor_eventos_global: factorEventosGlobal,
+        coef_temporal:         coefTemporal,
         momento_activo:  window.estadoTemporal?.activo || false,
         momento_dia:     window.estadoTemporal?.dia     || 1,
         momento_hora:    window.estadoTemporal?.hora    || 12,
@@ -1103,9 +1116,11 @@ function calcularRuta(forzar = false) {
             return;
         }
 
-        // Si la ruta pasa por obstáculos → avisar pero siempre dibujar
-        if (data.usa_obstaculos && !forzar) {
-            showNotification('⚠️ La ruta óptima atraviesa ' + data.segmentos_penalizados_usados + ' tramo(s) con obstáculos', 'warning');
+        const props = data.ruta?.properties ?? {};
+        const rutaAtraviesaObstaculos = data.usa_obstaculos || ((props?.tiempo_extra_obstaculos ?? 0) > 0);
+        if (rutaAtraviesaObstaculos && !forzar) {
+            const penalizados = data.segmentos_penalizados_usados || 1;
+            showNotification('⚠️ La ruta óptima atraviesa ' + penalizados + ' tramo(s) con obstáculos', 'warning');
         }
 
         // Dibujar ruta
@@ -1180,7 +1195,7 @@ function calcularRuta(forzar = false) {
         map.fitBounds(rutaLayer.getBounds(), { padding: [50, 50] });
 
         // Actualizar panel de estadísticas (IDs del panel derecho clásico)
-        const props = data.ruta?.properties ?? {};
+        // props ya declarado arriba en este mismo bloque
         window._rutaCalculadaDuracionMinutos = props.tiempo_minutos ?? null;
         _setText('ruta-distancia',           props.distancia_km            ?? '-');
         _setText('ruta-nodos',               props.num_nodos               ?? '-');
@@ -2113,6 +2128,13 @@ function _fmtTiempo(minutos) {
     }
     return `${s} s`;
 }
+
+function _fmtTiempoMinimo(minutos, minimoSegundos = 1) {
+    if (minutos == null || isNaN(minutos)) return '—';
+    const totalSeg = Math.round(minutos * 60);
+    if (totalSeg > 0) return _fmtTiempo(minutos);
+    return minutos > 0 ? `${minimoSegundos} s` : '0 s';
+}
 // ==================== CÁLCULO DE PESOS EN FRONTEND ====================
 
 /**
@@ -2158,7 +2180,14 @@ function _calcularPesosAristas() {
                 ? window.obtenerFactorMomentoParaSegmento(p.s, p.e)
                 : 1.0;
             if (fm === 1.0) return p;
-            return { s: p.s, e: p.e, peso: p.pesoBase * fm, tiempo_min: p.tiempoMin * fm };
+            return {
+                s: p.s,
+                e: p.e,
+                pesoBase: p.pesoBase,
+                tiempoMin: p.tiempoMin,
+                peso: p.pesoBase * fm,
+                tiempo_min: p.tiempoMin * fm
+            };
         });
     }
 
@@ -2209,6 +2238,9 @@ function _calcularPesosAristas() {
         return { s: p.s, e: p.e, peso: p.pesoBase * fm, tiempo_min: p.tiempoMin * fm };
     });
 }
+
+// Exponer en window para que event-manager.js pueda hacer monkey-patch
+window._calcularPesosAristas = _calcularPesosAristas;
 
 function _parsearVelocidad(val) {
     if (val === null || val === undefined || val === '') return null;
@@ -2479,13 +2511,12 @@ function _mostrarInfoEventosEnRuta(coordsRuta, props) {
 
     if (factorMax <= 1.0) return;
 
-    const tiempoBase = typeof props?.tiempo_minutos_base === 'number'
-        ? props.tiempo_minutos_base
-        : props?.tiempo_minutos ?? 0;
-    const tiempoReal  = props?.tiempo_minutos ?? 0;
-    const tiempoExtra = (typeof props?.tiempo_extra_eventos === 'number')
-        ? _fmtTiempo(props.tiempo_extra_eventos)
-        : _fmtTiempo(Math.max(0, tiempoReal - tiempoBase) / 60);
+    // El backend no puede mapear factores de evento por coordenadas exactas,
+    // así que calculamos el tiempo extra directamente en el frontend:
+    // tiempo_extra = tiempo_total * (1 - 1/factorMax)
+    const tiempoTotal    = props?.tiempo_minutos ?? 0;
+    const tiempoExtraMin = tiempoTotal > 0 ? Math.max(0, tiempoTotal * (1 - 1 / factorMax)) : 0;
+    const tiempoExtra = _fmtTiempoMinimo(tiempoExtraMin);
     const color = factorMax >= 3.5 ? '#e74c3c' : factorMax >= 2 ? '#f39c12' : '#8e44ad';
 
     const evDiv = document.createElement('div');
@@ -2546,10 +2577,12 @@ function _mostrarInfoObstaculosEnRuta(coordsRuta, props) {
 
     if (factorMax <= 1.0) return;
 
-    const tiempoBase  = props?.tiempo_minutos ?? 0;
-    const tiempoExtra = (typeof props?.tiempo_extra_obstaculos === 'number')
-        ? _fmtTiempo(props.tiempo_extra_obstaculos)
-        : _fmtTiempo(tiempoBase * (factorMax - 1) / factorMax / 60);
+    // Igual que con eventos: el backend no puede garantizar tiempo_extra_obstaculos
+    // cuando Dijkstra evita o cuando forzar=true vacía los obstáculos.
+    // Calculamos directamente: tiempo_extra = tiempo_total * (1 - 1/factorMax)
+    const tiempoTotal    = props?.tiempo_minutos ?? 0;
+    const tiempoExtraMin = tiempoTotal > 0 ? Math.max(0, tiempoTotal * (1 - 1 / factorMax)) : 0;
+    const tiempoExtra = _fmtTiempoMinimo(tiempoExtraMin);
     // Derivar el nivel de color del factor máximo encontrado
     const nivelMax  = factorMax >= 50 ? 3 : factorMax >= 2.5 ? 2 : 1;
     const nivelInfo = NIVELES_OBS[nivelMax];
@@ -2983,8 +3016,3 @@ async function _exportarPoisDirecto(formato) {
         showNotification('Error al exportar: ' + err.message, 'error');
     }
 }
-
-// ── Integración con el click global del mapa ─────────────────────────
-// El click del mapa es gestionado por el handler principal (línea ~802)
-// que ya incluye: if (modoPoi) { _onMapClickPoi(e.latlng); return; }
-// No se necesita un listener adicional aquí.

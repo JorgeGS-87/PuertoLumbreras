@@ -3,6 +3,7 @@ import os
 import json
 import csv
 import io
+import unicodedata
 import geopandas as gpd
 import pandas as pd
 import networkx as nx
@@ -65,6 +66,16 @@ def normalizar_maxspeed(valor):
         return max(10, min(120, speed))
     except Exception:
         return 50
+
+
+def normalizar_texto(texto):
+    if texto is None:
+        return ''
+    txt = str(texto).strip().lower()
+    txt = unicodedata.normalize('NFD', txt)
+    txt = re.sub(r'[\u0300-\u036f]', '', txt)
+    txt = re.sub(r'\s+', ' ', txt)
+    return txt
 
 
 def EPSG4258(filepath):
@@ -1690,7 +1701,8 @@ def crear_grafo(gdf):
                 peso         = tiempo_total * factor * f_lanes
 
                 attrs = dict(weight=peso, distancia_km=dist_km,
-                             tiempo_minutos=tiempo_total, peso_base=peso,
+                             tiempo_minutos=tiempo_total, tiempo_base=tiempo_total,
+                             peso_base=peso,
                              maxspeed=maxspeed, lanes=lanes, highway=highway)
 
                 if oneway == 'forward':
@@ -1732,6 +1744,8 @@ def calcular_ruta():
     obstaculos     = data.get('obstaculos', [])
     pesos_input    = data.get('pesos', [])
     coef_temporal  = float(data.get('coef_temporal', 1.0))
+    factor_eventos_global = float(data.get('factor_eventos_global', 1.0))
+    factor_eventos_global = max(1.0, min(100.0, factor_eventos_global))  # sanidad
     # Limitar: coeficiente entre 0.5 y 3.0 por seguridad
     coef_temporal = max(0.5, min(3.0, coef_temporal))
     tipo_vehiculo = data.get('tipo_vehiculo', 'coche')   # 'coche' | 'camion'
@@ -1845,7 +1859,7 @@ def calcular_ruta():
                     {'inicio': 13.5, 'fin': 14.5, 'factor': 1.3},
                     {'inicio': 17,   'fin': 17.5, 'factor': 1.6},
                 ],
-                'tipos':  ['colegio', 'school', 'college', 'kindergarten', 'university', 'educaci'],
+                'tipos':  ['colegio', 'colegios', 'centro escolar', 'centros escolares', 'school', 'college', 'kindergarten', 'university', 'educacion', 'educaci'],
                 'radio':  80,
             },
             'iglesias': {
@@ -1890,14 +1904,14 @@ def calcular_ruta():
                 )
                 if factor_horario is None:
                     continue
-                tipos_buscar = [t.lower() for t in config['tipos']]
+                tipos_buscar = [normalizar_texto(t) for t in config['tipos']]
                 for _, gdf in PuntosDinteres_dic.items():
                     for _, row in gdf.iterrows():
-                        tipo_poi = ''
+                        tipo_poi = []
                         for col in COLS_TIPO:
                             if col in row.index and row[col] and str(row[col]).strip().lower() not in ('nan', 'none', ''):
-                                tipo_poi = str(row[col]).lower()
-                                break
+                                tipo_poi.append(normalizar_texto(row[col]))
+                        tipo_poi = ' '.join(tipo_poi).strip()
                         if any(t in tipo_poi for t in tipos_buscar):
                             geom = row.geometry
                             pois_activos.append((geom.x, geom.y, factor_horario, config['radio']))
@@ -2119,6 +2133,14 @@ def calcular_ruta():
         OVERHEAD_PARADA_S   = 5.0
         tiempo_min += (OVERHEAD_ARRANQUE_S + OVERHEAD_PARADA_S) / 60.0
 
+        # ── Aplicar factor de evento global enviado desde el frontend ────────
+        # El frontend calcula el factor máximo sobre todos los segmentos de la capa
+        # usando geometría de polígonos (más fiable que mapear por coordenadas exactas).
+        if factor_eventos_global > 1.0:
+            tiempo_sin_evento   = tiempo_min
+            tiempo_min          = tiempo_min * factor_eventos_global
+            tiempo_extra_eventos = tiempo_min - tiempo_sin_evento
+
         vel            = round(dist_km / (tiempo_base / 60), 2) if tiempo_base > 0 else 0 # Velocidad promedio real en km/h (sin factores de penalización)
         tipo_principal = max(tipos_vias, key=tipos_vias.get) if tipos_vias else 'unclassified' # Tipo de vía más frecuente en la ruta
 
@@ -2141,9 +2163,9 @@ def calcular_ruta():
                 'distancia_km':                 round(dist_km, 2),
                 'tiempo_minutos':               round(tiempo_min, 2),
                 'tiempo_minutos_base':          round(tiempo_base, 2),
-                'tiempo_extra_eventos':         round(tiempo_extra_eventos, 1),
-                'tiempo_extra_obstaculos':      round(tiempo_extra_obstaculos, 1),
-                'tiempo_extra_temporal':        round(tiempo_extra_temporal, 1),
+                'tiempo_extra_eventos':         round(tiempo_extra_eventos, 3),
+                'tiempo_extra_obstaculos':      round(tiempo_extra_obstaculos, 3),
+                'tiempo_extra_temporal':        round(tiempo_extra_temporal, 3),
                 'tiempo_horas':                 round(tiempo_min / 60, 2),
                 'velocidad_promedio_km_h':       vel,
                 'velocidad_promedio_ponderada':  vel,  # alias para compatibilidad con el JS
@@ -2151,6 +2173,7 @@ def calcular_ruta():
                 'tipo_via_principal':            tipo_principal,
                 'tipos_via':                     tipos_vias,
                 'usa_obstaculos':                usa_obstaculos,
+                'usa_eventos':                   factor_eventos_global > 1.0,
             }
         }
 

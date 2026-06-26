@@ -86,7 +86,7 @@ const PERIODOS_CRITICOS = {
             { inicio: 13.5, fin: 14.5, intensidad: 'media' },  // Salida mediodía
             { inicio: 17,   fin: 17.5, intensidad: 'alta'  },  // Salida tarde
         ],
-        tipos:     ['colegio', 'school', 'college', 'kindergarten', 'university', 'educación'],
+        tipos:     ['colegio', 'colegios', 'centro escolar', 'centros escolares', 'school', 'college', 'kindergarten', 'university', 'educación'],
         color:     '#FF6B35',
         radioVias: 80,   // solo calles muy cercanas al colegio
         modoVias:  'urbano',
@@ -500,13 +500,25 @@ function desactivarSimulacionTemporal() {
 
 // ==================== BÚSQUEDA EN CAPAS ====================
 
+// Normaliza texto para comparación de nombres/tipos de POI.
+function _normalizarTexto(texto) {
+    if (!texto) return '';
+    return String(texto)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 // Mapeo de nombre de capa shapefile → tipo normalizado para PERIODOS_CRITICOS
 const _CAPA_A_TIPO = {
-    'centrosescolaresPuertoLumbreras': 'colegio',
-    'farmaciasED5030':                 'farmacia',
+    'centrosescolarespuertolumbreras': 'colegio',
+    'centros escolares':               'colegio',
+    'farmaciased5030':                 'farmacia',
     'rt_gasolineras':                  'gasolinera',
-    'Restaurantes':                    'restaurante',
-    'Monumentos':                      'monumento',
+    'restaurantes':                    'restaurante',
+    'monumentos':                      'monumento',
 };
 
 function encontrarPuntosDeInteresPorTipo(tipos, capas = []) {
@@ -518,34 +530,48 @@ function encontrarPuntosDeInteresPorTipo(tipos, capas = []) {
         const props = layer.feature.properties;
 
         // Tipo explícito desde campos semánticos del shapefile
-        const tipoExplicito = (
+        const tipoExplicitoRaw = (
             props.tipo       ||
+            props.Tipo       ||
             props.amenity    ||
             props.building   ||
             props.denCorta   ||
             props.tipo_centr ||
             ''
-        ).toLowerCase();
+        ).toString().trim();
+        const tipoExplicito = _normalizarTexto(tipoExplicitoRaw);
 
         // Tipo derivado del nombre de la capa shapefile (_capa se asigna en app.py)
-        const tipoCapa = _CAPA_A_TIPO[props._capa] || '';
+        const tipoCapa = _CAPA_A_TIPO[_normalizarTexto(props._capa)] || '';
 
-        // Tipo combinado: cualquiera de los dos
-        const tipoPunto = tipoExplicito || tipoCapa;
+        // Tipo combinado: explícito + capa, para no perder coincidencias cuando
+        // ambos valores están presentes y solo uno de ellos identifica el POI.
+        const tipoPuntoRaw = [tipoExplicitoRaw, tipoCapa].filter(Boolean).join(' ').trim();
+        const tipoPunto = _normalizarTexto(tipoPuntoRaw);
 
         // Coincidencia 1: por nombre de capa (match exacto y rápido)
-        const coincideCapa = capas.length > 0 && capas.includes(props._capa);
+        const capaActual = _normalizarTexto(props._capa || '');
+        const coincideCapa = capas.length > 0 && capas.some(c => _normalizarTexto(c) === capaActual);
 
         // Coincidencia 2: por tipos semánticos (con aliases para campos legacy)
         const coincideTipo = tipos.some(t => {
-            const tb = t.toLowerCase();
+            const tb = _normalizarTexto(t);
             return tipoPunto.includes(tb)
-                || (tipoPunto.includes('colegio')    && tb === 'school')
-                || (tipoPunto.includes('iglesia')    && tb === 'church')
-                || (tipoPunto.includes('oficina')    && tb === 'office')
-                || (tipoPunto.includes('farmacia')   && tb === 'pharmacy')
-                || (tipoPunto.includes('gasolinera') && tb === 'fuel')
-                || (tipoPunto.includes('restaurante')&& tb === 'restaurant');
+                || (tipoPunto.includes('colegio')          && tb === 'school')
+                || (tipoPunto.includes('school')           && tb === 'colegio')
+                || (tipoPunto.includes('centros escolares') && tb === 'colegio')
+                || (tipoPunto.includes('cole')             && tb === 'colegio')
+                || (tipoPunto.includes('centro escolar')   && tb === 'colegio')
+                || (tipoPunto.includes('iglesia')          && tb === 'church')
+                || (tipoPunto.includes('church')           && tb === 'iglesia')
+                || (tipoPunto.includes('oficina')          && tb === 'office')
+                || (tipoPunto.includes('office')           && tb === 'oficina')
+                || (tipoPunto.includes('farmacia')         && tb === 'pharmacy')
+                || (tipoPunto.includes('pharmacy')         && tb === 'farmacia')
+                || (tipoPunto.includes('gasolinera')       && tb === 'fuel')
+                || (tipoPunto.includes('fuel')             && tb === 'gasolinera')
+                || (tipoPunto.includes('restaurante')      && tb === 'restaurant')
+                || (tipoPunto.includes('restaurant')       && tb === 'restaurante');
         });
 
         if (coincideCapa || coincideTipo) {
